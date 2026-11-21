@@ -1,0 +1,279 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Directory</div>
+    <h1 class="page-title">Schools</h1>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn" (click)="openMerge()">
+      <app-icon name="merge" [size]="16" /> Merge schools
+    </button>
+    <button type="button" class="btn btn-primary" (click)="openForm(null)">
+      <app-icon name="plus" [size]="16" /> Add school
+    </button>
+  </div>
+</div>
+
+@if (error()) {
+  <div class="alert" role="alert">
+    <app-icon name="alert" [size]="16" />
+    <span>{{ error() }}</span>
+  </div>
+}
+
+<section class="card">
+  <div class="toolbar">
+    <div class="search">
+      <app-icon name="search" [size]="16" />
+      <input
+        type="search"
+        class="input"
+        placeholder="Search school, city or contact"
+        aria-label="Search schools"
+        [(ngModel)]="filters.search"
+        (ngModelChange)="onSearch()"
+      />
+    </div>
+    <app-dropdown
+      [options]="categoryFilterOptions"
+      [(ngModel)]="filters.category"
+      (ngModelChange)="applyFilters()"
+      placeholder="All categories"
+      countSingular="category"
+      countPlural="categories"
+    />
+    <app-dropdown
+      [options]="schoolTypeFilterOptions"
+      [(ngModel)]="filters.school_type"
+      (ngModelChange)="applyFilters()"
+      placeholder="All types"
+      countSingular="type"
+      countPlural="types"
+    />
+  </div>
+
+  @if (schools().length > 0) {
+    <table class="table">
+      <thead>
+        <tr>
+          <th>School</th>
+          <th>Category</th>
+          <th>Type</th>
+          <th>City or region</th>
+          <th>Principal / contact</th>
+          <th>Teachers</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (school of schools(); track school.id) {
+          <tr>
+            <td data-label="School"><span class="cell-main">{{ school.name }}</span></td>
+            <td data-label="Category">
+              <span class="pill plain accent">{{ school.category }}</span>
+            </td>
+            <td data-label="Type"><span class="pill plain">{{ school.school_type }}</span></td>
+            <td data-label="City or region">{{ school.city_region }}</td>
+            <td data-label="Principal / contact">{{ school.principal_contact || '—' }}</td>
+            <td data-label="Teachers">
+              @if (school.teacher_count > 0) {
+                <a routerLink="/teachers" [queryParams]="{ school_id: school.id }" class="mono">
+                  {{ school.teacher_count }}
+                </a>
+              } @else {
+                <span class="mono muted">0</span>
+              }
+            </td>
+            <td class="right">
+              <button type="button" class="btn btn-small" (click)="openForm(school)">Edit</button>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  } @else if (!loading()) {
+    <div class="empty">
+      @if (hasFilters) {
+        No schools match your search.
+      } @else {
+        No schools yet.
+        <div>
+          <button type="button" class="btn btn-primary" (click)="openForm(null)">
+            <app-icon name="plus" [size]="16" /> Add school
+          </button>
+        </div>
+      }
+    </div>
+  } @else {
+    <div class="empty">Loading…</div>
+  }
+
+  <app-pagination
+    [page]="filters.page"
+    [pageSize]="filters.page_size"
+    [total]="total()"
+    (pageChange)="goToPage($event)"
+  />
+</section>
+
+@if (dialog() === 'form') {
+  <app-modal [title]="editing() ? 'Edit school' : 'Add school'" (closed)="close()">
+    @if (dialogError()) {
+      <div class="alert" role="alert">
+        <app-icon name="alert" [size]="16" />
+        <span>{{ dialogError() }}</span>
+      </div>
+    }
+
+    <form (ngSubmit)="saveSchool()" novalidate>
+      <div class="form-grid">
+        <div class="field full">
+          <label for="s-name">School name</label>
+          <input
+            id="s-name"
+            name="name"
+            class="input"
+            autocomplete="off"
+            [class.invalid]="errors()['name']"
+            [(ngModel)]="form.name"
+          />
+          @if (errors()['name']) {
+            <span class="field-error">{{ errors()['name'] }}</span>
+          }
+        </div>
+
+        <div class="field">
+          <label>Institution category</label>
+          <app-dropdown
+            name="category"
+            [options]="categoryOptions"
+            [(ngModel)]="form.category"
+            [invalid]="!!errors()['category']"
+            placeholder="Choose"
+            countSingular="category"
+            countPlural="categories"
+          />
+          @if (errors()['category']) {
+            <span class="field-error">{{ errors()['category'] }}</span>
+          }
+        </div>
+
+        <div class="field">
+          <label>School type</label>
+          <app-dropdown
+            name="school_type"
+            [options]="schoolTypeOptions"
+            [(ngModel)]="form.school_type"
+            [invalid]="!!errors()['school_type']"
+            placeholder="Choose"
+            countSingular="type"
+            countPlural="types"
+          />
+          @if (errors()['school_type']) {
+            <span class="field-error">{{ errors()['school_type'] }}</span>
+          }
+        </div>
+
+        <div class="field">
+          <label for="s-city">City or region</label>
+          <input
+            id="s-city"
+            name="city_region"
+            class="input"
+            autocomplete="off"
+            [class.invalid]="errors()['city_region']"
+            [(ngModel)]="form.city_region"
+          />
+          @if (errors()['city_region']) {
+            <span class="field-error">{{ errors()['city_region'] }}</span>
+          }
+        </div>
+
+        <div class="field">
+          <label for="s-contact">Principal / contact</label>
+          <input
+            id="s-contact"
+            name="principal_contact"
+            class="input"
+            autocomplete="off"
+            [class.invalid]="errors()['principal_contact']"
+            [(ngModel)]="form.principal_contact"
+          />
+          @if (errors()['principal_contact']) {
+            <span class="field-error">{{ errors()['principal_contact'] }}</span>
+          }
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="btn" (click)="close()">Cancel</button>
+        <button type="submit" class="btn btn-primary" [disabled]="saving()">
+          {{ saving() ? 'Saving…' : editing() ? 'Save changes' : 'Add school' }}
+        </button>
+      </div>
+    </form>
+  </app-modal>
+}
+
+@if (dialog() === 'merge') {
+  <app-modal title="Merge schools" (closed)="close()">
+    @if (dialogError()) {
+      <div class="alert" role="alert">
+        <app-icon name="alert" [size]="16" />
+        <span>{{ dialogError() }}</span>
+      </div>
+    }
+
+    <form (ngSubmit)="mergeSchools()" novalidate>
+      <div class="form-grid">
+        <div class="field full">
+          <label>School to keep</label>
+          <app-dropdown
+            name="keep_id"
+            [options]="keepOptions()"
+            [ngModel]="keepId()"
+            (ngModelChange)="keepId.set($event === '' ? null : $event)"
+            placeholder="Choose a school"
+            countSingular="school"
+            countPlural="schools"
+          />
+        </div>
+
+        <div class="field full">
+          <label>School to remove</label>
+          <app-dropdown
+            name="remove_id"
+            [options]="removeOptions()"
+            [ngModel]="removeId()"
+            (ngModelChange)="removeId.set($event === '' ? null : $event)"
+            [invalid]="!!errors()['remove_id']"
+            placeholder="Choose a school"
+            countSingular="school"
+            countPlural="schools"
+          />
+        </div>
+      </div>
+
+      @if (keepSchool() && removeSchool()) {
+        <div class="alert warn merge-note" role="status">
+          <app-icon name="alert" [size]="16" />
+          <span>
+            {{ removeSchool()!.teacher_count }} teacher(s) will move to
+            <strong>{{ keepSchool()!.name }}</strong
+            >. <strong>{{ removeSchool()!.name }}</strong> will be removed. This cannot be undone.
+          </span>
+        </div>
+      }
+
+      <div class="form-actions">
+        <button type="button" class="btn" (click)="close()">Cancel</button>
+        <button
+          type="submit"
+          class="btn btn-primary"
+          [disabled]="saving() || !keepSchool() || !removeSchool()"
+        >
+          {{ saving() ? 'Merging…' : 'Merge schools' }}
+        </button>
+      </div>
+    </form>
+  </app-modal>
+}

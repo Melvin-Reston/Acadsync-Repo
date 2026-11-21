@@ -1,0 +1,91 @@
+/* Report Card (DepEd School Form 9): the controls around the card follow the
+   warm paper system; the CARD itself is strictly black and white, plain white
+   paper, in any mode — black text, black lines, no fills. */
+
+/* ---------- Controls (screen only) ---------- */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.controls .field {
+  min-width: 200px;
+}
+
+.controls .btn-primary {
+  margin-left: auto;
+}
+
+.view-toggle {
+  display: flex;
+  gap: 6px;
+}
+
+.view-toggle .btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.print-hint {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 12px;
+}
+
+/* ---------- Sheets on screen ---------- */
+.sheets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.sheet-wrap {
+  flex: 0 1 560px;
+  min-width: 0;
+  width: 100%;
+}
+
+.sheet-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sheet-label b {
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+}
+
+.sheet-label span:last-child {
+  font-size: 10px;
+}
+
+/* ---------- Phones ---------- */
+@media (max-width: 640px) {
+  .controls .btn-primary {
+    margin-left: 0;
+  }
+}
+
+/* ---------- Print ---------- */
+/* In print the sheets stack one per page. This lives here, next to the
+   screen rule it overrides, so the print rule wins the cascade. */
+@media print {
+  .sheets {
+    display: block;
+  }
+}

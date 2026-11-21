@@ -1,0 +1,229 @@
+<a routerLink="/teachers" class="back"> <app-icon name="arrow-left" [size]="15" /> Teachers </a>
+
+@if (error()) {
+  <div class="alert" role="alert">
+    <app-icon name="alert" [size]="16" />
+    <span>{{ error() }}</span>
+  </div>
+}
+
+@if (teacher(); as t) {
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Teacher profile</div>
+      <h1 class="page-title">{{ t.first_name }} {{ t.last_name }}</h1>
+      <div class="status">
+        @if (t.is_restricted) {
+          <span class="pill red">Restricted</span>
+        } @else {
+          <span class="pill">Active</span>
+        }
+        <span class="mono muted">{{ t.username }}</span>
+      </div>
+    </div>
+    <div class="head-actions">
+      <button type="button" class="btn" (click)="open('edit')">
+        <app-icon name="edit" [size]="16" /> Edit
+      </button>
+      <button type="button" class="btn" (click)="open('reset')">
+        <app-icon name="key" [size]="16" /> Reset password
+      </button>
+      @if (t.is_restricted) {
+        <button type="button" class="btn btn-primary" (click)="open('unrestrict')">
+          <app-icon name="unlock" [size]="16" /> Unrestrict
+        </button>
+      } @else {
+        <button type="button" class="btn btn-danger" (click)="open('restrict')">
+          <app-icon name="lock" [size]="16" /> Restrict
+        </button>
+      }
+    </div>
+  </div>
+
+  @if (t.is_restricted) {
+    <div class="alert" role="status">
+      <app-icon name="lock" [size]="16" />
+      <span>
+        Restricted on {{ t.restricted_at | date: 'MMM d, y, h:mm a' }}
+        @if (t.restricted_by_name) {
+          by {{ t.restricted_by_name }}
+        }
+        <br />
+        Reason: {{ t.restriction_reason }}
+      </span>
+    </div>
+  }
+
+  <section class="card stack">
+    <div class="card-head"><h2 class="card-title">Personal details</h2></div>
+    <dl class="details card-pad">
+      <div>
+        <dt>First name</dt>
+        <dd>{{ t.first_name }}</dd>
+      </div>
+      <div>
+        <dt>Last name</dt>
+        <dd>{{ t.last_name }}</dd>
+      </div>
+      <div>
+        <dt>Email</dt>
+        <dd>{{ t.email }}</dd>
+      </div>
+      <div>
+        <dt>Mobile number</dt>
+        <dd class="mono">{{ t.mobile }}</dd>
+      </div>
+      <div class="full">
+        <dt>Present address</dt>
+        <dd>{{ t.present_address || '—' }}</dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="card stack">
+    <div class="card-head"><h2 class="card-title">Account</h2></div>
+    <dl class="details card-pad">
+      <div>
+        <dt>Username</dt>
+        <dd class="mono">{{ t.username }}</dd>
+      </div>
+      <div>
+        <dt>School</dt>
+        <dd>{{ t.school_name }} · {{ t.school_city_region }}</dd>
+      </div>
+      <div>
+        <dt>Password</dt>
+        <dd>{{ t.must_change_password ? 'Temporary, must be changed' : 'Set by the teacher' }}</dd>
+      </div>
+      <div>
+        <dt>Added</dt>
+        <dd>
+          {{ t.created_at | date: 'MMM d, y' }}
+          @if (t.created_by_name) {
+            by {{ t.created_by_name }}
+          }
+        </dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="card stack">
+    <div class="card-head">
+      <h2 class="card-title">Subscription</h2>
+      @if (t.subscription_id) {
+        <a [routerLink]="['/subscriptions', t.subscription_id]">View subscription</a>
+      }
+    </div>
+    @if (t.subscription_id && t.subscription_status) {
+      <dl class="details card-pad">
+        <div>
+          <dt>Plan</dt>
+          <dd>{{ t.plan_name }}</dd>
+        </div>
+        <div>
+          <dt>Status</dt>
+          <dd>
+            <span class="pill" [class]="statusTone(t.subscription_status)">
+              {{ statusLabel(t.subscription_status) }}
+            </span>
+          </dd>
+        </div>
+        <div>
+          <dt>Price</dt>
+          <dd class="money">{{ peso(t.plan_price) }}</dd>
+        </div>
+        <div>
+          <dt>{{ hasCurrentSubscription(t) ? 'Current period ends' : 'Period ended' }}</dt>
+          <dd>{{ t.subscription_period_end | date: 'MMM d, y' }}</dd>
+        </div>
+      </dl>
+    }
+    @if (!hasCurrentSubscription(t)) {
+      <div class="card-pad no-plan">
+        <span class="muted">No current subscription.</span>
+        <a class="btn btn-small btn-primary" routerLink="/subscriptions" [queryParams]="{ add: t.id }">
+          <app-icon name="plus" [size]="15" /> Add subscription
+        </a>
+      </div>
+    }
+  </section>
+
+  @switch (dialog()) {
+    @case ('edit') {
+      <app-teacher-form [teacher]="t" (saved)="onEdited($event)" (closed)="close()" />
+    }
+    @case ('restrict') {
+      <app-modal title="Restrict teacher" (closed)="close()">
+        @if (dialogError()) {
+          <div class="alert" role="alert">
+            <app-icon name="alert" [size]="16" />
+            <span>{{ dialogError() }}</span>
+          </div>
+        }
+        <form (ngSubmit)="restrict()" novalidate>
+          <div class="field">
+            <label for="reason">Reason</label>
+            <textarea
+              id="reason"
+              name="reason"
+              class="textarea"
+              maxlength="300"
+              [(ngModel)]="reason"
+            ></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn" (click)="close()">Cancel</button>
+            <button type="submit" class="btn btn-danger" [disabled]="working()">
+              {{ working() ? 'Saving…' : 'Restrict ' + t.first_name }}
+            </button>
+          </div>
+        </form>
+      </app-modal>
+    }
+    @case ('unrestrict') {
+      <app-modal title="Remove restriction" (closed)="close()">
+        @if (dialogError()) {
+          <div class="alert" role="alert">
+            <app-icon name="alert" [size]="16" />
+            <span>{{ dialogError() }}</span>
+          </div>
+        }
+        <p>{{ t.first_name }} {{ t.last_name }} will be able to sign in again.</p>
+        <div class="form-actions">
+          <button type="button" class="btn" (click)="close()">Cancel</button>
+          <button type="button" class="btn btn-primary" [disabled]="working()" (click)="unrestrict()">
+            {{ working() ? 'Saving…' : 'Unrestrict' }}
+          </button>
+        </div>
+      </app-modal>
+    }
+    @case ('reset') {
+      <app-modal title="Reset password" (closed)="close()">
+        @if (dialogError()) {
+          <div class="alert" role="alert">
+            <app-icon name="alert" [size]="16" />
+            <span>{{ dialogError() }}</span>
+          </div>
+        }
+        <p>
+          The current password of {{ t.first_name }} {{ t.last_name }} will stop working and a new
+          temporary password will be created.
+        </p>
+        <div class="form-actions">
+          <button type="button" class="btn" (click)="close()">Cancel</button>
+          <button type="button" class="btn btn-primary" [disabled]="working()" (click)="resetPassword()">
+            {{ working() ? 'Resetting…' : 'Reset password' }}
+          </button>
+        </div>
+      </app-modal>
+    }
+  }
+
+  @if (temporaryPassword()) {
+    <app-temporary-password
+      [password]="temporaryPassword()"
+      [ownerName]="t.first_name + ' ' + t.last_name"
+      (closed)="temporaryPassword.set('')"
+    />
+  }
+}

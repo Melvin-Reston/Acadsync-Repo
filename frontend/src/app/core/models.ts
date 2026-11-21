@@ -1,0 +1,971 @@
+// The shapes of the data the API sends back.
+
+export type AdminRole = 'super_user' | 'admin';
+// Automatic events (an expired trial, an issued invoice) are logged as 'system'.
+export type ActivityRole = AdminRole | 'system';
+
+export interface Admin {
+  id: number;
+  role: AdminRole;
+  full_name: string;
+  email: string;
+  is_active: boolean;
+  must_change_password: boolean;
+  last_login_at: string | null;
+}
+
+export interface AdminAccount extends Admin {
+  is_locked: boolean;
+  locked_until: string | null;
+  created_at: string;
+}
+
+export interface Teacher {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  mobile: string;
+  present_address: string;
+  username: string;
+  school_id: number;
+  school_name: string;
+  school_city_region: string;
+  must_change_password: boolean;
+  is_restricted: boolean;
+  restriction_reason: string | null;
+  restricted_at: string | null;
+  restricted_by_name: string | null;
+  created_by_name: string | null;
+  created_at: string;
+  updated_at: string;
+  // Current subscription, or the latest one. All null when the teacher never had one.
+  subscription_id: number | null;
+  plan_name: string | null;
+  plan_price: string | null;
+  subscription_status: SubscriptionStatus | null;
+  subscription_period_end: string | null;
+}
+
+export interface TeacherForm {
+  first_name: string;
+  last_name: string;
+  email: string;
+  mobile: string;
+  username: string;
+  school_id: number | null;
+  present_address: string;
+  temporary_password?: string;
+  plan_id?: number | null;
+  with_trial?: boolean;
+}
+
+export interface School {
+  id: number;
+  name: string;
+  category: 'Primary' | 'Secondary';
+  school_type: 'Public' | 'Private';
+  city_region: string;
+  principal_contact: string;
+  teacher_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SchoolForm {
+  name: string;
+  category: string;
+  school_type: string;
+  city_region: string;
+  principal_contact: string;
+}
+
+export interface ActivityEntry {
+  id: number;
+  admin_id: number | null;
+  admin_name: string;
+  admin_role: ActivityRole;
+  action: string;
+  entity_type: string | null;
+  entity_id: number | null;
+  description: string;
+  ip_address: string | null;
+  created_at: string;
+}
+
+export interface Page<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface ActivityPage extends Page<ActivityEntry> {
+  admins: { id: number; full_name: string; role: AdminRole }[];
+}
+
+export interface Overview {
+  counts: {
+    total_teachers: number;
+    restricted_teachers: number;
+    total_schools: number;
+    new_signups_this_month: number;
+    active_subscriptions: number;
+    trial_subscriptions: number;
+    pending_payments: number;
+    income_this_month: string;
+  };
+  recent_teachers: {
+    id: number;
+    first_name: string;
+    last_name: string;
+    username: string;
+    is_restricted: boolean;
+    created_at: string;
+    school_name: string;
+  }[];
+  recent_activity: Pick<
+    ActivityEntry,
+    'id' | 'admin_name' | 'admin_role' | 'action' | 'description' | 'created_at'
+  >[];
+  academic_year: string | null;
+}
+
+export interface PaymentSettings {
+  has_qr: boolean;
+  account_name: string;
+  instructions: string;
+  updated_at: string | null;
+}
+
+export interface Settings {
+  academic_year: string;
+  academic_year_updated_at: string;
+  grading_profile: string;
+  grading: GradingInfo;
+  grading_profiles: GradingProfileOption[];
+  payment: PaymentSettings;
+}
+
+// The grading system in force for one academic year.
+export interface GradingInfo {
+  code: string;
+  label: string;
+  period_label: string;
+  period_short: string;
+  periods: number[];
+  grade_label: string;
+  third_label: string;
+  third_short: string;
+}
+
+export interface GradingProfileOption {
+  code: string;
+  label: string;
+  periods: number[];
+  period_label: string;
+  grade_label: string;
+  third_label: string;
+}
+
+// ---------- Plans, subscriptions, invoices and payments ----------
+// Money arrives as text with two decimals ("100.00") so no centavos are lost.
+
+export type BillingCycle = 'monthly' | 'yearly' | 'one_time';
+export type SubscriptionStatus = 'trial' | 'active' | 'past_due' | 'expired' | 'cancelled';
+export type InvoiceStatus = 'unpaid' | 'paid' | 'void';
+export type PaymentStatus = 'pending' | 'confirmed' | 'rejected';
+
+export interface Plan {
+  id: number;
+  name: string;
+  price: string;
+  billing_cycle: BillingCycle;
+  duration_months: number;
+  trial_days: number;
+  features: string[];
+  is_popular: boolean;
+  is_active: boolean;
+  sort_order: number;
+  subscription_count?: number;
+  current_subscription_count?: number;
+}
+
+export interface PlanForm {
+  name: string;
+  price: string;
+  billing_cycle: BillingCycle;
+  duration_months: number;
+  trial_days: number;
+  features: string[];
+  is_popular: boolean;
+  sort_order: number;
+}
+
+export interface Subscription {
+  id: number;
+  teacher_id: number;
+  plan_id: number;
+  plan_name: string;
+  price: string;
+  billing_cycle: BillingCycle;
+  duration_months: number;
+  status: SubscriptionStatus;
+  started_at: string;
+  trial_ends_at: string | null;
+  current_period_start: string;
+  current_period_end: string;
+  ended_at: string | null;
+  end_reason: string | null;
+  created_at: string;
+  first_name: string;
+  last_name: string;
+  username: string;
+  teacher_email: string;
+  is_restricted: boolean;
+  school_name: string;
+  created_by_name: string | null;
+  unpaid_invoice_count: number;
+}
+
+export interface SubscriptionPage extends Page<Subscription> {
+  counts: Record<SubscriptionStatus, number>;
+}
+
+export interface Invoice {
+  id: number;
+  invoice_number: string;
+  subscription_id: number;
+  teacher_id: number;
+  plan_name: string;
+  amount: string;
+  period_start: string;
+  period_end: string;
+  status: InvoiceStatus;
+  issued_at: string;
+  due_date: string;
+  paid_at: string | null;
+  voided_at: string | null;
+  void_reason: string | null;
+  is_overdue: boolean;
+  first_name: string;
+  last_name: string;
+  username: string;
+  school_name: string;
+  has_pending_payment: boolean;
+}
+
+// The short invoice rows shown inside a subscription.
+export type SubscriptionInvoice = Pick<
+  Invoice,
+  | 'id'
+  | 'invoice_number'
+  | 'plan_name'
+  | 'amount'
+  | 'period_start'
+  | 'period_end'
+  | 'status'
+  | 'issued_at'
+  | 'due_date'
+  | 'paid_at'
+  | 'is_overdue'
+>;
+
+export interface InvoiceTotals {
+  outstanding: string;
+  overdue: string;
+  paid: string;
+  outstanding_count: number;
+  overdue_count: number;
+  paid_count: number;
+}
+
+export interface InvoicePage extends Page<Invoice> {
+  totals: InvoiceTotals;
+}
+
+export interface Payment {
+  id: number;
+  invoice_id: number;
+  teacher_id: number;
+  amount: string;
+  reference_number: string;
+  source: 'teacher' | 'admin';
+  status: PaymentStatus;
+  paid_on: string;
+  note: string;
+  rejection_reason: string | null;
+  reviewed_at: string | null;
+  reviewed_by_name: string | null;
+  created_at: string;
+  has_screenshot: boolean;
+  invoice_number: string;
+  plan_name: string;
+  subscription_id: number;
+  invoice_status: InvoiceStatus;
+  first_name: string;
+  last_name: string;
+  username: string;
+  school_name: string;
+}
+
+export interface PaymentPage extends Page<Payment> {
+  pending_count: number;
+}
+
+// ---------- Reports ----------
+export interface IncomeReport {
+  from: string;
+  to: string;
+  summary: { total: string; payment_count: number };
+  by_plan: { plan_name: string; payment_count: number; total: string }[];
+  items: {
+    id: number;
+    paid_on: string;
+    invoice_number: string;
+    plan_name: string;
+    reference_number: string;
+    source: 'teacher' | 'admin';
+    amount: string;
+    teacher_name: string;
+    username: string;
+    school_name: string;
+  }[];
+}
+
+export interface SubscriptionsReport {
+  from: string;
+  to: string;
+  summary: Record<SubscriptionStatus, number> & { total: number };
+  by_plan: { plan_name: string; subscription_count: number }[];
+  items: {
+    id: number;
+    plan_name: string;
+    price: string;
+    billing_cycle: BillingCycle;
+    status: SubscriptionStatus;
+    started_at: string;
+    current_period_end: string;
+    ended_at: string | null;
+    teacher_name: string;
+    username: string;
+    school_name: string;
+  }[];
+}
+
+export interface TeachersPerSchoolReport {
+  from: string;
+  to: string;
+  summary: {
+    school_count: number;
+    teacher_count: number;
+    added_in_range: number;
+    paid_plan_count: number;
+  };
+  items: {
+    id: number;
+    name: string;
+    city_region: string;
+    category: string;
+    school_type: string;
+    teacher_count: number;
+    added_in_range: number;
+    restricted_count: number;
+    paid_plan_count: number;
+  }[];
+}
+
+// ---------- Announcements ----------
+export type Audience = 'all' | 'free' | 'pro';
+
+export interface Announcement {
+  id: number;
+  title: string;
+  body: string;
+  audience: Audience;
+  starts_on: string | null;
+  ends_on: string;
+  status: 'live' | 'scheduled' | 'ended';
+  created_at: string;
+  updated_at: string;
+  created_by_name: string | null;
+}
+
+export interface AnnouncementForm {
+  title: string;
+  body: string;
+  audience: Audience;
+  starts_on: string;
+  ends_on: string;
+}
+
+// ---------- Teacher portal ----------
+
+export interface TeacherSelf {
+  id: number;
+  first_name: string;
+  last_name: string;
+  email: string;
+  username: string;
+  mobile: string;
+  present_address: string;
+  school_id: number;
+  school_name: string | null;
+  must_change_password: boolean;
+  is_restricted: boolean;
+  is_adviser: boolean;
+  advisory_grade: number | null;
+  advisory_section: string | null;
+  created_at?: string;
+}
+
+export interface TeacherSubscription {
+  id: number;
+  plan_id: number;
+  plan_name: string;
+  price: string;
+  billing_cycle: BillingCycle;
+  status: SubscriptionStatus;
+  trial_ends_at: string | null;
+  current_period_start: string;
+  current_period_end: string;
+}
+
+export interface TeacherInvoice {
+  id: number;
+  invoice_number: string;
+  plan_name: string;
+  amount: string;
+  due_date: string;
+  issued_at: string;
+  is_overdue: boolean;
+  latest_payment_status: PaymentStatus | null;
+}
+
+// One row of the teacher's own invoice list (Batch 6): the full receipt data
+// for the row, including whether a payment is waiting and why one was refused.
+export interface TeacherInvoiceRow {
+  id: number;
+  invoice_number: string;
+  plan_name: string;
+  amount: string;
+  period_start: string;
+  period_end: string;
+  status: InvoiceStatus;
+  issued_at: string;
+  due_date: string;
+  paid_at: string | null;
+  voided_at: string | null;
+  void_reason: string | null;
+  is_overdue: boolean;
+  latest_payment_status: PaymentStatus | null;
+  latest_rejection_reason: string | null;
+}
+
+// One payment on the teacher's own invoice, as shown on its receipt.
+export interface TeacherInvoicePayment {
+  id: number;
+  amount: string;
+  reference_number: string;
+  status: PaymentStatus;
+  paid_on: string;
+  note: string;
+  rejection_reason: string | null;
+  reviewed_at: string | null;
+  created_at: string;
+  has_screenshot: boolean;
+}
+
+export interface TeacherAnnouncement {
+  id: number;
+  title: string;
+  body: string;
+  audience: Audience;
+  starts_on: string | null;
+  ends_on: string;
+  created_at: string;
+}
+
+export interface TeacherDashboard {
+  teacher: TeacherSelf;
+  subscription: TeacherSubscription | null;
+  next_invoice: TeacherInvoice | null;
+  announcements: TeacherAnnouncement[];
+  academic_year: string | null;
+  class_count: number;
+  learner_count: number;
+  today_classes: TodayClass[];
+  // Consolidation readiness for the teacher's advisory section (Batch 4).
+  // Null when the teacher has no advisory assignment.
+  consolidation: ConsolidationReadiness | null;
+}
+
+// One of the teacher's classes today, for the sign-in panel.
+export interface TodayClass {
+  id: number;
+  class_id: number;
+  title: string;
+  room: string;
+  start_time: string;
+  end_time: string;
+  status: 'now' | 'next';
+}
+
+export interface TeacherMe {
+  teacher: TeacherSelf;
+  subscription: TeacherSubscription | null;
+  academic_year: string | null;
+}
+
+// ---------- Classes & Sections and Schedules (Batch 2) ----------
+
+export interface Subject {
+  id: number;
+  name: string;
+  grade_level: number;
+  // The subject group, which decides the default weights under DO 015:
+  // core 20/50/30, MAPEH and EPP/TLE 20/60/20.
+  group: 'core' | 'mapeh' | 'epp_tle';
+  class_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClassItem {
+  id: number;
+  subject_id: number;
+  subject_name: string;
+  grade_level: number;
+  section_name: string;
+  room: string;
+  academic_year: string;
+  learner_count: number;
+  meeting_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Meeting {
+  id: number;
+  class_id: number;
+  subject_name: string;
+  grade_level: number;
+  section_name: string;
+  room: string;
+  day_of_week: number;
+  day_name: string;
+  start_time: string;
+  end_time: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClassLearner {
+  id: number;
+  first_name: string;
+  last_name: string;
+  learner_id: string;
+  sex: 'Male' | 'Female';
+  birthdate: string | null; // "2010-05-14" or null when not given
+  school_name: string;
+  enrolled_at: string;
+}
+
+export interface ClassDetail extends ClassItem {
+  learners: ClassLearner[];
+  meetings: Meeting[];
+}
+
+export interface Learner {
+  id: number;
+  first_name: string;
+  last_name: string;
+  learner_id: string;
+  sex: 'Male' | 'Female';
+  birthdate: string | null; // "2010-05-14" or null when not given
+  school_id: number;
+  school_name: string;
+  classes?: string | null; // section names, comma separated
+  class_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// One row of a bulk upload result (Batch 7): added, skipped as a duplicate,
+// or failed with its reason.
+export interface BulkUploadRow {
+  row: number;
+  status: 'added' | 'skipped' | 'error';
+  learner_id: string;
+  message: string;
+}
+
+export interface BulkUploadResult {
+  summary: { added: number; skipped: number; failed: number; total: number };
+  results: BulkUploadRow[];
+}
+
+export interface ScheduleDay {
+  date: string;
+  day_of_week: number;
+  day_name: string;
+}
+
+export interface ScheduleMeeting extends Meeting {
+  date: string;
+}
+
+export interface ScheduleResponse {
+  week_start: string;
+  week_end: string;
+  days: ScheduleDay[];
+  meetings: ScheduleMeeting[];
+}
+
+// ---------- Attendance (Batch 3) ----------
+
+export type AttendanceStatus = 'present' | 'late' | 'absent' | 'excused';
+export type AttendanceMethod = 'manual' | 'qr';
+
+export interface AttendanceMark {
+  status: AttendanceStatus;
+  time_in: string | null; // "07:32" or null for absent/excused
+  method: AttendanceMethod;
+}
+
+export interface AttendanceRow {
+  id: number;
+  first_name: string;
+  last_name: string;
+  learner_id: string;
+  sex: 'Male' | 'Female';
+  mark: AttendanceMark | null;
+}
+
+export interface AttendanceRoll {
+  class: ClassItem;
+  date: string; // YYYY-MM-DD
+  saved: boolean;
+  saved_at: string | null; // ISO timestamp of the last save, or null
+  learners: AttendanceRow[];
+}
+
+export interface AttendanceLookup {
+  learner: Learner;
+  class: {
+    id: number;
+    subject_name: string;
+    grade_level: number;
+    section_name: string;
+  };
+  date: string;
+  mark: AttendanceMark | null;
+}
+
+// ---------- Grades and Consolidation (Batch 4) ----------
+
+export interface GradeColumn {
+  id: number;
+  class_id: number;
+  quarter: number;
+  component: 'WW' | 'PT' | 'EX';
+  name: string;
+  highest_possible: number;
+  position: number;
+  // The share of the Examinations component (ST1 30, ST2 30, Term Exam 40),
+  // or null for WW/PT and for columns made under DO 8.
+  sub_weight: number | null;
+  // The display name of a default Examinations column ("Summative Test 1"),
+  // or null.
+  label: string | null;
+}
+
+export interface GradeWeights {
+  ww: number;
+  pt: number;
+  ex: number;
+}
+
+export interface GradeComponentGrade {
+  total: number;
+  maxTotal: number;
+  ps: number | null;
+  ws: number | null;
+  entered: number;
+  count: number;
+}
+
+export interface GradeComputed {
+  components: Record<'WW' | 'PT' | 'EX', GradeComponentGrade>;
+  complete: boolean;
+  entered: number;
+  cells: number;
+  initial: number | null;
+  qg: number | null; // the grade on the card: the term grade under DO 015, the quarterly grade under DO 8
+  descriptor: string | null;
+  status: string;
+}
+
+export interface GradeLearnerRow {
+  id: number;
+  first_name: string;
+  last_name: string;
+  learner_id: string;
+  sex: 'Male' | 'Female';
+  scores: Record<number, number | null>;
+  computed: GradeComputed;
+}
+
+export interface GradeStats {
+  mps: number | null;
+  passing_rate: number | null;
+  highest_transmuted: number | null;
+  intervention_count: number;
+  intervention: string[];
+  encoding_pct: number;
+  complete_count: number;
+  total_learners: number;
+}
+
+export interface GradeSubmission {
+  id: number;
+  class_id: number;
+  quarter: number;
+  academic_year: string;
+  submitted_by: number;
+  submitted_at: string;
+  // The grading system the filing was made under; a filed grade keeps it.
+  profile?: string;
+}
+
+export interface GradeReminder {
+  active: boolean;
+  reminded_at: string | null;
+  adviser_name: string | null;
+}
+
+export interface GradeSheet {
+  class: ClassItem;
+  quarter: number;
+  academic_year: string;
+  grading: GradingInfo;
+  columns: GradeColumn[];
+  weights: GradeWeights;
+  learners: GradeLearnerRow[];
+  stats: GradeStats;
+  submission: GradeSubmission | null;
+  // Every period already filed for this class and year (the period tabs
+  // mark the filed ones).
+  submitted_periods: number[];
+  reminder: GradeReminder;
+  // True when the teacher is both the subject teacher and the adviser of
+  // this class: the button reads "Move to Consolidation" instead of
+  // "Submit to adviser", and the grades file straight into Consolidation.
+  direct_add: boolean;
+}
+
+export interface SubmissionCheck {
+  quarter: number;
+  academic_year: string;
+  grading: GradingInfo;
+  total_learners: number;
+  complete_learners: number;
+  incomplete_learners: number;
+  entered_cells: number;
+  total_cells: number;
+  encoding_pct: number;
+  incomplete_names: string[];
+  intervention: string[];
+  submitted: boolean;
+  submitted_at: string | null;
+}
+
+export interface ConsolidationSubject {
+  class_id: number | null; // the class the Remind action goes to (first unfiled class of the subject)
+  subject_name: string;
+  teacher_name: string;
+  submitted: boolean;
+  submitted_at: string | null;
+  average: number | null;
+  reminded: boolean;
+  reminded_at: string | null;
+  // True when the teacher who still needs to file is the adviser themself:
+  // a direct-add needs no reminder, so the Remind button is hidden.
+  own_class: boolean;
+}
+
+export interface ConsolidationLearner {
+  learner_id: string;
+  first_name: string;
+  last_name: string;
+  sex: 'Male' | 'Female';
+  grades: Record<string, number | null>;
+  gwa: number | null;
+  gwa_reason: string | null;
+  honors: string | null;
+  at_risk: boolean;
+  standing: string;
+  rank: number | null;
+}
+
+export interface ConsolidationView {
+  has_advisory: boolean;
+  academic_year: string;
+  grading: GradingInfo;
+  grade: number | null;
+  section: string | null;
+  quarter: number;
+  readiness: {
+    submitted: number;
+    total: number;
+    pct: number;
+  };
+  kpis: {
+    class_gwa: number | null;
+    subject_average: number | null;
+    honor_count: number;
+    honor_pct: number;
+    at_risk_count: number;
+  };
+  subjects: ConsolidationSubject[];
+  learners: ConsolidationLearner[];
+}
+
+// Final grades across the year's periods: each subject's final grade is the
+// mean of its period grades, and the final GWA is the mean of the final
+// grades. This is the same final grade the Report Card (Batch 5) prints.
+export interface ConsolidationFinalSubject {
+  subject_name: string;
+  teacher_name: string;
+  filed_periods: number;
+  total_periods: number;
+  average: number | null;
+}
+
+export interface ConsolidationFinalLearner {
+  learner_id: string;
+  first_name: string;
+  last_name: string;
+  sex: 'Male' | 'Female';
+  grades: Record<string, number | null>;
+  gwa: number | null;
+  gwa_reason: string | null;
+  honors: string | null;
+  at_risk: boolean;
+  standing: string;
+  rank: number | null;
+}
+
+export interface ConsolidationFinals {
+  has_data: boolean;
+  academic_year: string;
+  grading: GradingInfo;
+  periods: number[];
+  period_label: string;
+  subjects: ConsolidationFinalSubject[];
+  learners: ConsolidationFinalLearner[];
+  readiness: {
+    complete: number;
+    total: number;
+    pct: number;
+  };
+  kpis: {
+    class_gwa: number | null;
+    honor_count: number;
+    at_risk_count: number;
+  };
+}
+
+export interface ConsolidationReadiness {
+  has_advisory: boolean;
+  grade: number | null;
+  section: string | null;
+  quarter: number;
+  academic_year: string;
+  grading: GradingInfo;
+  submitted: number;
+  total: number;
+  pct: number;
+}
+
+// ---------- Report Card (Batch 5) ----------
+// One card per learner in the adviser's section, filled from the consolidated
+// grades and the attendance records. The API returns everything the card
+// prints; the page displays it and saves the teacher's comments.
+export interface ReportCardDescriptor {
+  range: string;
+  descriptor: string;
+  remarks: string;
+}
+
+export interface ReportCardMonth {
+  key: string; // "2026-06"
+  label: string; // "Jun"
+}
+
+export interface ReportCardAttendanceMonth {
+  class_days: number;
+  present: number;
+  absent: number;
+  excused: number;
+}
+
+export interface ReportCardSubject {
+  subject_name: string;
+  teacher_name: string;
+}
+
+export interface ReportCardLearnerSubject {
+  subject_name: string;
+  period_grades: (number | null)[];
+  final_grade: number | null;
+  remarks: string | null;
+}
+
+export interface ReportCardLearner {
+  learner_id: string;
+  first_name: string;
+  last_name: string;
+  sex: 'Male' | 'Female';
+  subjects: ReportCardLearnerSubject[];
+  general_average: number | null;
+  general_average_remarks: string | null;
+  attendance: {
+    months: Record<string, ReportCardAttendanceMonth | null>;
+    totals: ReportCardAttendanceMonth | null;
+  };
+  comments: Record<string, string>;
+}
+
+export interface ReportCardView {
+  has_advisory: boolean;
+  adviser: { grade: number; section: string; name: string };
+  school_name: string;
+  academic_year: string;
+  grading: GradingInfo;
+  descriptors: ReportCardDescriptor[];
+  months: ReportCardMonth[];
+  subjects: ReportCardSubject[];
+  learners: ReportCardLearner[];
+}
+
+export interface PublicSchool {
+  id: number;
+  name: string;
+  city_region: string;
+}
+
+export interface TeacherSession {
+  token: string;
+  teacher: {
+    id: number;
+    first_name: string;
+    last_name: string;
+    email: string;
+    username: string;
+    must_change_password: boolean;
+  };
+}
+
+// Field name -> message, as returned by the API for form mistakes.
+export type FieldErrors = Record<string, string>;

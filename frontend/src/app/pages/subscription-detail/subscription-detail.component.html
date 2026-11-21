@@ -1,0 +1,277 @@
+<a routerLink="/subscriptions" class="back">
+  <app-icon name="arrow-left" [size]="15" /> Subscriptions
+</a>
+
+@if (error()) {
+  <div class="alert" role="alert">
+    <app-icon name="alert" [size]="16" />
+    <span>{{ error() }}</span>
+  </div>
+}
+
+@if (subscription(); as s) {
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Subscription</div>
+      <h1 class="page-title">{{ s.plan_name }}</h1>
+      <div class="status">
+        <span class="pill" [class]="statusTone(s.status)">{{ statusLabel(s.status) }}</span>
+        <a [routerLink]="['/teachers', s.teacher_id]">{{ s.first_name }} {{ s.last_name }}</a>
+      </div>
+    </div>
+    <div class="head-actions">
+      @if (s.status !== 'cancelled') {
+        <button type="button" class="btn" (click)="open('extend')">
+          <app-icon name="plus" [size]="16" /> Extend
+        </button>
+      }
+      @if (isCurrent(s)) {
+        <button type="button" class="btn" (click)="open('change')">
+          <app-icon name="edit" [size]="16" /> Change plan
+        </button>
+        <button type="button" class="btn btn-danger" (click)="open('cancel')">
+          <app-icon name="x" [size]="16" /> Cancel
+        </button>
+      }
+    </div>
+  </div>
+
+  @if (s.status === 'past_due') {
+    <div class="alert warn" role="status">
+      <app-icon name="alert" [size]="16" />
+      <span>Waiting for payment of the unpaid invoice below.</span>
+    </div>
+  }
+
+  <section class="card stack">
+    <div class="card-head"><h2 class="card-title">Details</h2></div>
+    <dl class="details card-pad">
+      <div>
+        <dt>Teacher</dt>
+        <dd>
+          <a [routerLink]="['/teachers', s.teacher_id]">{{ s.first_name }} {{ s.last_name }}</a>
+          <span class="mono muted"> · {{ s.username }}</span>
+        </dd>
+      </div>
+      <div>
+        <dt>School</dt>
+        <dd>{{ s.school_name }}</dd>
+      </div>
+      <div>
+        <dt>Plan</dt>
+        <dd>{{ s.plan_name }}</dd>
+      </div>
+      <div>
+        <dt>Price</dt>
+        <dd class="money">{{ planPrice(s) }}</dd>
+      </div>
+      <div>
+        <dt>Billing cycle</dt>
+        <dd>{{ billingCycleLabel(s.billing_cycle) }}</dd>
+      </div>
+      <div>
+        <dt>Started</dt>
+        <dd>
+          {{ s.started_at | date: 'MMM d, y' }}
+          @if (s.created_by_name) {
+            by {{ s.created_by_name }}
+          }
+        </dd>
+      </div>
+      @if (s.trial_ends_at) {
+        <div>
+          <dt>Trial ends</dt>
+          <dd>{{ s.trial_ends_at | date: 'MMM d, y' }}</dd>
+        </div>
+      }
+      <div>
+        <dt>Current period</dt>
+        <dd>
+          {{ s.current_period_start | date: 'MMM d, y' }} –
+          {{ s.current_period_end | date: 'MMM d, y' }}
+        </dd>
+      </div>
+      @if (s.ended_at) {
+        <div>
+          <dt>Ended</dt>
+          <dd>{{ s.ended_at | date: 'MMM d, y' }}</dd>
+        </div>
+        <div>
+          <dt>Reason</dt>
+          <dd>{{ s.end_reason || '—' }}</dd>
+        </div>
+      }
+    </dl>
+  </section>
+
+  <section class="card stack">
+    <div class="card-head"><h2 class="card-title">Invoices</h2></div>
+    @if (invoices().length > 0) {
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Invoice</th>
+            <th>Period</th>
+            <th>Amount</th>
+            <th>Due</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (invoice of invoices(); track invoice.id) {
+            <tr>
+              <td data-label="Invoice" class="mono nowrap">{{ invoice.invoice_number }}</td>
+              <td data-label="Period">
+                {{ invoice.period_start | date: 'MMM d, y' }} –
+                {{ invoice.period_end | date: 'MMM d, y' }}
+              </td>
+              <td data-label="Amount" class="money">{{ peso(invoice.amount) }}</td>
+              <td data-label="Due" class="nowrap">{{ invoice.due_date | date: 'MMM d, y' }}</td>
+              <td data-label="Status">
+                <span class="pill" [class]="invoiceStatusTone(invoice.status, invoice.is_overdue)">
+                  {{ invoiceStatusLabel(invoice.status, invoice.is_overdue) }}
+                </span>
+              </td>
+              <td class="right">
+                <a
+                  class="btn btn-small"
+                  routerLink="/payments"
+                  [queryParams]="{ invoice: invoice.id }"
+                  >View</a
+                >
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    } @else {
+      <div class="empty">No invoices.</div>
+    }
+  </section>
+
+  @switch (dialog()) {
+    @case ('extend') {
+      <app-modal title="Extend subscription" (closed)="close()">
+        @if (dialogError()) {
+          <div class="alert" role="alert">
+            <app-icon name="alert" [size]="16" />
+            <span>{{ dialogError() }}</span>
+          </div>
+        }
+        <form (ngSubmit)="extend()" novalidate>
+          <div class="field">
+            <label for="ex-months">Months to add</label>
+            <input
+              id="ex-months"
+              name="months"
+              type="number"
+              min="1"
+              max="24"
+              class="input mono"
+              [class.invalid]="errors()['months']"
+              [(ngModel)]="months"
+            />
+            @if (errors()['months']) {
+              <span class="field-error">{{ errors()['months'] }}</span>
+            }
+          </div>
+          @if (s.status === 'past_due' || s.status === 'expired') {
+            <div class="alert warn" role="status">
+              <app-icon name="alert" [size]="16" />
+              <span>
+                The subscription becomes active from today without a payment. Unpaid invoices are
+                voided.
+              </span>
+            </div>
+          }
+          <div class="form-actions">
+            <button type="button" class="btn" (click)="close()">Cancel</button>
+            <button type="submit" class="btn btn-primary" [disabled]="working()">
+              {{ working() ? 'Saving…' : 'Extend' }}
+            </button>
+          </div>
+        </form>
+      </app-modal>
+    }
+    @case ('cancel') {
+      <app-modal title="Cancel subscription" (closed)="close()">
+        @if (dialogError()) {
+          <div class="alert" role="alert">
+            <app-icon name="alert" [size]="16" />
+            <span>{{ dialogError() }}</span>
+          </div>
+        }
+        <form (ngSubmit)="cancel()" novalidate>
+          <div class="field">
+            <label for="ca-reason">Reason (optional)</label>
+            <textarea
+              id="ca-reason"
+              name="reason"
+              class="textarea"
+              rows="3"
+              [class.invalid]="errors()['reason']"
+              [(ngModel)]="reason"
+            ></textarea>
+          </div>
+          <div class="alert warn" role="status">
+            <app-icon name="alert" [size]="16" />
+            <span>
+              {{ s.first_name }} {{ s.last_name }} loses {{ s.plan_name }} right away. Unpaid
+              invoices are voided.
+            </span>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn" (click)="close()">Keep subscription</button>
+            <button type="submit" class="btn btn-danger" [disabled]="working()">
+              {{ working() ? 'Cancelling…' : 'Cancel subscription' }}
+            </button>
+          </div>
+        </form>
+      </app-modal>
+    }
+    @case ('change') {
+      <app-modal title="Change plan" (closed)="close()">
+        @if (dialogError()) {
+          <div class="alert" role="alert">
+            <app-icon name="alert" [size]="16" />
+            <span>{{ dialogError() }}</span>
+          </div>
+        }
+        <form (ngSubmit)="changePlan()" novalidate>
+          <div class="field">
+            <label>New plan</label>
+            <app-dropdown
+              name="plan_id"
+              [options]="planOptions()"
+              [(ngModel)]="planId"
+              [invalid]="!!errors()['plan_id']"
+              placeholder="Choose a plan"
+              countSingular="plan"
+              countPlural="plans"
+            />
+            @if (errors()['plan_id']) {
+              <span class="field-error">{{ errors()['plan_id'] }}</span>
+            }
+          </div>
+          @if (chosenPlan; as plan) {
+            @if (plan.trial_days > 0) {
+              <div class="field">
+                <label class="check">
+                  <input type="checkbox" name="with_trial" [(ngModel)]="withTrial" />
+                  Start with the {{ plan.trial_days }}-day trial
+                </label>
+              </div>
+            }
+          }
+          <div class="form-actions">
+            <button type="button" class="btn" (click)="close()">Cancel</button>
+            <button type="submit" class="btn btn-primary" [disabled]="working()">
+              {{ working() ? 'Saving…' : 'Change plan' }}
+            </button>
+          </div>
+        </form>
+      </app-modal>
+    }
+  }
+}

@@ -1,0 +1,393 @@
+<div class="pagehead">
+  <div>
+    <h1>Grades / Class Record</h1>
+    <div class="sub">
+      Academic Year {{ academicYear() }}
+      @if (sheet()) {
+        · {{ sheet()!.grading.label }}
+      }
+    </div>
+  </div>
+  <div class="head-controls">
+    <div class="field">
+      <label>Class &amp; section</label>
+      <app-dropdown
+        [ngModel]="selectedClassId()"
+        (ngModelChange)="selectedClassId.set($event); onClassChange()"
+        [options]="classOptions()"
+        placeholder="Choose a class"
+        searchPlaceholder="Search classes"
+        countSingular="class"
+        countPlural="classes"
+        [disabled]="classes().length === 0"
+      />
+    </div>
+  </div>
+</div>
+
+@if (error()) {
+  <div class="alert" role="alert">
+    <app-icon name="alert" [size]="16" />
+    <span>{{ error() }}</span>
+  </div>
+}
+
+@if (loading() && !sheet()) {
+  <p class="muted">Loading the grade sheet…</p>
+} @else if (classes().length === 0) {
+  <div class="card">
+    <div class="empty">
+      <p><b>No classes yet.</b></p>
+      <p>Add a class first, then encode its grades.</p>
+      <a class="btn btn-primary" routerLink="/teacher/classes">Go to Classes &amp; Sections</a>
+    </div>
+  </div>
+} @else if (sheet()) {
+  <div class="trail">
+    Academic Year {{ academicYear() }} &nbsp;›&nbsp; Class Records &amp; Grading &nbsp;›&nbsp;
+    <b>{{ sheet()!.class.subject_name }} · {{ sheet()!.class.section_name }}</b>
+  </div>
+
+  @if (sheet()!.reminder.active) {
+    <div class="alert warn" role="alert">
+      <app-icon name="alert" [size]="16" />
+      <span>Your adviser{{ sheet()!.reminder.adviser_name ? ' (' + sheet()!.reminder.adviser_name + ')' : '' }} asked you to submit grades for {{ sheet()!.class.subject_name }}, {{ periodLabel() }}.</span>
+    </div>
+  }
+
+  <!-- Class record header -->
+  <section class="card record" aria-label="Class record header">
+    <div class="record-top">
+      <div>
+        <div class="kicker"><span class="live-dot" aria-hidden="true"></span>Class record</div>
+        <h2>{{ sheet()!.class.subject_name }} · {{ sheet()!.class.section_name }}</h2>
+        <div class="meta">
+          <span>Grade {{ sheet()!.class.grade_level }}</span>
+          <span class="sep">|</span>
+          <span>{{ periodLabel() }}</span>
+          <span class="sep">|</span>
+          <span>{{ sheet()!.learners.length }} {{ sheet()!.learners.length === 1 ? 'learner' : 'learners' }}</span>
+          <span class="sep">|</span>
+          <span>{{ sheet()!.grading.label }}</span>
+        </div>
+      </div>
+      <div class="record-actions">
+        <button type="button" class="btn" (click)="recalculate()">
+          <app-icon name="refresh" [size]="16" /> Recalculate all
+        </button>
+        <button type="button" class="btn" (click)="exportCsv()" [disabled]="sheet()!.learners.length === 0">
+          <app-icon name="download" [size]="16" /> CSV
+        </button>
+        <button type="button" class="btn btn-secondary" (click)="discardChanges()" [disabled]="!dirty()">Discard changes</button>
+        <button type="button" class="btn btn-primary" (click)="save()" [disabled]="saving() || !dirty()">
+          {{ saving() ? 'Saving…' : 'Save scores' }}
+        </button>
+        <button type="button" class="btn btn-primary" (click)="openSubmit()" [disabled]="submitLoading() || sheet()!.learners.length === 0">
+          {{ submitLoading() ? 'Checking…' : submitLabel() }}
+        </button>
+      </div>
+    </div>
+    <div class="saved-note" [class.dirty]="dirty()">
+      @if (sheet()!.submission) {
+        <span class="pill accent">{{ sheet()!.direct_add ? 'In Consolidation' : 'Submitted' }} {{ submittedNote() }}</span>
+      }
+      <span class="unsaved-dot"></span>{{ dirty() ? 'Unsaved changes' : sheet()!.submission ? 'Saved' : 'Not submitted yet' }}
+    </div>
+    <div class="quarters" role="tablist" [attr.aria-label]="sheet()!.grading.period_label">
+      @for (q of periods(); track q) {
+        <button type="button" class="qtab" role="tab" [class.active]="quarter() === q" [attr.aria-selected]="quarter() === q" (click)="onQuarterChange(q)">
+          <span>
+            <span class="qn">{{ sheet()!.grading.period_label }} {{ q }}</span>
+            <span class="qs">{{ quarter() === q ? 'Active encoding' : 'Class record' }}</span>
+          </span>
+          <span class="qdot" aria-hidden="true"></span>
+          @if (sheet()!.submitted_periods.includes(q)) {
+            <span class="done">SUBMITTED</span>
+          }
+        </button>
+      }
+      <div class="curr-note">Grading system<b>{{ sheet()!.grading.label }}</b></div>
+    </div>
+  </section>
+
+  <div class="formula" aria-label="Computation formula">
+    <span><span class="fx">fx</span><span>{{ formulaText() }}</span></span>
+    <span class="live"><i aria-hidden="true"></i>Live calculation</span>
+  </div>
+
+  <!-- Summary stats -->
+  <section class="ledger" aria-label="Grade summary">
+    <div class="cell">
+      <span class="k">Mean percentage score (MPS)</span>
+      <span class="v">{{ stats().mps === null ? '—' : stats().mps + '%' }}</span>
+      <span class="s">of complete records</span>
+    </div>
+    <div class="cell">
+      <span class="k">Passing rate</span>
+      <span class="v">{{ stats().passingRate === null ? '—' : stats().passingRate + '%' }}</span>
+      <span class="s">{{ stats().completeCount }} of {{ stats().total }} complete</span>
+      <div class="bar" aria-hidden="true"><i [style.width.%]="stats().passingRate ?? 0"></i></div>
+    </div>
+    <div class="cell">
+      <span class="k">Highest {{ sheet()!.grading.grade_label.toLowerCase() }}</span>
+      <span class="v">{{ stats().highest === null ? '—' : stats().highest }}</span>
+      <span class="s">{{ sheet()!.grading.grade_label.toLowerCase() }}</span>
+    </div>
+    <div class="cell">
+      <span class="k">Intervention list</span>
+      <span class="v">{{ stats().intervention.length }}</span>
+      <span class="s">{{ stats().intervention.length === 0 ? 'no learner below 75' : stats().intervention.join('; ') }}</span>
+    </div>
+    <div class="cell">
+      <span class="k">Encoding progress</span>
+      <span class="v">{{ stats().encodingPct }}%</span>
+      <span class="s">{{ stats().completeCount }} of {{ stats().total }} records complete</span>
+      <div class="bar" aria-hidden="true"><i [style.width.%]="stats().encodingPct"></i></div>
+    </div>
+  </section>
+
+  <!-- Weights -->
+  <section class="card weights" aria-label="Grade weights">
+    <div class="weights-head">
+      <div>
+        <span class="card-title">Weights</span>
+        <span class="muted"> · WW {{ sheet()!.weights.ww }}% · PT {{ sheet()!.weights.pt }}% · {{ sheet()!.grading.third_short }} {{ sheet()!.weights.ex }}%</span>
+      </div>
+      @if (!weightsEditing()) {
+        <button type="button" class="btn" (click)="weightsEditing.set(true)">Edit weights</button>
+      }
+    </div>
+    @if (weightsEditing()) {
+      <div class="weights-form">
+        <label class="field">Written Works %
+          <input type="number" class="input" min="0" max="100" [ngModel]="weightsDraft().ww" (ngModelChange)="weightsDraft.set({ ...weightsDraft(), ww: $event })" />
+        </label>
+        <label class="field">Performance Tasks %
+          <input type="number" class="input" min="0" max="100" [ngModel]="weightsDraft().pt" (ngModelChange)="weightsDraft.set({ ...weightsDraft(), pt: $event })" />
+        </label>
+        <label class="field">{{ sheet()!.grading.third_label }} %
+          <input type="number" class="input" min="0" max="100" [ngModel]="weightsDraft().ex" (ngModelChange)="weightsDraft.set({ ...weightsDraft(), ex: $event })" />
+        </label>
+        @if (sheet()!.grading.third_short === 'EX' && exColumns().length > 0) {
+          <div class="subweights">
+            <span class="card-title">Examinations shares</span>
+            <span class="muted"> · each test's share of the Examinations grade</span>
+            @for (column of exColumns(); track column.id) {
+              <label class="field">{{ column.name }} %
+                <input type="number" class="input" min="0" max="100" [ngModel]="subWeightsDraft()[column.id] ?? 0" (ngModelChange)="setSubWeight(column, $event)" />
+              </label>
+            }
+            <span class="weights-sum" [class.bad]="subWeightsSum() !== 100">Total {{ subWeightsSum() }}% — must be 100%</span>
+          </div>
+        }
+        <div class="weights-actions">
+          <span class="weights-sum" [class.bad]="weightsSum() !== 100">Total {{ weightsSum() }}% — must be 100%</span>
+          <button type="button" class="btn" (click)="cancelWeights()">Cancel</button>
+          <button type="button" class="btn btn-primary" (click)="saveWeights()" [disabled]="weightsSum() !== 100 || (exColumns().length > 0 && subWeightsSum() !== 100) || weightsSaving()">
+            {{ weightsSaving() ? 'Saving…' : 'Save weights' }}
+          </button>
+        </div>
+      </div>
+    }
+  </section>
+
+  @if (sheet()!.learners.length === 0) {
+    <div class="card">
+      <div class="empty">
+        <p><b>No learners enrolled.</b></p>
+        <p>Enrol learners in Classes &amp; Sections first, then encode their grades.</p>
+        <a class="btn btn-primary" routerLink="/teacher/classes">Go to Classes &amp; Sections</a>
+      </div>
+    </div>
+  } @else {
+    <!-- Encoding grid -->
+    <section class="card gridcard" aria-label="Grade encoding grid">
+      <div class="grid-tools">
+        <label class="searchbox">
+          <app-icon name="search" [size]="16" />
+          <input type="search" placeholder="Search a learner…" [ngModel]="search()" (ngModelChange)="search.set($event)" aria-label="Search learners" />
+        </label>
+        <div class="fchips" role="group" aria-label="Filter by sex">
+          <button type="button" class="fchip" [class.active]="sexFilter() === 'all'" (click)="sexFilter.set('all')">All <span class="n">({{ sexCounts().all }})</span></button>
+          <button type="button" class="fchip" [class.active]="sexFilter() === 'Male'" (click)="sexFilter.set('Male')">Male <span class="n">({{ sexCounts().Male }})</span></button>
+          <button type="button" class="fchip" [class.active]="sexFilter() === 'Female'" (click)="sexFilter.set('Female')">Female <span class="n">({{ sexCounts().Female }})</span></button>
+        </div>
+        <button type="button" class="tool-toggle" [class.on]="highlightBelow()" [attr.aria-pressed]="highlightBelow()" (click)="highlightBelow.set(!highlightBelow())">
+          <span class="tk" aria-hidden="true"></span>Highlight &lt; 75
+        </button>
+        <button type="button" class="btn tool-btn" [attr.aria-pressed]="sortByRank()" (click)="sortByRank.set(!sortByRank())">
+          Sort by rank
+        </button>
+        @if (search() || sexFilter() !== 'all' || highlightBelow() || sortByRank()) {
+          <button type="button" class="btn btn-ghost" (click)="resetFilters()">Clear filters</button>
+        }
+      </div>
+
+      <!-- Encoding table (desktop) -->
+      <div class="table-wrap">
+        <table class="grades-table">
+          <thead>
+            <tr class="group-row">
+              <th class="sticky" rowspan="2">Learner</th>
+              @if (columnsByComponent().WW.length > 0) {
+                <th class="group ww" [attr.colspan]="columnsByComponent().WW.length">Written Works · {{ sheet()!.weights.ww }}%</th>
+              }
+              @if (columnsByComponent().PT.length > 0) {
+                <th class="group pt" [attr.colspan]="columnsByComponent().PT.length">Performance Tasks · {{ sheet()!.weights.pt }}%</th>
+              }
+              @if (columnsByComponent().EX.length > 0) {
+                <th class="group qa" [attr.colspan]="columnsByComponent().EX.length">{{ sheet()!.grading.third_label }} · {{ sheet()!.weights.ex }}%</th>
+              }
+              <th class="group calc" colspan="8">Computed</th>
+            </tr>
+            <tr>
+              @for (column of sheet()!.columns; track column.id) {
+                <th [class]="'col-' + column.component.toLowerCase()">
+                  <span class="col-name">{{ column.name }}</span>
+                  <span class="col-max">
+                    / <input type="number" class="max-input" min="1" max="1000" [value]="column.highest_possible" (change)="updateColumnMax(column, $any($event.target).value)" aria-label="Highest possible score for {{ column.name }}" />
+                    <button type="button" class="col-remove" (click)="askRemoveColumn(column)" aria-label="Remove {{ column.name }}" title="Remove {{ column.name }}">×</button>
+                  </span>
+                </th>
+              }
+              <th class="calc">WW PS</th>
+              <th class="calc">WW WS</th>
+              <th class="calc">PT PS</th>
+              <th class="calc">PT WS</th>
+              <th class="calc">{{ sheet()!.grading.third_short }} PS</th>
+              <th class="calc">{{ sheet()!.grading.third_short }} WS</th>
+              <th class="calc">Initial</th>
+              <th class="calc qg">{{ sheet()!.grading.period_short }}G</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of filteredRows(); track row.learner.id) {
+              <tr [class.low]="highlightBelow() && row.computed.complete && (row.computed.qg ?? 100) < 75">
+                <td class="sticky learner-cell">
+                  <span class="learner-name">{{ learnerName(row.learner) }}</span>
+                  <span class="learner-id">{{ row.learner.learner_id }} · {{ row.learner.sex }}</span>
+                </td>
+                @for (column of sheet()!.columns; track column.id) {
+                  <td [class]="'score-cell col-' + column.component.toLowerCase()">
+                    <input type="number" class="score-input" min="0" [max]="column.highest_possible" step="0.01" placeholder="—"
+                      [value]="scoreValue(row.learner.id, column.id) ?? ''"
+                      (change)="setScore(row.learner, column, $any($event.target).value)"
+                      [attr.aria-label]="column.name + ' score for ' + learnerName(row.learner)" />
+                  </td>
+                }
+                <td class="num">{{ fmt(row.computed.components.WW.ps) }}</td>
+                <td class="num">{{ fmt(row.computed.components.WW.ws) }}</td>
+                <td class="num">{{ fmt(row.computed.components.PT.ps) }}</td>
+                <td class="num">{{ fmt(row.computed.components.PT.ws) }}</td>
+                <td class="num">{{ fmt(row.computed.components.EX.ps) }}</td>
+                <td class="num">{{ fmt(row.computed.components.EX.ws) }}</td>
+                <td class="num">{{ fmt(row.computed.initial) }}</td>
+                <td class="num qg" [class.below]="row.computed.complete && (row.computed.qg ?? 100) < 75" [title]="row.computed.descriptor ?? ''">{{ fmt(row.computed.qg) }}</td>
+              </tr>
+            }
+            @if (filteredRows().length === 0) {
+              <tr><td [attr.colspan]="sheet()!.columns.length + 9" class="empty-row">No learners match the filters.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Per-learner cards (phones) -->
+      <div class="cards">
+        @for (row of filteredRows(); track row.learner.id) {
+          <article class="card learner-card" [class.low]="highlightBelow() && row.computed.complete && (row.computed.qg ?? 100) < 75">
+            <header>
+              <div>
+                <span class="learner-name">{{ learnerName(row.learner) }}</span>
+                <span class="learner-id">{{ row.learner.learner_id }} · {{ row.learner.sex }}</span>
+              </div>
+              <div class="card-qg">
+                <span class="lbl">{{ sheet()!.grading.period_short }}G</span>
+                <span class="qg-big" [class.below]="row.computed.complete && (row.computed.qg ?? 100) < 75">{{ fmt(row.computed.qg) }}</span>
+                <span class="lbl">{{ row.computed.status }}</span>
+              </div>
+            </header>
+            @for (component of components; track component) {
+              <div class="card-group">
+                <span class="group-label">{{ componentLabel(component) }} · {{ component === 'WW' ? sheet()!.weights.ww : component === 'PT' ? sheet()!.weights.pt : sheet()!.weights.ex }}%</span>
+                <div class="card-scores">
+                  @for (column of columnsByComponent()[component]; track column.id) {
+                    <div class="score-field">
+                      <span class="score-field-head">
+                        <span>{{ column.name }} / {{ column.highest_possible }}</span>
+                        <button type="button" class="col-remove" (click)="askRemoveColumn(column)" [attr.aria-label]="'Remove ' + column.name" [title]="'Remove ' + column.name">×</button>
+                      </span>
+                      <input type="number" class="input score-input" min="0" [max]="column.highest_possible" step="0.01" placeholder="—"
+                        [value]="scoreValue(row.learner.id, column.id) ?? ''"
+                        (change)="setScore(row.learner, column, $any($event.target).value)"
+                        [attr.aria-label]="column.name + ' score for ' + learnerName(row.learner)" />
+                    </div>
+                  }
+                </div>
+                <span class="card-computed">PS {{ fmt(row.computed.components[component].ps) }} · WS {{ fmt(row.computed.components[component].ws) }}</span>
+              </div>
+            }
+            <footer>Initial {{ fmt(row.computed.initial) }}@if (row.computed.descriptor) { · {{ row.computed.descriptor }} } · {{ row.computed.entered }} of {{ row.computed.cells }} cells encoded</footer>
+          </article>
+        }
+      </div>
+
+      <!-- Add a column: kept outside the table so it works on phones too. -->
+      <div class="add-columns">
+        <span class="muted">Add a column:</span>
+        <button type="button" class="btn btn-ghost" (click)="addColumn('WW')">+ WW{{ columnsByComponent().WW.length + 1 }}</button>
+        <button type="button" class="btn btn-ghost" (click)="addColumn('PT')">+ PT{{ columnsByComponent().PT.length + 1 }}</button>
+        <button type="button" class="btn btn-ghost" (click)="addColumn('EX')">+ {{ sheet()!.grading.third_short }}{{ columnsByComponent().EX.length + 1 }}</button>
+      </div>
+    </section>
+  }
+}
+
+<!-- Submit to adviser / Move to Consolidation -->
+@if (submitOpen() && submitCheck()) {
+  <app-modal [title]="sheet()!.direct_add ? 'Move to Consolidation' : 'Submit to adviser'" (closed)="submitOpen.set(false)">
+    <p class="muted">{{ periodLabel() }} · {{ sheet()!.class.subject_name }} · {{ sheet()!.class.section_name }}</p>
+    <div class="check-rows">
+      <div class="check-row"><span>Encoding progress</span><b>{{ submitCheck()!.encoding_pct }}%</b></div>
+      <div class="check-row"><span>Complete records</span><b>{{ submitCheck()!.complete_learners }} of {{ submitCheck()!.total_learners }}</b></div>
+      <div class="check-row"><span>Cells encoded</span><b>{{ submitCheck()!.entered_cells }} of {{ submitCheck()!.total_cells }}</b></div>
+    </div>
+    @if (submitCheck()!.incomplete_names.length > 0) {
+      <p class="muted">Still incomplete: {{ submitCheck()!.incomplete_names.join(', ') }}</p>
+    }
+    @if (submitCheck()!.intervention.length > 0) {
+      <p class="muted">Below 75: {{ submitCheck()!.intervention.join(', ') }}</p>
+    }
+    @if (submitCheck()!.complete_learners < submitCheck()!.total_learners) {
+      <label class="check modal-check">
+        <input type="checkbox" [ngModel]="confirmBlanks()" (ngModelChange)="confirmBlanks.set($event)" />
+        {{ sheet()!.direct_add ? 'Move anyway — the blanks stay blank in the consolidation.' : 'Submit anyway — the blanks stay blank in the consolidation.' }}
+      </label>
+    } @else {
+      @if (sheet()!.direct_add) {
+        <p class="muted">Every record is complete. These grades go straight into Consolidation for your section — you are its adviser.</p>
+      } @else {
+        <p class="muted">Every record is complete. The adviser will see these grades in Consolidation.</p>
+      }
+    }
+    <div class="modal-actions">
+      <button type="button" class="btn" (click)="submitOpen.set(false)">Cancel</button>
+      <button type="button" class="btn btn-primary" (click)="submit()" [disabled]="submitting() || (submitCheck()!.complete_learners < submitCheck()!.total_learners && !confirmBlanks())">
+        {{ submitting() ? 'Filing…' : sheet()!.direct_add ? 'Move to Consolidation' : 'Submit grades' }}
+      </button>
+    </div>
+  </app-modal>
+}
+
+<!-- Remove column -->
+@if (removeColumn()) {
+  <app-modal title="Remove {{ removeColumn()!.name }}" (closed)="removeColumn.set(null)">
+    <p>Removing {{ removeColumn()!.name }} also deletes every score in it. This cannot be undone.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn" (click)="removeColumn.set(null)">Keep the column</button>
+      <button type="button" class="btn btn-danger" (click)="confirmRemoveColumn()" [disabled]="removingColumn()">
+        {{ removingColumn() ? 'Removing…' : 'Remove column' }}
+      </button>
+    </div>
+  </app-modal>
+}

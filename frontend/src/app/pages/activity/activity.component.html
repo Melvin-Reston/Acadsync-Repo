@@ -1,0 +1,113 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">System</div>
+    <h1 class="page-title">Activity Log</h1>
+  </div>
+  @if (hasFilters) {
+    <div class="head-actions">
+      <button type="button" class="btn" (click)="clearFilters()">
+        <app-icon name="x" [size]="16" /> Clear filters
+      </button>
+    </div>
+  }
+</div>
+
+@if (error()) {
+  <div class="alert" role="alert">
+    <app-icon name="alert" [size]="16" />
+    <span>{{ error() }}</span>
+  </div>
+}
+
+<section class="card">
+  <div class="toolbar">
+    <div class="search">
+      <app-icon name="search" [size]="16" />
+      <input
+        type="search"
+        class="input"
+        placeholder="Search details or name"
+        aria-label="Search activity"
+        [(ngModel)]="filters.search"
+        (ngModelChange)="onSearch()"
+      />
+    </div>
+    <app-dropdown
+      [options]="typeOptions"
+      [(ngModel)]="filters.action"
+      (ngModelChange)="applyFilters()"
+      placeholder="All types"
+      countSingular="type"
+      countPlural="types"
+    />
+    <app-dropdown
+      [options]="adminOptions()"
+      [ngModel]="filters.admin_id"
+      (ngModelChange)="filters.admin_id = $event === '' ? null : $event; applyFilters()"
+      placeholder="All accounts"
+      countSingular="account"
+      countPlural="accounts"
+    />
+    <input
+      type="date"
+      class="input"
+      aria-label="From date"
+      [(ngModel)]="filters.from"
+      (ngModelChange)="applyFilters()"
+    />
+    <input
+      type="date"
+      class="input"
+      aria-label="To date"
+      [(ngModel)]="filters.to"
+      (ngModelChange)="applyFilters()"
+    />
+  </div>
+
+  @if (entries().length > 0) {
+    <table class="table">
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>Who</th>
+          <th>What</th>
+          <th>Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (entry of entries(); track entry.id) {
+          <tr>
+            <td data-label="When" class="mono nowrap">
+              {{ entry.created_at | date: 'MMM d, y, h:mm a' }}
+            </td>
+            <td data-label="Who">
+              <span>
+                <span class="cell-main">{{ entry.admin_name }}</span>
+                <span class="cell-sub">{{ roleLabel(entry.admin_role) }}</span>
+              </span>
+            </td>
+            <td data-label="What">
+              <span class="pill plain" [class]="actionTone(entry.action)">
+                {{ actionLabel(entry.action) }}
+              </span>
+            </td>
+            <td data-label="Details">{{ entry.description }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  } @else if (!loading()) {
+    <div class="empty">
+      {{ hasFilters ? 'No activity matches your filters.' : 'No activity yet.' }}
+    </div>
+  } @else {
+    <div class="empty">Loading…</div>
+  }
+
+  <app-pagination
+    [page]="filters.page"
+    [pageSize]="filters.page_size"
+    [total]="total()"
+    (pageChange)="goToPage($event)"
+  />
+</section>

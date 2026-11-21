@@ -1,0 +1,681 @@
+<div class="hero">
+  <div class="hero-left">
+    <span class="mono-label">
+      Teacher workspace
+      @if (academicYear()) {
+        <span class="ay">Academic Year {{ academicYear() }}</span>
+      }
+    </span>
+    <h1>Classes <em>&amp;</em> Sections</h1>
+    <p>Your classes and sections for this school year — all in one place.</p>
+  </div>
+  <div class="hero-right">
+    <div class="ledger-summary" role="group" aria-label="Summary">
+      <div class="cell">
+        <span class="k">Your classes</span>
+        <span class="v">{{ classes().length }}</span>
+      </div>
+      <div class="cell">
+        <span class="k">Learners</span>
+        <span class="v">{{ totalStudents() }}</span>
+      </div>
+    </div>
+    <div class="hero-actions">
+      <div class="view-toggle" role="group" aria-label="View layout">
+        <button type="button" [class.active]="view() === 'tiles'" [attr.aria-pressed]="view() === 'tiles'" (click)="view.set('tiles')">
+          <app-icon name="grid" [size]="15" /> Tiles
+        </button>
+        <button type="button" [class.active]="view() === 'list'" [attr.aria-pressed]="view() === 'list'" (click)="view.set('list')">
+          <app-icon name="list" [size]="15" /> List
+        </button>
+      </div>
+      <button type="button" class="btn btn-primary" (click)="openAddClass()">
+        <app-icon name="plus" [size]="16" /> Add class &amp; section
+      </button>
+    </div>
+  </div>
+</div>
+
+@if (error()) {
+  <div class="alert" role="alert">
+    <app-icon name="alert" [size]="16" />
+    <span>{{ error() }}</span>
+  </div>
+}
+
+<div class="tabs" role="tablist">
+  <button type="button" class="tab" [class.active]="tab() === 'classes'" (click)="tab.set('classes')">
+    Classes
+    <span class="count">{{ classes().length }}</span>
+  </button>
+  <button type="button" class="tab" [class.active]="tab() === 'learners'" (click)="tab.set('learners')">
+    Learners
+    <span class="count">{{ learners().length }}</span>
+  </button>
+</div>
+
+@if (tab() === 'classes') {
+  @if (loading()) {
+    <p class="muted">Loading your classes…</p>
+  } @else {
+    <section aria-labelledby="classesTitle">
+      <div class="col-head">
+        <div>
+          <h2 id="classesTitle">Class overview</h2>
+          <p class="muted">Your classes and sections for this school year.</p>
+        </div>
+        <span class="count-badge">{{ classes().length }} {{ classes().length === 1 ? 'class' : 'classes' }}</span>
+      </div>
+
+      <div class="tools">
+        <div class="tools-row">
+          <label class="search">
+            <app-icon name="search" [size]="16" />
+            <input type="search" class="input" placeholder="Search your classes…" [ngModel]="search()" (ngModelChange)="search.set($event)" aria-label="Search your classes" />
+          </label>
+          <app-dropdown
+            class="filter"
+            [ngModel]="gradeFilter()"
+            (ngModelChange)="gradeFilter.set($event)"
+            [options]="gradeOptions()"
+            placeholder="All grades"
+            searchPlaceholder="Search grades"
+            countSingular="grade"
+            countPlural="grades"
+            aria-label="Filter by grade"
+          />
+          <app-dropdown
+            class="filter"
+            [ngModel]="yearFilter()"
+            (ngModelChange)="yearFilter.set($event)"
+            [options]="yearOptions()"
+            placeholder="All years"
+            searchPlaceholder="Search years"
+            countSingular="year"
+            countPlural="years"
+            aria-label="Filter by school year"
+          />
+          <button type="button" class="btn btn-secondary" (click)="openSubjects()">Manage Subjects</button>
+        </div>
+      </div>
+
+      @if (groups().length === 0) {
+        <div class="empty">
+          @if (classes().length === 0) {
+            <p><b>No classes yet.</b></p>
+            <p>Add your first class to get started.</p>
+            <button type="button" class="btn btn-primary" (click)="openAddClass()">Add class &amp; section</button>
+          } @else {
+            <p><b>No classes match.</b></p>
+            <p>Try a different search or filter.</p>
+          }
+        </div>
+      } @else {
+        <div class="groups" [class.list-mode]="view() === 'list'">
+          @for (group of groups(); track group.subjectId; let i = $index) {
+            <article class="card subject-card">
+              <div class="card-top">
+                <span class="idx" aria-hidden="true">{{ (i + 1) < 10 ? '0' + (i + 1) : (i + 1) }}</span>
+                <div>
+                  <h3>{{ group.subjectName }}</h3>
+                  <p class="meta">
+                    Grade {{ group.gradeLevel }} · {{ group.classes.length }}
+                    {{ group.classes.length === 1 ? 'section' : 'sections' }} ·
+                    {{ group.students }} {{ group.students === 1 ? 'student' : 'students' }}
+                  </p>
+                </div>
+              </div>
+              <hr class="card-rule" />
+              <div class="stats-row">
+                <div class="stat">
+                  <span class="k">Sections</span>
+                  <span class="v">{{ group.classes.length }}</span>
+                </div>
+                <div class="stat">
+                  <span class="k">Students</span>
+                  <span class="v">{{ group.students }}</span>
+                </div>
+              </div>
+
+              @if (expandedSubject() === group.subjectId) {
+                <div class="section-detail open">
+                  @for (klass of group.classes; track klass.id; let si = $index) {
+                    <div class="sec-row">
+                      <span class="sec-name">
+                        {{ klass.section_name }}
+                        <span>{{ group.classes.length > 1 ? 'SECTION ' + (si + 1) + ' OF ' + group.classes.length : 'SECTION ONLY' }}</span>
+                      </span>
+                      <dl>
+                        <div>
+                          <dt>Grade level</dt>
+                          <dd>Grade {{ klass.grade_level }}</dd>
+                        </div>
+                        <div>
+                          <dt>Room</dt>
+                          <dd>{{ klass.room || '—' }}</dd>
+                        </div>
+                        <div>
+                          <dt>Schedule</dt>
+                          <dd>
+                            @if (klass.meeting_count > 0) {
+                              {{ klass.meeting_count }} {{ klass.meeting_count === 1 ? 'meeting' : 'meetings' }} a week
+                            } @else {
+                              No meetings yet
+                            }
+                          </dd>
+                        </div>
+                      </dl>
+                      <div class="sec-actions">
+                        <button type="button" class="btn btn-small" (click)="toggleDetail(klass)">
+                          {{ expandedDetail()?.classId === klass.id ? 'Hide details' : 'Details' }}
+                        </button>
+                        <button type="button" class="btn btn-small" (click)="openEnrol(klass)">Enrol learners</button>
+                        <button type="button" class="btn btn-small" (click)="openEditClass(klass)">Edit</button>
+                        <button type="button" class="btn btn-small btn-danger" (click)="deleteTarget.set({ kind: 'class', item: klass })">Delete</button>
+                      </div>
+                      @if (expandedDetail()?.classId === klass.id) {
+                        <div class="sec-detail">
+                          @if (expandedDetail()!.meetings.length > 0) {
+                            <div>
+                              <span class="k">Meetings</span>
+                              <ul class="plain-list">
+                                @for (meeting of expandedDetail()!.meetings; track meeting.day_name + meeting.start_time) {
+                                  <li>{{ meeting.day_name }} · {{ time12(meeting.start_time) }} – {{ time12(meeting.end_time) }} · {{ meeting.room }}</li>
+                                }
+                              </ul>
+                            </div>
+                          } @else {
+                            <p class="muted">No meetings yet. Add them on the Schedules page.</p>
+                          }
+                          @if (expandedDetail()!.learners.length > 0) {
+                            <div>
+                              <span class="k">Learners</span>
+                              <ul class="plain-list">
+                                @for (learner of expandedDetail()!.learners; track learner.id) {
+                                  <li>
+                                    <span>{{ learner.last_name }}, {{ learner.first_name }}</span>
+                                    <button type="button" class="btn btn-small" (click)="qrLearner.set({ learner, classLabel: expandedDetail()!.classLabel })">QR card</button>
+                                  </li>
+                                }
+                              </ul>
+                            </div>
+                          }
+                        </div>
+                      }
+                    </div>
+                  }
+                </div>
+              }
+
+              <div class="card-actions">
+                <button type="button" class="link-btn" (click)="toggleSubject(group.subjectId)" [attr.aria-expanded]="expandedSubject() === group.subjectId">
+                  <span>{{ expandedSubject() === group.subjectId ? 'Hide sections' : 'View sections' }}</span>
+                  <app-icon name="chevron-right" [size]="14" />
+                </button>
+              </div>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  }
+} @else {
+  <div class="card">
+    <div class="toolbar">
+      <app-dropdown
+        class="filter roster-filter"
+        [ngModel]="rosterClassId()"
+        (ngModelChange)="onRosterClassChange($event)"
+        [options]="rosterOptions()"
+        placeholder="All learners"
+        searchPlaceholder="Search classes"
+        countSingular="class"
+        countPlural="classes"
+        aria-label="Show learners of a class"
+      />
+      <label class="search">
+        <app-icon name="search" [size]="16" />
+        <input type="search" class="input" placeholder="Search learners…" [ngModel]="learnerSearch()" (ngModelChange)="learnerSearch.set($event)" aria-label="Search learners" />
+      </label>
+      <button type="button" class="btn btn-secondary" (click)="openUpload()">
+        <app-icon name="download" [size]="16" /> Upload CSV
+      </button>
+      <button type="button" class="btn btn-primary" (click)="openAddLearner()">
+        <app-icon name="plus" [size]="16" /> Add learner
+      </button>
+    </div>
+
+    @if (rosterRows().length === 0) {
+      <div class="empty">
+        @if (learners().length === 0) {
+          <p><b>No learners yet.</b></p>
+          <p>Add learners here, upload a CSV, or enrol them straight from a class.</p>
+          <button type="button" class="btn btn-primary" (click)="openAddLearner()">Add learner</button>
+        } @else {
+          <p><b>No learners match.</b></p>
+          <p>Try a different search or class.</p>
+        }
+      </div>
+    } @else {
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Learner ID</th>
+            <th>Sex</th>
+            <th>Birthdate</th>
+            <th>School</th>
+            <th><span class="sr-only">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (learner of rosterRows(); track learner.id) {
+            <tr>
+              <td data-label="Name">
+                <span class="learner-name">
+                  <span class="avatar" aria-hidden="true">{{ initialsOf(learner) }}</span>
+                  <b>{{ learner.last_name }}, {{ learner.first_name }}</b>
+                </span>
+              </td>
+              <td data-label="Learner ID" class="mono">{{ learner.learner_id }}</td>
+              <td data-label="Sex">{{ learner.sex }}</td>
+              <td data-label="Birthdate">{{ learner.birthdate || '—' }}</td>
+              <td data-label="School">{{ learner.school_name }}</td>
+              <td class="right nowrap">
+                <app-menu
+                  [items]="learnerMenuItems()"
+                  label="Actions for {{ learner.first_name }} {{ learner.last_name }}"
+                  (picked)="learnerMenuAction($event, learner)"
+                />
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  </div>
+}
+
+<!-- Add / edit class -->
+@if (classFormOpen()) {
+  <app-modal [title]="editingClass ? 'Edit class' : 'Add class & section'" (closed)="classFormOpen.set(false)">
+    <form (ngSubmit)="saveClass()" novalidate>
+      <div class="field">
+        <label>Subject</label>
+        @if (!editingClass) {
+          <div class="radio-row">
+            <label class="check">
+              <input type="radio" name="subjectChoice" value="existing" [(ngModel)]="subjectChoice" [disabled]="subjects().length === 0" />
+              <span>An existing subject</span>
+            </label>
+            <label class="check">
+              <input type="radio" name="subjectChoice" value="new" [(ngModel)]="subjectChoice" />
+              <span>A new subject</span>
+            </label>
+          </div>
+        }
+      </div>
+
+      @if (subjectChoice === 'existing') {
+        <div class="field">
+          <label for="class-subject">Subject</label>
+          <app-dropdown
+            [(ngModel)]="formSubjectId"
+            name="formSubjectId"
+            [options]="subjectOptions()"
+            placeholder="Choose a subject"
+            searchPlaceholder="Search subjects"
+            countSingular="subject"
+            countPlural="subjects"
+            [invalid]="!!formErrors()['subject_id']"
+          />
+          @if (formErrors()['subject_id']) {
+            <span class="field-error">{{ formErrors()['subject_id'] }}</span>
+          }
+          @if (chosenSubject(); as subject) {
+            <span class="muted">Grade {{ subject.grade_level }} · {{ subject.class_count }} {{ subject.class_count === 1 ? 'class' : 'classes' }}</span>
+          }
+        </div>
+      } @else {
+        <div class="form-grid">
+          <div class="field">
+            <label for="class-new-subject">New subject name</label>
+            <input id="class-new-subject" name="formNewSubject" type="text" class="input" placeholder="e.g. Music and Arts" maxlength="120" [(ngModel)]="formNewSubject" [class.invalid]="formErrors()['new_subject_name']" />
+            @if (formErrors()['new_subject_name']) {
+              <span class="field-error">{{ formErrors()['new_subject_name'] }}</span>
+            }
+          </div>
+          <div class="field">
+            <label for="class-grade">Grade level</label>
+            <app-dropdown
+              [(ngModel)]="formGrade"
+              name="formGrade"
+              [options]="gradeLevelOptions"
+              placeholder="Grade level"
+              searchPlaceholder="Search grades"
+              countSingular="grade"
+              countPlural="grades"
+            />
+          </div>
+        </div>
+      }
+
+      <div class="form-grid">
+        <div class="field">
+          <label for="class-section">Section name</label>
+          <input id="class-section" name="formSection" type="text" class="input" placeholder="e.g. Luke" maxlength="60" [(ngModel)]="formSection" [class.invalid]="formErrors()['section_name']" />
+          @if (formErrors()['section_name']) {
+            <span class="field-error">{{ formErrors()['section_name'] }}</span>
+          }
+        </div>
+        <div class="field">
+          <label for="class-room">Room</label>
+          <input id="class-room" name="formRoom" type="text" class="input" placeholder="e.g. Room 8" maxlength="60" [(ngModel)]="formRoom" [class.invalid]="formErrors()['room']" />
+          @if (formErrors()['room']) {
+            <span class="field-error">{{ formErrors()['room'] }}</span>
+          }
+        </div>
+        <div class="field">
+          <label for="class-year">Academic year</label>
+          <input id="class-year" name="formYear" type="text" class="input" placeholder="2026-2027" maxlength="9" [(ngModel)]="formYear" [class.invalid]="formErrors()['academic_year']" />
+          @if (formErrors()['academic_year']) {
+            <span class="field-error">{{ formErrors()['academic_year'] }}</span>
+          }
+        </div>
+      </div>
+
+      @if (error()) {
+        <div class="alert" role="alert">
+          <app-icon name="alert" [size]="16" />
+          <span>{{ error() }}</span>
+        </div>
+      }
+
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" (click)="classFormOpen.set(false)">Cancel</button>
+        <button type="submit" class="btn btn-primary" [disabled]="saving()">
+          {{ saving() ? 'Saving…' : editingClass ? 'Save changes' : 'Add class' }}
+        </button>
+      </div>
+    </form>
+  </app-modal>
+}
+
+<!-- Manage subjects -->
+@if (subjectsOpen()) {
+  <app-modal title="Manage Subjects" (closed)="subjectsOpen.set(false)">
+    @if (subjects().length === 0) {
+      <p class="muted">No subjects yet. Add one below.</p>
+    } @else {
+      <ul class="plain-list">
+        @for (subject of subjects(); track subject.id) {
+          <li>
+            <div class="row-between">
+              <div>
+                @if (editingSubjectId === subject.id) {
+                  <div class="input-row">
+                    <input type="text" class="input" [(ngModel)]="editingSubjectName" maxlength="120" aria-label="Subject name" />
+                    <app-dropdown
+                      [(ngModel)]="editingSubjectGroup"
+                      [options]="subjectGroupOptions"
+                      placeholder="Group"
+                      searchPlaceholder="Search groups"
+                      countSingular="group"
+                      countPlural="groups"
+                      aria-label="Subject group"
+                    />
+                    <button type="button" class="btn btn-small btn-primary" (click)="saveSubjectName(subject)" [disabled]="saving()">Save</button>
+                    <button type="button" class="btn btn-small" (click)="editingSubjectId = null">Cancel</button>
+                  </div>
+                } @else {
+                  <b>{{ subject.name }}</b>
+                  <span class="muted"> · Grade {{ subject.grade_level }} · {{ subjectGroupLabel(subject.group) }} · {{ subject.class_count }} {{ subject.class_count === 1 ? 'class' : 'classes' }}</span>
+                }
+              </div>
+              @if (editingSubjectId !== subject.id) {
+                <span class="nowrap">
+                  <button type="button" class="btn btn-small" (click)="startEditSubject(subject)">Edit</button>
+                  <button type="button" class="btn btn-small btn-danger" (click)="deleteTarget.set({ kind: 'subject', item: subject })">Delete</button>
+                </span>
+              }
+            </div>
+          </li>
+        }
+      </ul>
+    }
+
+    <div class="form-grid" style="margin-top: 16px">
+      <div class="field">
+        <label for="new-subject-name">New subject</label>
+        <input id="new-subject-name" type="text" class="input" placeholder="e.g. Sacraments" maxlength="120" [(ngModel)]="newSubjectName" (ngModelChange)="onNewSubjectNameChange()" [class.invalid]="formErrors()['name']" />
+        @if (formErrors()['name']) {
+          <span class="field-error">{{ formErrors()['name'] }}</span>
+        }
+      </div>
+      <div class="field">
+        <label for="new-subject-grade">Grade level</label>
+        <app-dropdown
+          [(ngModel)]="newSubjectGrade"
+          [options]="gradeLevelOptions"
+          placeholder="Grade level"
+          searchPlaceholder="Search grades"
+          countSingular="grade"
+          countPlural="grades"
+        />
+      </div>
+      <div class="field">
+        <label for="new-subject-group">Group</label>
+        <app-dropdown
+          [(ngModel)]="newSubjectGroup"
+          (ngModelChange)="newSubjectGroupTouched = true"
+          [options]="subjectGroupOptions"
+          placeholder="Group"
+          searchPlaceholder="Search groups"
+          countSingular="group"
+          countPlural="groups"
+        />
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn btn-primary" (click)="addSubject()" [disabled]="saving() || !newSubjectName.trim()">Add subject</button>
+    </div>
+
+    @if (error()) {
+      <div class="alert" role="alert" style="margin-top: 14px">
+        <app-icon name="alert" [size]="16" />
+        <span>{{ error() }}</span>
+      </div>
+    }
+  </app-modal>
+}
+
+<!-- Enrol learners -->
+@if (enrolClass(); as klass) {
+  <app-modal [title]="'Enrol learners · ' + klass.subject_name + ' – ' + klass.section_name" (closed)="enrolClass.set(null)">
+    <div class="field">
+      <label for="enrol-select">Enrol a learner</label>
+      <div class="input-row">
+        <app-dropdown
+          [(ngModel)]="enrolLearnerId"
+          [options]="enrolLearnerOptions()"
+          placeholder="Choose a learner"
+          searchPlaceholder="Search student name"
+          countSingular="student"
+          countPlural="students"
+        />
+        <button type="button" class="btn btn-primary" (click)="enrolSelected()" [disabled]="!enrolLearnerId || saving()">Enrol</button>
+      </div>
+    </div>
+
+    <div class="form-grid" style="margin-top: 16px">
+      <div class="field">
+        <label for="quick-first">First name</label>
+        <input id="quick-first" type="text" class="input" [(ngModel)]="quickFirst" maxlength="60" />
+      </div>
+      <div class="field">
+        <label for="quick-last">Last name</label>
+        <input id="quick-last" type="text" class="input" [(ngModel)]="quickLast" maxlength="60" />
+      </div>
+      <div class="field">
+        <label for="quick-id">Learner ID</label>
+        <input id="quick-id" type="text" class="input" placeholder="STU-2026-1048" [(ngModel)]="quickId" maxlength="30" />
+      </div>
+      <div class="field">
+        <label for="quick-sex">Sex</label>
+        <app-dropdown
+          [(ngModel)]="quickSex"
+          [options]="sexOptions"
+          placeholder="Sex"
+          searchPlaceholder="Search"
+          countSingular="option"
+          countPlural="options"
+        />
+      </div>
+      <div class="field">
+        <label for="quick-birthdate">Birthdate</label>
+        <input id="quick-birthdate" type="date" class="input" [(ngModel)]="quickBirthdate" />
+      </div>
+    </div>
+    @if (formErrors()['learner_id']) {
+      <span class="field-error">{{ formErrors()['learner_id'] }}</span>
+    }
+    <div class="form-actions">
+      <button type="button" class="btn btn-secondary" (click)="quickAddLearner()" [disabled]="saving() || !quickFirst.trim() || !quickLast.trim() || !quickId.trim()">
+        Add new learner &amp; enrol
+      </button>
+    </div>
+  </app-modal>
+}
+
+<!-- Add / edit learner -->
+@if (learnerFormOpen()) {
+  <app-modal [title]="editingLearner ? 'Edit learner' : 'Add learner'" (closed)="learnerFormOpen.set(false)">
+    <form (ngSubmit)="saveLearner()" novalidate>
+      <div class="form-grid">
+        <div class="field">
+          <label for="learner-first">First name</label>
+          <input id="learner-first" name="learnerFirst" type="text" class="input" maxlength="60" [(ngModel)]="learnerFirst" [class.invalid]="formErrors()['first_name']" />
+          @if (formErrors()['first_name']) {
+            <span class="field-error">{{ formErrors()['first_name'] }}</span>
+          }
+        </div>
+        <div class="field">
+          <label for="learner-last">Last name</label>
+          <input id="learner-last" name="learnerLast" type="text" class="input" maxlength="60" [(ngModel)]="learnerLast" [class.invalid]="formErrors()['last_name']" />
+          @if (formErrors()['last_name']) {
+            <span class="field-error">{{ formErrors()['last_name'] }}</span>
+          }
+        </div>
+        <div class="field">
+          <label for="learner-id">Learner ID</label>
+          <input id="learner-id" name="learnerIdText" type="text" class="input" placeholder="STU-2026-1048" maxlength="30" [(ngModel)]="learnerIdText" [class.invalid]="formErrors()['learner_id']" />
+          @if (formErrors()['learner_id']) {
+            <span class="field-error">{{ formErrors()['learner_id'] }}</span>
+          }
+        </div>
+        <div class="field">
+          <label for="learner-sex">Sex</label>
+          <app-dropdown
+            [(ngModel)]="learnerSex"
+            name="learnerSex"
+            [options]="sexOptions"
+            placeholder="Sex"
+            searchPlaceholder="Search"
+            countSingular="option"
+            countPlural="options"
+          />
+        </div>
+        <div class="field">
+          <label for="learner-birthdate">Birthdate</label>
+          <input id="learner-birthdate" name="learnerBirthdate" type="date" class="input" [(ngModel)]="learnerBirthdate" [class.invalid]="!!formErrors()['birthdate']" />
+          @if (formErrors()['birthdate']) {
+            <span class="field-error">{{ formErrors()['birthdate'] }}</span>
+          }
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" (click)="learnerFormOpen.set(false)">Cancel</button>
+        <button type="submit" class="btn btn-primary" [disabled]="saving()">
+          {{ saving() ? 'Saving…' : editingLearner ? 'Save changes' : 'Add learner' }}
+        </button>
+      </div>
+    </form>
+  </app-modal>
+}
+
+<!-- Bulk upload learners (CSV) -->
+@if (uploadOpen()) {
+  <app-modal title="Upload learners (CSV)" (closed)="uploadOpen.set(false)">
+    <p class="muted">
+      One learner per row. A row whose learner ID already exists in your school is skipped as a duplicate; a row with a mistake is reported and never stops the good rows. Nothing is overwritten.
+    </p>
+    <div class="field">
+      <label>Template</label>
+      <button type="button" class="btn btn-secondary" (click)="downloadUploadTemplate()">
+        <app-icon name="download" [size]="16" /> Download template
+      </button>
+      <span class="muted"> Columns: first_name, last_name, learner_id, sex, birthdate (YYYY-MM-DD, optional).</span>
+    </div>
+    <div class="field">
+      <label for="upload-file">CSV file</label>
+      <input id="upload-file" type="file" class="input" accept=".csv,text/csv" (change)="onUploadFileSelected($event)" />
+    </div>
+    @if (error()) {
+      <div class="alert" role="alert">
+        <app-icon name="alert" [size]="16" />
+        <span>{{ error() }}</span>
+      </div>
+    }
+    @if (uploadResult(); as result) {
+      <div class="upload-summary">
+        <span class="pill plain">{{ result.summary.added }} added</span>
+        <span class="pill plain">{{ result.summary.skipped }} skipped</span>
+        <span class="pill plain">{{ result.summary.failed }} with errors</span>
+      </div>
+      <table class="table upload-results">
+        <thead>
+          <tr>
+            <th>Row</th>
+            <th>Learner ID</th>
+            <th>Status</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (row of result.results; track row.row) {
+            <tr>
+              <td data-label="Row">{{ row.row }}</td>
+              <td data-label="Learner ID" class="mono">{{ row.learner_id || '—' }}</td>
+              <td data-label="Status">
+                <span class="pill" [class.plain]="row.status !== 'added'">{{ row.status }}</span>
+              </td>
+              <td data-label="Result">{{ row.message }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+    <div class="form-actions">
+      <button type="button" class="btn btn-secondary" (click)="uploadOpen.set(false)">Close</button>
+      <button type="button" class="btn btn-primary" (click)="uploadCsv()" [disabled]="!uploadFile || uploading()">
+        {{ uploading() ? 'Uploading…' : 'Upload' }}
+      </button>
+    </div>
+  </app-modal>
+}
+
+<!-- Delete confirmation -->
+@if (deleteTarget(); as target) {
+  <app-modal [title]="deleteTitle()" (closed)="deleteTarget.set(null)">
+    <p>{{ deleteText() }}</p>
+    <div class="form-actions">
+      <button type="button" class="btn btn-secondary" (click)="deleteTarget.set(null)">Keep it</button>
+      <button type="button" class="btn btn-danger" (click)="confirmDelete()">Delete</button>
+    </div>
+  </app-modal>
+}
+
+<!-- Learner QR pass card -->
+@if (qrLearner(); as qr) {
+  <app-qr-card [learner]="qr.learner" [classLabel]="qr.classLabel" (closed)="qrLearner.set(null)" />
+}

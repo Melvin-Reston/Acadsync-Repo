@@ -1,0 +1,80 @@
+<app-auth-shell
+  heading="Welcome back"
+  subheading="Sign in with your teacher account to access your workspace."
+  brandSub="Teacher Portal"
+  eyebrow="Teacher Portal"
+  foot="Teacher Portal"
+  variant="teacher"
+>
+  @if (error()) {
+    <div class="alert" role="alert">
+      <app-icon name="alert" [size]="16" />
+      <span>{{ error() }}</span>
+    </div>
+  }
+
+  <form (ngSubmit)="submit()" novalidate>
+    <div class="field">
+      <label for="login">Username or email</label>
+      <input
+        id="login"
+        name="login"
+        type="text"
+        class="input"
+        autocomplete="username"
+        [class.invalid]="errors()['login']"
+        [(ngModel)]="login"
+      />
+      @if (errors()['login']) {
+        <span class="field-error">{{ errors()['login'] }}</span>
+      }
+    </div>
+
+    <div class="field">
+      <label for="password">Password</label>
+      <div class="input-row">
+        <input
+          id="password"
+          name="password"
+          class="input"
+          autocomplete="current-password"
+          [type]="showPassword() ? 'text' : 'password'"
+          [class.invalid]="errors()['password']"
+          [(ngModel)]="password"
+        />
+        <button
+          type="button"
+          class="icon-btn"
+          [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'"
+          (click)="showPassword.set(!showPassword())"
+        >
+          <app-icon [name]="showPassword() ? 'lock' : 'eye'" />
+        </button>
+      </div>
+      @if (errors()['password']) {
+        <span class="field-error">{{ errors()['password'] }}</span>
+      }
+    </div>
+
+    <div class="row-between">
+      <label class="remember">
+        <input type="checkbox" name="remember" [(ngModel)]="remember" />
+        Remember this device
+      </label>
+      <a routerLink="/teacher/forgot-password">Forgot password?</a>
+    </div>
+
+    <button type="submit" class="btn btn-primary btn-block" [disabled]="loading()">
+      {{ loading() ? 'Signing in…' : 'Sign in' }}
+    </button>
+  </form>
+
+  <div class="divider" aria-hidden="true">or</div>
+
+  <a routerLink="/teacher/create-account" class="btn btn-secondary btn-block">Create Account</a>
+
+  <p class="secure-row">
+    <app-icon name="lock" [size]="13" />
+    Your connection is encrypted and secure
+  </p>
+</app-auth-shell>

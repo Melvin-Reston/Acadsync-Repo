@@ -1,0 +1,289 @@
+/* Payments & Invoices (Teacher Batch 6). Shared card, pill, button and table
+   styles come from the global stylesheet; only this page's own layout lives here. */
+.plan-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.plan-card {
+  border: 1.5px solid var(--border-strong);
+  border-radius: 14px;
+  padding: 16px;
+  background: var(--surface-2);
+}
+
+.plan-card.current {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
+
+.plan-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.plan-price {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+.plan-trial {
+  margin: 6px 0 0;
+  color: var(--ink-2);
+  font-size: 13.5px;
+}
+
+.plan-features {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: var(--ink-2);
+  font-size: 13.5px;
+  display: grid;
+  gap: 3px;
+}
+
+.plan-features.muted {
+  padding-left: 0;
+  list-style: none;
+}
+
+/* The receipt: dark header, perforated edge, line items and totals — the
+   receipt-first layout from the approved design, in the warm paper system. */
+.receipt-wrap {
+  margin-bottom: 18px;
+  scroll-margin-top: 12px;
+}
+
+.receipt-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.pay-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 22px;
+  align-items: start;
+}
+
+.step-title {
+  font-family: var(--font-serif);
+  font-size: 22px;
+  margin: 0 0 12px;
+}
+
+.steps {
+  margin: 14px 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 6px;
+  color: var(--ink-2);
+  font-size: 14px;
+}
+
+.qr-box {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.qr-box img {
+  width: 118px;
+  height: 118px;
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  object-fit: contain;
+  flex: none;
+}
+
+.qr-box p {
+  margin: 4px 0 0;
+}
+
+.receipt {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px 6px 18px 18px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  position: sticky;
+  top: 76px;
+}
+
+.receipt-top {
+  background: var(--ink);
+  color: var(--bg);
+  padding: 18px 20px 14px;
+}
+
+.receipt-top .mono {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.receipt-top h3 {
+  margin: 6px 0 2px;
+  font-family: var(--font-mono);
+  font-size: 19px;
+  letter-spacing: -0.02em;
+}
+
+.receipt-top p {
+  margin: 0;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.perf {
+  height: 12px;
+  background: radial-gradient(circle at 8px 6px, transparent 5px, var(--surface) 5.5px);
+  background-size: 16px 12px;
+  background-color: var(--ink);
+}
+
+.receipt-body {
+  padding: 16px 20px 20px;
+}
+
+.line-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 0;
+  border-bottom: 1px dashed var(--border-strong);
+}
+
+.line-item b {
+  font-size: 14px;
+  display: block;
+}
+
+.line-item p {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+.line-item .price {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.totals {
+  padding-top: 12px;
+}
+
+.trow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 0;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.trow.total {
+  border-top: 2px solid var(--ink);
+  margin-top: 8px;
+  padding-top: 12px;
+  color: var(--ink);
+  align-items: baseline;
+}
+
+.trow.total .val {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.trow small {
+  color: var(--ink-2);
+}
+
+.receipt-sub {
+  margin: 18px 0 4px;
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.receipt-payments li {
+  padding: 10px 0;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.invoice-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.invoice-table th {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.invoice-table td {
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+  font-size: 14px;
+}
+
+.invoice-table td.num,
+.invoice-table th.num {
+  font-family: var(--font-mono);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.invoice-table tr.selected td {
+  background: var(--accent-tint);
+}
+
+.sub {
+  color: var(--ink-2);
+  font-size: 12.5px;
+  display: block;
+  margin-top: 2px;
+}
+
+@media (max-width: 960px) {
+  .pay-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .receipt {
+    position: static;
+  }
+}

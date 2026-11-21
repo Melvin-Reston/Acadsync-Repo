@@ -1,0 +1,105 @@
+<div class="app">
+  @if (drawerOpen()) {
+    <div class="scrim" (click)="closeDrawer()"></div>
+  }
+
+  <aside class="sidebar" [class.open]="drawerOpen()">
+    <div class="side-top">
+      <a routerLink="/teacher/dashboard" class="brand" (click)="closeDrawer()">
+        <div class="brand-mark">A</div>
+        <div>
+          <div class="brand-name">AcadSync</div>
+          <div class="brand-sub">Teacher Portal</div>
+        </div>
+      </a>
+      <button type="button" class="drawer-close" aria-label="Close menu" (click)="closeDrawer()">
+        <app-icon name="x" />
+      </button>
+    </div>
+
+    <nav class="side-scroll" aria-label="Main">
+      @for (group of navGroups; track group.label) {
+        <div class="nav-label">{{ group.label }}</div>
+        @for (item of group.items; track item.number) {
+          @if (item.path) {
+            <a
+              class="nav-item"
+              routerLinkActive="active"
+              [routerLink]="item.path"
+              (click)="closeDrawer()"
+            >
+              <span class="nav-num">{{ item.number }}</span>
+              <app-icon [name]="item.icon" />
+              {{ item.label }}
+            </a>
+          } @else {
+            <span class="nav-item soon" title="Coming in a later batch">
+              <span class="nav-num">{{ item.number }}</span>
+              <app-icon [name]="item.icon" />
+              {{ item.label }}
+              <span class="soon-tag">Soon</span>
+            </span>
+          }
+        }
+      }
+    </nav>
+
+    @if (auth.teacher(); as teacher) {
+      <div class="side-foot">
+        <a routerLink="/teacher/profile" class="admin-card" (click)="closeDrawer()">
+          <span class="avatar">{{ initials(teacher.first_name + ' ' + teacher.last_name) }}</span>
+          <span class="admin-text">
+            <b>{{ teacher.first_name }} {{ teacher.last_name }}</b>
+            <span>{{ adviserLine() }}</span>
+          </span>
+        </a>
+        <button type="button" class="signout" (click)="auth.logout()">
+          <app-icon name="logout" [size]="16" /> Sign out
+        </button>
+      </div>
+    }
+  </aside>
+
+  <div class="main-wrap">
+    <header class="topbar">
+      <button
+        type="button"
+        class="icon-btn hamburger"
+        aria-label="Open menu"
+        (click)="drawerOpen.set(true)"
+      >
+        <app-icon name="menu" />
+      </button>
+
+      <span class="top-title">{{ pageTitle() }}</span>
+
+      @if (academicYear()) {
+        <span class="year-chip mono">AY {{ academicYear() }}</span>
+      }
+
+      <span class="top-date">{{ today | date: 'EEEE, MMMM d, y' }}</span>
+
+      <button
+        type="button"
+        class="icon-btn"
+        [attr.aria-label]="theme.theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+        (click)="theme.toggle()"
+      >
+        <app-icon [name]="theme.theme() === 'dark' ? 'sun' : 'moon'" />
+      </button>
+    </header>
+
+    <main class="content">
+      @if (auth.teacher()?.must_change_password) {
+        <div class="alert warn" role="status">
+          <app-icon name="key" [size]="16" />
+          <span>
+            You are using a temporary password.
+            <a routerLink="/teacher/profile">Change it now</a>
+          </span>
+        </div>
+      }
+      <router-outlet />
+    </main>
+  </div>
+</div>

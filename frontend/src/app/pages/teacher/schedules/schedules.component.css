@@ -1,0 +1,163 @@
+/* Schedules: week navigation, timetable grid, agenda, matrices. */
+
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.week-nav {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+
+.week-label {
+  flex: 1;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.week-label b {
+  font-family: var(--font-serif);
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.meeting-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  margin: 4px 0;
+  border: 1px solid var(--accent-tint-2);
+  border-radius: 10px;
+  background: var(--accent-tint);
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.35;
+  min-width: 120px;
+}
+
+.meeting-block b {
+  color: var(--accent-deep);
+}
+
+:root[data-theme='dark'] .meeting-block b {
+  color: var(--accent);
+}
+
+.meeting-block span {
+  color: var(--ink-2);
+}
+
+.day-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 14px 16px 0;
+}
+
+.chip {
+  min-height: 36px;
+  padding: 0 13px;
+  border-radius: 99px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.agenda-title {
+  font-family: var(--font-serif);
+  font-size: 21px;
+  font-weight: 600;
+  margin: 18px 16px 0;
+}
+
+.agenda-list {
+  padding: 0 16px 16px;
+}
+
+.agenda-list li {
+  padding: 14px 0;
+}
+
+.agenda-list li + li {
+  border-top: 1px dashed var(--border-strong);
+}
+
+@media (max-width: 640px) {
+  .meeting-block {
+    min-width: 0;
+  }
+
+  /* The week label gets its own line so the date never breaks mid-way. */
+  .week-nav {
+    flex-wrap: wrap;
+  }
+
+  .week-label {
+    flex: 1 1 100%;
+    order: -1;
+  }
+}
+
+/* ---------- Whole-week add result ---------- */
+
+.field-hint {
+  display: block;
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.week-result {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 13.5px;
+}
+
+.week-result p {
+  margin: 0;
+}
+
+.week-result p + p {
+  margin-top: 8px;
+}
+
+.week-result ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+/* The Manage modal must fit on a phone without scrolling: tighten the
+   submit row on narrow screens (the form is one field taller than the
+   dialog on a 375px phone otherwise). */
+@media (max-width: 480px) {
+  .manage-form .form-actions {
+    margin-top: 10px;
+  }
+}

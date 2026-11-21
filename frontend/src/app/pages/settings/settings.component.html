@@ -1,0 +1,407 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">System</div>
+    <h1 class="page-title">Settings</h1>
+  </div>
+</div>
+
+<div class="settings-grid">
+  <!-- My profile -->
+  <section class="card">
+    <div class="card-head">
+      <h2 class="card-title">My profile</h2>
+      @if (auth.admin(); as admin) {
+        <span class="pill plain accent">{{ roleLabel(admin.role) }}</span>
+      }
+    </div>
+    <form class="card-pad" (ngSubmit)="saveProfile()" novalidate>
+      @if (errorIn() === 'profile' && error()) {
+        <div class="alert" role="alert">
+          <app-icon name="alert" [size]="16" />
+          <span>{{ error() }}</span>
+        </div>
+      }
+      <div class="form-grid">
+        <div class="field">
+          <label for="p-name">Full name</label>
+          <input
+            id="p-name"
+            name="full_name"
+            class="input"
+            autocomplete="name"
+            [class.invalid]="errorIn() === 'profile' && errors()['full_name']"
+            [(ngModel)]="profile.full_name"
+          />
+          @if (errorIn() === 'profile' && errors()['full_name']) {
+            <span class="field-error">{{ errors()['full_name'] }}</span>
+          }
+        </div>
+        <div class="field">
+          <label for="p-email">Email</label>
+          <input
+            id="p-email"
+            name="email"
+            type="email"
+            class="input"
+            autocomplete="email"
+            [class.invalid]="errorIn() === 'profile' && errors()['email']"
+            [(ngModel)]="profile.email"
+          />
+          @if (errorIn() === 'profile' && errors()['email']) {
+            <span class="field-error">{{ errors()['email'] }}</span>
+          }
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" [disabled]="saving() === 'profile'">
+          {{ saving() === 'profile' ? 'Saving…' : 'Save profile' }}
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Change password -->
+  <section class="card">
+    <div class="card-head"><h2 class="card-title">Change password</h2></div>
+    <form class="card-pad" (ngSubmit)="changePassword()" novalidate>
+      @if (errorIn() === 'password' && error()) {
+        <div class="alert" role="alert">
+          <app-icon name="alert" [size]="16" />
+          <span>{{ error() }}</span>
+        </div>
+      }
+      <div class="form-grid">
+        <div class="field full">
+          <label for="pw-current">Current password</label>
+          <input
+            id="pw-current"
+            name="current_password"
+            type="password"
+            class="input"
+            autocomplete="current-password"
+            [class.invalid]="errorIn() === 'password' && errors()['current_password']"
+            [(ngModel)]="password.current"
+          />
+          @if (errorIn() === 'password' && errors()['current_password']) {
+            <span class="field-error">{{ errors()['current_password'] }}</span>
+          }
+        </div>
+        <div class="field">
+          <label for="pw-new">New password</label>
+          <input
+            id="pw-new"
+            name="new_password"
+            type="password"
+            class="input"
+            autocomplete="new-password"
+            [class.invalid]="errorIn() === 'password' && errors()['new_password']"
+            [(ngModel)]="password.next"
+          />
+          @if (errorIn() === 'password' && errors()['new_password']) {
+            <span class="field-error">{{ errors()['new_password'] }}</span>
+          }
+        </div>
+        <div class="field">
+          <label for="pw-confirm">Confirm new password</label>
+          <input
+            id="pw-confirm"
+            name="confirm_password"
+            type="password"
+            class="input"
+            autocomplete="new-password"
+            [class.invalid]="errorIn() === 'password' && errors()['confirm']"
+            [(ngModel)]="password.confirm"
+          />
+          @if (errorIn() === 'password' && errors()['confirm']) {
+            <span class="field-error">{{ errors()['confirm'] }}</span>
+          }
+        </div>
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" [disabled]="saving() === 'password'">
+          {{ saving() === 'password' ? 'Saving…' : 'Change password' }}
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Academic year -->
+  <section class="card">
+    <div class="card-head"><h2 class="card-title">Academic year</h2></div>
+    <form class="card-pad" (ngSubmit)="saveAcademicYear()" novalidate>
+      @if (errorIn() === 'year' && error()) {
+        <div class="alert" role="alert">
+          <app-icon name="alert" [size]="16" />
+          <span>{{ error() }}</span>
+        </div>
+      }
+      <div class="field">
+        <label for="year">Current academic year</label>
+        <input
+          id="year"
+          name="academic_year"
+          class="input mono"
+          placeholder="2026-2027"
+          autocomplete="off"
+          [class.invalid]="errorIn() === 'year' && errors()['academic_year']"
+          [ngModel]="academicYear()"
+          (ngModelChange)="academicYear.set($event)"
+        />
+        @if (errorIn() === 'year' && errors()['academic_year']) {
+          <span class="field-error">{{ errors()['academic_year'] }}</span>
+        }
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" [disabled]="saving() === 'year'">
+          {{ saving() === 'year' ? 'Saving…' : 'Save academic year' }}
+        </button>
+      </div>
+    </form>
+
+    <!-- Grading system for the academic year above -->
+    <form class="card-pad" (ngSubmit)="saveGradingSystem()" novalidate>
+      @if (errorIn() === 'grading' && error()) {
+        <div class="alert" role="alert">
+          <app-icon name="alert" [size]="16" />
+          <span>{{ error() }}</span>
+        </div>
+      }
+      <div class="field">
+        <label>Grading system for {{ academicYear() || 'this academic year' }}</label>
+        <app-dropdown
+          name="grading_profile"
+          [options]="gradingProfileOptions()"
+          [ngModel]="gradingProfile()"
+          (ngModelChange)="gradingProfile.set($event)"
+          [invalid]="errorIn() === 'grading' && !!errors()['profile']"
+          placeholder="Choose a grading system"
+          countSingular="grading system"
+          countPlural="grading systems"
+        />
+        @if (gradingProfile()) {
+          <span class="muted">{{ gradingDescription(gradingProfile()) }}</span>
+        }
+        @if (errorIn() === 'grading' && errors()['profile']) {
+          <span class="field-error">{{ errors()['profile'] }}</span>
+        }
+      </div>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary" [disabled]="saving() === 'grading'">
+          {{ saving() === 'grading' ? 'Saving…' : 'Save grading system' }}
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Payment QR code: shown to teachers when they pay -->
+  <section class="card">
+    <div class="card-head">
+      <h2 class="card-title">Payment QR code</h2>
+      <span class="pill" [class.accent]="hasQr()" [class.plain]="!hasQr()">
+        {{ hasQr() ? 'Uploaded' : 'Not set' }}
+      </span>
+    </div>
+    <form class="card-pad" (ngSubmit)="savePayment()" novalidate>
+      @if (errorIn() === 'payment' && error()) {
+        <div class="alert" role="alert">
+          <app-icon name="alert" [size]="16" />
+          <span>{{ error() }}</span>
+        </div>
+      }
+
+      <div class="qr-row">
+        <div class="qr-box">
+          @if (qrUrl()) {
+            <img [src]="qrUrl()" alt="Payment QR code" />
+          } @else {
+            <span class="muted">No QR code</span>
+          }
+        </div>
+        <div class="field">
+          <label for="qr-image">{{ hasQr() ? 'Replace image' : 'QR code image' }}</label>
+          <input
+            id="qr-image"
+            name="qr_image"
+            type="file"
+            class="input"
+            accept="image/png,image/jpeg,image/webp"
+            [class.invalid]="errorIn() === 'payment' && errors()['qr_image']"
+            (change)="onQrChosen($event)"
+          />
+          <span class="hint">PNG, JPG or WEBP, up to 2 MB.</span>
+          @if (errorIn() === 'payment' && errors()['qr_image']) {
+            <span class="field-error">{{ errors()['qr_image'] }}</span>
+          }
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="qr-name">Account name</label>
+        <input
+          id="qr-name"
+          name="account_name"
+          class="input"
+          autocomplete="off"
+          [class.invalid]="errorIn() === 'payment' && errors()['account_name']"
+          [(ngModel)]="payment.account_name"
+        />
+        @if (errorIn() === 'payment' && errors()['account_name']) {
+          <span class="field-error">{{ errors()['account_name'] }}</span>
+        }
+      </div>
+
+      <div class="field">
+        <label for="qr-instructions">Instructions</label>
+        <textarea
+          id="qr-instructions"
+          name="instructions"
+          class="textarea"
+          rows="4"
+          [class.invalid]="errorIn() === 'payment' && errors()['instructions']"
+          [(ngModel)]="payment.instructions"
+        ></textarea>
+        @if (errorIn() === 'payment' && errors()['instructions']) {
+          <span class="field-error">{{ errors()['instructions'] }}</span>
+        }
+      </div>
+
+      <div class="form-actions">
+        @if (hasQr()) {
+          <button type="button" class="btn btn-danger" (click)="confirmRemoveQr.set(true)">
+            Remove QR code
+          </button>
+        }
+        <button type="submit" class="btn btn-primary" [disabled]="saving() === 'payment'">
+          {{ saving() === 'payment' ? 'Saving…' : 'Save payment details' }}
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Admin account: only the Super User sees this card -->
+  @if (auth.isSuperUser()) {
+    <section class="card">
+      <div class="card-head">
+        <h2 class="card-title">Admin account</h2>
+        @if (adminAccount(); as admin) {
+          <span class="pills">
+            @if (admin.is_locked) {
+              <span class="pill amber">Locked</span>
+            }
+            @if (admin.must_change_password) {
+              <span class="pill plain amber">Temporary password</span>
+            }
+            <span class="pill" [class.red]="!admin.is_active">
+              {{ admin.is_active ? 'Enabled' : 'Disabled' }}
+            </span>
+          </span>
+        }
+      </div>
+      <form class="card-pad" (ngSubmit)="saveAdminAccount()" novalidate>
+        @if (errorIn() === 'account' && error()) {
+          <div class="alert" role="alert">
+            <app-icon name="alert" [size]="16" />
+            <span>{{ error() }}</span>
+          </div>
+        }
+        @if (adminAccount(); as admin) {
+          <div class="form-grid">
+            <div class="field">
+              <label for="a-name">Full name</label>
+              <input
+                id="a-name"
+                name="admin_full_name"
+                class="input"
+                autocomplete="off"
+                [class.invalid]="errorIn() === 'account' && errors()['full_name']"
+                [(ngModel)]="account.full_name"
+              />
+              @if (errorIn() === 'account' && errors()['full_name']) {
+                <span class="field-error">{{ errors()['full_name'] }}</span>
+              }
+            </div>
+            <div class="field">
+              <label for="a-email">Email</label>
+              <input
+                id="a-email"
+                name="admin_email"
+                type="email"
+                class="input"
+                autocomplete="off"
+                [class.invalid]="errorIn() === 'account' && errors()['email']"
+                [(ngModel)]="account.email"
+              />
+              @if (errorIn() === 'account' && errors()['email']) {
+                <span class="field-error">{{ errors()['email'] }}</span>
+              }
+            </div>
+            <label class="check full">
+              <input type="checkbox" name="admin_is_active" [(ngModel)]="account.is_active" />
+              <span>Account enabled (can sign in)</span>
+            </label>
+            <div class="full last-login mono">
+              Last sign-in:
+              {{ admin.last_login_at ? (admin.last_login_at | date: 'MMM d, y, h:mm a') : 'Never' }}
+            </div>
+          </div>
+          <div class="form-actions">
+            @if (admin.is_locked) {
+              <button
+                type="button"
+                class="btn"
+                [disabled]="saving() === 'account'"
+                (click)="unlockAdminAccount()"
+              >
+                <app-icon name="unlock" [size]="16" /> Unlock
+              </button>
+            }
+            <button
+              type="button"
+              class="btn"
+              [disabled]="saving() === 'account'"
+              (click)="confirmReset.set(true)"
+            >
+              <app-icon name="key" [size]="16" /> Reset password
+            </button>
+            <button type="submit" class="btn btn-primary" [disabled]="saving() === 'account'">
+              {{ saving() === 'account' ? 'Saving…' : 'Save Admin account' }}
+            </button>
+          </div>
+        }
+      </form>
+    </section>
+  }
+</div>
+
+@if (confirmReset()) {
+  <app-modal title="Reset Admin password" (closed)="confirmReset.set(false)">
+    <p>
+      The Admin account's current password will stop working, it will be signed out, and a new
+      temporary password will be created.
+    </p>
+    <div class="form-actions">
+      <button type="button" class="btn" (click)="confirmReset.set(false)">Cancel</button>
+      <button type="button" class="btn btn-primary" (click)="resetAdminPassword()">
+        Reset password
+      </button>
+    </div>
+  </app-modal>
+}
+
+@if (temporaryPassword()) {
+  <app-temporary-password
+    [password]="temporaryPassword()"
+    [ownerName]="account.full_name"
+    (closed)="temporaryPassword.set('')"
+  />
+}
+
+@if (confirmRemoveQr()) {
+  <app-modal title="Remove QR code" (closed)="confirmRemoveQr.set(false)">
+    <p>Remove the payment QR code? Teachers will not see a QR code until a new one is uploaded.</p>
+    <div class="form-actions">
+      <button type="button" class="btn" (click)="confirmRemoveQr.set(false)">Cancel</button>
+      <button type="button" class="btn btn-danger" (click)="savePayment(true)">Remove QR code</button>
+    </div>
+  </app-modal>
+}

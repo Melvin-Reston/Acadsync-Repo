@@ -1,0 +1,323 @@
+<div class="page-head no-print">
+  <div>
+    <div class="eyebrow">Teacher Portal</div>
+    <h1 class="page-title">Report Card</h1>
+    <p class="muted">
+      DepEd School Form 9
+      @if (view()?.academic_year) {
+        · AY {{ view()!.academic_year }}
+      }
+      @if (view()?.grading) {
+        · {{ view()!.grading.label }}
+      }
+      @if (view()?.has_advisory) {
+        · Grade {{ view()!.adviser.grade }} {{ view()!.adviser.section }}
+      }
+    </p>
+  </div>
+</div>
+
+@if (error()) {
+  <div class="alert no-print" role="alert">
+    <app-icon name="alert" [size]="16" />
+    <span>{{ error() }}</span>
+  </div>
+}
+
+@if (loading() && !view()) {
+  <p class="muted no-print">Loading the report cards…</p>
+} @else if (view() && !view()!.has_advisory) {
+  <div class="card no-print">
+    <div class="empty">
+      <p><b>No advisory assignment yet.</b></p>
+      <p>Set your advisory section on the Dashboard first, then the report cards for that section will gather here.</p>
+      <a class="btn btn-primary" routerLink="/teacher/dashboard">Go to Dashboard</a>
+    </div>
+  </div>
+} @else if (view()) {
+  <!-- Controls: screen only, never printed -->
+  <section class="card controls no-print" aria-label="Report card controls">
+    <div class="field">
+      <label>Print scope</label>
+      <app-dropdown
+        [options]="scopeOptions"
+        [ngModel]="scope()"
+        (ngModelChange)="scope.set($event)"
+        placeholder="Choose a scope"
+        countSingular="scope"
+        countPlural="scopes"
+      />
+    </div>
+    @if (scope() === 'single') {
+      <div class="field">
+        <label>Student</label>
+        <app-dropdown
+          [options]="learnerOptions()"
+          [ngModel]="selectedLearnerId()"
+          (ngModelChange)="selectedLearnerId.set($event)"
+          placeholder="Choose a student"
+          searchPlaceholder="Search student name"
+          countSingular="student"
+          countPlural="students"
+        />
+      </div>
+    }
+    <div class="field">
+      <label>View</label>
+      <div class="view-toggle" role="group" aria-label="Card view">
+        <button type="button" class="btn btn-small" [class.active]="cardView() === 'both'" (click)="cardView.set('both')">Both sides</button>
+        <button type="button" class="btn btn-small" [class.active]="cardView() === 'front'" (click)="cardView.set('front')">Front</button>
+        <button type="button" class="btn btn-small" [class.active]="cardView() === 'back'" (click)="cardView.set('back')">Back</button>
+      </div>
+    </div>
+    <button type="button" id="printBtn" class="btn btn-primary" (click)="print()" [disabled]="view()!.learners.length === 0">
+      <app-icon name="printer" [size]="16" /> Print card
+    </button>
+    <p class="muted print-hint">Print with Ctrl / ⌘ + P — paper A5, scale 100%, margins None. Front prints as page 1, back as page 2.</p>
+  </section>
+
+  @if (view()!.learners.length === 0) {
+    <div class="card no-print">
+      <div class="empty">
+        <p><b>No learners in this section yet.</b></p>
+        <p>When learners are enrolled in Grade {{ view()!.adviser.grade }} {{ view()!.adviser.section }}, their cards will appear here.</p>
+      </div>
+    </div>
+  } @else if (view()!.subjects.length === 0) {
+    <div class="card no-print">
+      <div class="empty">
+        <p><b>No grades filed for this section yet.</b></p>
+        <p>When a subject teacher files grades for Grade {{ view()!.adviser.grade }} {{ view()!.adviser.section }}, the subjects will appear on the cards.</p>
+      </div>
+    </div>
+  }
+
+  <div class="sheets report-card">
+    @for (learner of cardsToShow(); track learner.learner_id) {
+      <!-- ================= FRONT ================= -->
+      @if (showFront()) {
+        <section class="sheet-wrap" [attr.data-learner]="learner.learner_id" data-side="front">
+          <div class="sheet-label no-print"><b>Front</b><span>{{ learnerDisplayName(learner) }}</span></div>
+          <article class="sheet" aria-label="Report card front">
+            <div class="rep">
+              <div class="seals" aria-hidden="true">
+                <div class="seal">DepEd<br />Seal</div>
+                <div class="seal">School<br />Seal</div>
+              </div>
+              <p>Republic of the Philippines</p>
+              <p class="dept">Department of Education</p>
+              <p class="region">Region &nbsp;·&nbsp; Schools Division &nbsp;·&nbsp; District</p>
+              <p class="region-sub">Municipality / City, Province</p>
+            </div>
+
+            <div class="school">
+              <h1>{{ view()!.school_name }}</h1>
+              <p>Learner’s Performance Report</p>
+              <div class="rule"></div>
+            </div>
+
+            <div class="title-block">
+              <h2>Report on Learning Progress</h2>
+              <p>School Year <b>{{ view()!.academic_year }}</b> &nbsp;·&nbsp; {{ view()!.grading.period_label }}s 1 – {{ view()!.grading.periods.length }}</p>
+            </div>
+
+            <div class="info" aria-label="Learner information">
+              <div class="info-row full name-row"><label>Name</label><span>{{ learnerDisplayName(learner) }}</span></div>
+              <div class="info-row"><label>LRN</label><span>{{ learner.learner_id }}</span></div>
+              <div class="info-row"><label>Age</label><span class="blank">&nbsp;</span></div>
+              <div class="info-row"><label>Sex</label><span>{{ learner.sex }}</span></div>
+              <div class="info-row"><label>Grade</label><span>{{ view()!.adviser.grade }}</span></div>
+              <div class="info-row"><label>Section</label><span>{{ view()!.adviser.section }}</span></div>
+              <div class="info-row"><label>Track (SHS only)</label><span class="blank">&nbsp;</span></div>
+            </div>
+
+            <p class="letter"><b>Dear Parents,</b> This Performance Report presents your child’s progress and achievement in the different learning areas. The school welcomes you to reach out should you wish to know more about your child’s learning and performance.</p>
+
+            <div class="sigs">
+              <div class="sig"><div class="sig-line"></div><span>School Head</span><strong>Signature over printed name</strong></div>
+              <div class="sig"><div class="sig-line"></div><span>Adviser</span><strong>{{ view()!.adviser.name }}</strong></div>
+            </div>
+
+            <div class="section-head"><h3>Learning Progress &amp; Achievement</h3><span>Final grade per {{ view()!.grading.period_label.toLowerCase() }}</span></div>
+            <table class="grades">
+              <thead>
+                <tr>
+                  <th rowspan="2">Learning Areas</th>
+                  <th [attr.colspan]="view()!.grading.periods.length" class="c">{{ view()!.grading.period_label }}</th>
+                  <th class="c" rowspan="2">Final Grade</th>
+                  <th class="c" rowspan="2">Remarks</th>
+                </tr>
+                <tr>
+                  @for (period of view()!.grading.periods; track period) {
+                    <th class="c">{{ periodShort(period) }}</th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (subject of learner.subjects; track subject.subject_name) {
+                  <tr>
+                    <td>{{ subject.subject_name }}</td>
+                    @for (grade of subject.period_grades; track $index) {
+                      <td class="c">{{ fmt(grade) }}</td>
+                    }
+                    <td class="c final">{{ fmt(subject.final_grade) }}</td>
+                    <td class="c remark" [class.pass]="subject.remarks === 'Passed'" [class.fail]="subject.remarks === 'Failed'">{{ subject.remarks ?? '—' }}</td>
+                  </tr>
+                }
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td class="ga" [attr.colspan]="view()!.grading.periods.length + 1">General Average</td>
+                  <td class="c ga">{{ fmt(learner.general_average) }}</td>
+                  <td class="c ga remark" [class.pass]="learner.general_average_remarks === 'Passed'" [class.fail]="learner.general_average_remarks === 'Failed'">{{ learner.general_average_remarks ?? '—' }}</td>
+                </tr>
+              </tfoot>
+            </table>
+
+            <div class="bottom-grid">
+              <div>
+                <div class="section-head" style="margin-top:0"><h3>Performance Descriptors</h3></div>
+                <table class="desc">
+                  <tr><th>Scale</th><th>Descriptor</th><th>Remarks</th></tr>
+                  @for (descriptor of view()!.descriptors; track descriptor.descriptor) {
+                    <tr><td>{{ descriptor.range }}</td><td>{{ descriptor.descriptor }}</td><td>{{ descriptor.remarks }}</td></tr>
+                  }
+                </table>
+              </div>
+              <div class="note-box">
+                <h4>How to read this card</h4>
+                <p><b>75 and above</b> is Passed. The Final Grade is the average of {{ view()!.grading.period_label }}s 1–{{ view()!.grading.periods.length }} for each subject. The General Average is the mean of all Final Grades. Blank cells mean no grade filed yet.</p>
+              </div>
+            </div>
+
+            <div class="sheet-foot"><span><b>Front</b> · A5</span><span>{{ view()!.school_name }}</span><span>SY {{ view()!.academic_year }}</span></div>
+          </article>
+        </section>
+      }
+
+      <!-- ================= BACK ================= -->
+      @if (showBack()) {
+        <section class="sheet-wrap" [attr.data-learner]="learner.learner_id" data-side="back">
+          <div class="sheet-label no-print"><b>Back</b><span>{{ learnerDisplayName(learner) }}</span></div>
+          <article class="sheet sheet-back" aria-label="Report card back">
+            <div class="back-head">
+              <div><h2>Attendance, Comments<br />&amp; Certification</h2><p>{{ learnerDisplayName(learner) }} &nbsp;·&nbsp; {{ view()!.academic_year }}</p></div>
+              <div class="a5tag">A5 · Back</div>
+            </div>
+
+            <h3>Attendance Record <span>Counted in school days</span></h3>
+            <table class="attend">
+              <thead>
+                <tr>
+                  <th></th>
+                  @for (month of view()!.months; track month.key) {
+                    <th>{{ month.label }}</th>
+                  }
+                  <th class="total">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>No. of Class Days</td>
+                  @for (month of view()!.months; track month.key) {
+                    <td>{{ fmt(learner.attendance.months[month.key]?.class_days) }}</td>
+                  }
+                  <td class="total">{{ fmt(learner.attendance.totals?.class_days) }}</td>
+                </tr>
+                <tr>
+                  <td>No. of Days Present</td>
+                  @for (month of view()!.months; track month.key) {
+                    <td>{{ fmt(learner.attendance.months[month.key]?.present) }}</td>
+                  }
+                  <td class="total">{{ fmt(learner.attendance.totals?.present) }}</td>
+                </tr>
+                <tr>
+                  <td>No. of Days Absent</td>
+                  @for (month of view()!.months; track month.key) {
+                    <td>{{ fmt(learner.attendance.months[month.key]?.absent) }}</td>
+                  }
+                  <td class="total">{{ fmt(learner.attendance.totals?.absent) }}</td>
+                </tr>
+                <tr>
+                  <td>No. of Days Excused</td>
+                  @for (month of view()!.months; track month.key) {
+                    <td>{{ fmt(learner.attendance.months[month.key]?.excused) }}</td>
+                  }
+                  <td class="total">{{ fmt(learner.attendance.totals?.excused) }}</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <h3>Teacher’s Comments / Remarks</h3>
+            <div class="comment-box">
+              @for (period of view()!.grading.periods; track period) {
+                <div class="comment-row">
+                  <label>{{ view()!.grading.period_label }} {{ period }} <span>{{ periodMonths(period) }}</span></label>
+                  <div class="comment-cell">
+                    <div class="comment-print">
+                      @if (savedComment(learner, period)) {
+                        <p>{{ savedComment(learner, period) }}</p>
+                      } @else {
+                        <i></i><i></i><i></i>
+                      }
+                    </div>
+                    <textarea
+                      class="comment-edit no-print"
+                      rows="2"
+                      maxlength="1000"
+                      [attr.aria-label]="'Comment for ' + view()!.grading.period_label + ' ' + period"
+                      [ngModel]="draft(learner.learner_id, period)"
+                      (ngModelChange)="setDraft(learner.learner_id, period, $event)"
+                    ></textarea>
+                    <button
+                      type="button"
+                      class="btn btn-small comment-save no-print"
+                      (click)="saveComment(learner, period)"
+                      [disabled]="!commentChanged(learner, period) || saving() === learner.learner_id + ':' + period"
+                    >
+                      {{ saving() === learner.learner_id + ':' + period ? 'Saving…' : 'Save comment' }}
+                    </button>
+                  </div>
+                </div>
+              }
+            </div>
+
+            <h3>Parent / Guardian’s Signature</h3>
+            <div class="parent-sigs">
+              @for (period of view()!.grading.periods; track period) {
+                <div class="parent-sig"><div class="line"></div><span>{{ view()!.grading.period_label }} {{ period }}</span></div>
+              }
+            </div>
+
+            <div class="cert">
+              <h3>Certificate of Transfer</h3>
+              <p>This is to certify that the above-named learner has satisfactorily completed the requirements for the grade level indicated.</p>
+              <div class="cert-grid">
+                <div class="cert-field"><label>Admitted to Grade</label><span></span></div>
+                <div class="cert-field"><label>Eligible for Admission to Grade</label><span></span></div>
+              </div>
+              <p class="cert-approved">Approved:</p>
+              <div class="cert-sigs">
+                <div class="sig"><div class="sig-line"></div><span>Adviser</span><strong>Signature over printed name</strong></div>
+                <div class="sig"><div class="sig-line"></div><span>School Head</span><strong>Signature over printed name</strong></div>
+              </div>
+            </div>
+
+            <div class="cancel">
+              <h3>Cancellation of Eligibility to Transfer</h3>
+              <div class="cert-grid">
+                <div class="cert-field"><label>Admitted in</label><span></span></div>
+                <div class="cert-field"><label>Date</label><span></span></div>
+              </div>
+              <div class="cert-sigs single">
+                <div class="sig"><div class="sig-line"></div><span>School Head</span></div>
+              </div>
+            </div>
+
+            <div class="sheet-foot"><span><b>Back</b> · A5</span><span>Keep with learner’s record</span><span>SY {{ view()!.academic_year }}</span></div>
+          </article>
+        </section>
+      }
+    }
+  </div>
+}

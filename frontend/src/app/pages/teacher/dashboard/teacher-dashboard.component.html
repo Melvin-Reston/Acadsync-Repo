@@ -1,0 +1,251 @@
+@if (loading()) {
+  <p class="muted">Loading your dashboard…</p>
+} @else if (error() && !data()) {
+  <div class="alert" role="alert">
+    <app-icon name="alert" [size]="16" />
+    <span>{{ error() }}</span>
+  </div>
+} @else if (teacher(); as teacher) {
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Teacher Portal</div>
+      <h1 class="page-title">Hello, {{ teacher.first_name }}</h1>
+      <p class="muted">{{ today | date: 'EEEE, MMMM d, y' }} · {{ teacher.school_name }}</p>
+    </div>
+  </div>
+
+  @if (error()) {
+    <div class="alert" role="alert">
+      <app-icon name="alert" [size]="16" />
+      <span>{{ error() }}</span>
+    </div>
+  }
+
+  <div class="dash-grid">
+    <div class="stack">
+      <!-- My plan -->
+      <section class="card card-pad">
+        <div class="card-head">
+          <h2 class="card-title">My plan</h2>
+          @if (subscription(); as sub) {
+            <span class="pill {{ subscriptionStatusTone(sub.status) }}">{{ subscriptionStatusLabel(sub.status) }}</span>
+          }
+        </div>
+
+        @if (subscription(); as sub) {
+          <dl class="details">
+            <div>
+              <dt>Plan</dt>
+              <dd>{{ sub.plan_name }}</dd>
+            </div>
+            <div>
+              <dt>Price</dt>
+              <dd>{{ planPrice(sub) }}</dd>
+            </div>
+            @if (sub.status === 'trial' && sub.trial_ends_at) {
+              <div>
+                <dt>Trial ends</dt>
+                <dd>{{ sub.trial_ends_at | date: 'MMM d, y' }}</dd>
+              </div>
+            }
+            <div>
+              <dt>Period ends</dt>
+              <dd>{{ sub.current_period_end | date: 'MMM d, y' }}</dd>
+            </div>
+            <div class="full">
+              <dt>What happens next</dt>
+              <dd>{{ nextStep() }}</dd>
+            </div>
+          </dl>
+        } @else {
+          <p class="muted">You have no plan yet.</p>
+        }
+
+        <div class="form-actions">
+          <a routerLink="/teacher/payments" class="btn btn-secondary">View payments &amp; invoices</a>
+        </div>
+
+        @if (!subscription() || subscription()?.status === 'expired' || subscription()?.status === 'cancelled') {
+          @if (!planPickerOpen()) {
+            <div class="form-actions">
+              <button type="button" class="btn btn-primary" (click)="openPlanPicker()">Choose a plan</button>
+            </div>
+          } @else {
+            <div class="plan-list">
+              @for (plan of plans(); track plan.id) {
+                <button type="button" class="plan-card" [class.selected]="selectedPlanId() === plan.id" (click)="selectedPlanId.set(plan.id)">
+                  <span class="plan-head">
+                    <b>{{ plan.name }}</b>
+                    @if (plan.is_popular) {
+                      <span class="pill accent">Popular</span>
+                    }
+                  </span>
+                  <span class="plan-price">{{ planPrice(plan) }}</span>
+                  @if (plan.trial_days > 0) {
+                    <span class="plan-trial">{{ plan.trial_days }}-day trial first</span>
+                  }
+                  @if (plan.features.length > 0) {
+                    <span class="plan-features">{{ plan.features.join(', ') }}</span>
+                  }
+                </button>
+              }
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn btn-primary" [disabled]="!selectedPlanId() || choosingPlan()" (click)="choosePlan()">
+                {{ choosingPlan() ? 'Saving…' : 'Choose this plan' }}
+              </button>
+            </div>
+          }
+        }
+      </section>
+
+      <!-- My assignment -->
+      <section class="card card-pad">
+        <div class="card-head">
+          <h2 class="card-title">My Assignment</h2>
+          @if (data()?.academic_year) {
+            <span class="year-chip mono">AY {{ data()?.academic_year }}</span>
+          }
+        </div>
+
+        <form (ngSubmit)="saveAdviser()" novalidate>
+          <label class="check">
+            <input type="checkbox" name="isAdviser" [(ngModel)]="isAdviser" />
+            <span>I am an adviser</span>
+          </label>
+
+          <div class="form-grid">
+            <div class="field">
+              <label>Advisory grade</label>
+              <app-dropdown
+                name="advisoryGrade"
+                [options]="advisoryGradeOptions"
+                [(ngModel)]="advisoryGrade"
+                [disabled]="!isAdviser"
+                placeholder="Choose a grade"
+                countSingular="grade"
+                countPlural="grades"
+              />
+            </div>
+            <div class="field">
+              <label for="advisory-section">Advisory section</label>
+              <input id="advisory-section" name="advisorySection" type="text" class="input" placeholder="Luke" [disabled]="!isAdviser" [class.invalid]="formErrors()['advisory_section']" [(ngModel)]="advisorySection" />
+              @if (formErrors()['advisory_section']) {
+                <span class="field-error">{{ formErrors()['advisory_section'] }}</span>
+              }
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" [disabled]="saving()">
+              {{ saving() ? 'Saving…' : 'Save assignment' }}
+            </button>
+          </div>
+        </form>
+
+        <!-- Filed assignment slip -->
+        <div class="slip">
+          <div class="slip-head">Filed assignment · AcadSync</div>
+          <dl class="details">
+            <div>
+              <dt>Faculty</dt>
+              <dd>{{ teacher.last_name }}, {{ teacher.first_name }}</dd>
+            </div>
+            <div>
+              <dt>Adviser</dt>
+              <dd>{{ teacher.is_adviser ? 'Yes' : 'No' }}</dd>
+            </div>
+            @if (teacher.is_adviser) {
+              <div>
+                <dt>Advisory grade</dt>
+                <dd>Grade {{ teacher.advisory_grade }}</dd>
+              </div>
+              <div>
+                <dt>Advisory section</dt>
+                <dd>{{ teacher.advisory_section }}</dd>
+              </div>
+            }
+            <div>
+              <dt>School year</dt>
+              <dd>{{ data()?.academic_year }}</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+    </div>
+
+    <div class="stack">
+      <!-- Announcements -->
+      <section class="card card-pad">
+        <div class="card-head">
+          <h2 class="card-title">Announcements</h2>
+        </div>
+        @if (announcements().length === 0) {
+          <p class="muted">No announcements right now.</p>
+        } @else {
+          <ul class="plain-list">
+            @for (item of announcements(); track item.id) {
+              <li>
+                <b>{{ item.title }}</b>
+                <p class="pre-line">{{ item.body }}</p>
+                <span class="muted mono">{{ item.ends_on | date: 'MMM d, y' }}</span>
+              </li>
+            }
+          </ul>
+        }
+      </section>
+
+      <!-- Classes -->
+      <section class="card card-pad">
+        <div class="card-head">
+          <h2 class="card-title">Classes &amp; Sections</h2>
+          <span class="pill plain">
+            {{ data()?.class_count ?? 0 }} {{ (data()?.class_count ?? 0) === 1 ? 'class' : 'classes' }} ·
+            {{ data()?.learner_count ?? 0 }} {{ (data()?.learner_count ?? 0) === 1 ? 'learner' : 'learners' }}
+          </span>
+        </div>
+        @if (todayClasses().length === 0) {
+          <p class="muted">No classes today.</p>
+        } @else {
+          <ul class="plain-list">
+            @for (cls of todayClasses(); track cls.id) {
+              <li>
+                <div class="row-between">
+                  <div>
+                    <b>{{ cls.title }}</b>
+                    <p class="muted">{{ cls.room }} · {{ time12(cls.start_time) }} – {{ time12(cls.end_time) }}</p>
+                  </div>
+                  <span class="pill plain" [class.accent]="cls.status === 'now'">
+                    {{ cls.status === 'now' ? 'Now' : 'Next' }}
+                  </span>
+                </div>
+              </li>
+            }
+          </ul>
+        }
+        <div class="form-actions">
+          <a routerLink="/teacher/classes" class="btn btn-secondary">View classes</a>
+          <a routerLink="/teacher/schedules" class="btn btn-secondary">View schedules</a>
+        </div>
+      </section>
+
+      <!-- Consolidation -->
+      <section class="card card-pad">
+        <div class="card-head">
+          <h2 class="card-title">Consolidation</h2>
+          @if (consolidation(); as con) {
+            <span class="pill plain">{{ con.submitted }} of {{ con.total }} submitted</span>
+          }
+        </div>
+        @if (consolidation(); as con) {
+          <p class="muted">Grade {{ con.grade }} {{ con.section }} · {{ con.grading.period_label }} {{ con.quarter }} · {{ con.submitted }} of {{ con.total }} subjects filed.</p>
+          <div class="form-actions">
+            <a routerLink="/teacher/consolidation" class="btn btn-secondary">View consolidation</a>
+          </div>
+        } @else {
+          <p class="muted">Set your advisory assignment in My Assignment to see your section's consolidation here.</p>
+        }
+      </section>
+    </div>
+  </div>
+}

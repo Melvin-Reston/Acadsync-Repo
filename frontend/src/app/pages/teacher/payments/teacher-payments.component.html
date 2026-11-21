@@ -1,0 +1,355 @@
+@if (loading()) {
+  <p class="muted">Loading your payments…</p>
+} @else {
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Teacher Portal</div>
+      <h1 class="page-title">Payments &amp; Invoices</h1>
+    </div>
+  </div>
+
+  @if (error()) {
+    <div class="alert" role="alert">
+      <app-icon name="alert" [size]="16" />
+      <span>{{ error() }}</span>
+    </div>
+  }
+
+  <!-- Current subscription -->
+  <section class="card card-pad">
+    <div class="card-head">
+      <h2 class="card-title">My plan</h2>
+      @if (subscription(); as sub) {
+        <span class="pill {{ subscriptionStatusTone(sub.status) }}">{{ subscriptionStatusLabel(sub.status) }}</span>
+      }
+    </div>
+
+    @if (subscription(); as sub) {
+      <dl class="details">
+        <div>
+          <dt>Plan</dt>
+          <dd>{{ sub.plan_name }}</dd>
+        </div>
+        <div>
+          <dt>Price</dt>
+          <dd>{{ planPrice(sub) }}</dd>
+        </div>
+        @if (sub.status === 'trial' && sub.trial_ends_at) {
+          <div>
+            <dt>Trial ends</dt>
+            <dd>
+              {{ sub.trial_ends_at | date: 'MMM d, y' }}
+              @if (daysLeft() !== null) {
+                <span class="muted">· {{ daysLeft() }} {{ daysLeft() === 1 ? 'day' : 'days' }} left</span>
+              }
+            </dd>
+          </div>
+        }
+        <div>
+          <dt>Period ends</dt>
+          <dd>
+            {{ sub.current_period_end | date: 'MMM d, y' }}
+            @if (sub.status === 'active' && daysLeft() !== null) {
+              <span class="muted">· {{ daysLeft() }} {{ daysLeft() === 1 ? 'day' : 'days' }} left</span>
+            }
+          </dd>
+        </div>
+        <div class="full">
+          <dt>What happens next</dt>
+          <dd>{{ nextStep() }}</dd>
+        </div>
+      </dl>
+    } @else {
+      <p class="muted">You have no plan yet. Choose one below to get started.</p>
+    }
+  </section>
+
+  <!-- Past due or expired: what is owed, and what happens next -->
+  @if (subscription()?.status === 'past_due' && unpaidInvoice(); as due) {
+    <div class="alert warn" role="alert">
+      <app-icon name="alert" [size]="16" />
+      <span>
+        Your subscription is past due. Invoice {{ due.invoice_number }} for {{ peso(due.amount) }} is due
+        {{ due.due_date | date: 'MMM d, y' }}. If it is not paid by then, the subscription expires.
+      </span>
+    </div>
+  }
+  @if (subscription()?.status === 'past_due' && waitingInvoice(); as waiting) {
+    <div class="alert info" role="alert">
+      <app-icon name="check" [size]="16" />
+      <span>
+        Your payment for invoice {{ waiting.invoice_number }} is waiting for confirmation by the administrator.
+      </span>
+    </div>
+  }
+  @if (subscription()?.status === 'expired') {
+    <div class="alert warn" role="alert">
+      <app-icon name="alert" [size]="16" />
+      <span>Your plan has ended. Choose a plan below to start a new one.</span>
+    </div>
+  }
+
+  <!-- Plans -->
+  <section class="card card-pad">
+    <div class="card-head">
+      <h2 class="card-title">Plans</h2>
+    </div>
+    @if (plans().length === 0) {
+      <p class="muted">No plans are available right now.</p>
+    } @else {
+      <div class="plan-list">
+        @for (plan of plans(); track plan.id) {
+          <article class="plan-card" [class.current]="isCurrentPlan(plan)">
+            <div class="plan-head">
+              <b>{{ plan.name }}</b>
+              @if (plan.is_popular) {
+                <span class="pill accent">Popular</span>
+              }
+              @if (isCurrentPlan(plan)) {
+                <span class="pill accent">Current plan</span>
+              }
+            </div>
+            <div class="plan-price">{{ planPrice(plan) }}</div>
+            @if (plan.trial_days > 0) {
+              <p class="plan-trial">{{ plan.trial_days }}-day trial first</p>
+            }
+            @if (plan.features.length > 0) {
+              <ul class="plan-features">
+                @for (feature of plan.features; track feature) {
+                  <li>{{ feature }}</li>
+                }
+              </ul>
+            } @else {
+              <p class="plan-features muted">Class records, attendance, and grade encoding for your own sections.</p>
+            }
+            @if (!isCurrentPlan(plan)) {
+              <div class="form-actions">
+                @if (confirmingPlanId() === plan.id) {
+                  <button type="button" class="btn btn-primary" [disabled]="changingPlan()" (click)="planAction(plan)">
+                    {{ changingPlan() ? 'Saving…' : 'Confirm change' }}
+                  </button>
+                  <button type="button" class="btn btn-secondary" [disabled]="changingPlan()" (click)="cancelPlanConfirm()">Cancel</button>
+                } @else {
+                  <button type="button" class="btn btn-secondary" (click)="planAction(plan)">
+                    {{ hasCurrentSubscription() ? 'Change to this plan' : 'Choose this plan' }}
+                  </button>
+                }
+              </div>
+              @if (confirmingPlanId() === plan.id && hasCurrentSubscription()) {
+                <p class="muted">Your current plan ends and any unpaid invoice for it is voided.</p>
+              }
+            }
+          </article>
+        }
+      </div>
+    }
+  </section>
+
+  <!-- Receipt for the selected invoice: the receipt is the centre, the payment steps follow from it -->
+  @if (selectedInvoice(); as invoice) {
+    <section class="receipt-wrap" id="receipt" aria-label="Invoice receipt">
+      <div class="receipt-head">
+        <h2 class="card-title">Invoice {{ invoice.invoice_number }}</h2>
+        <button type="button" class="btn btn-secondary" (click)="closeReceipt()">Close</button>
+      </div>
+
+      @if (receiptLoading()) {
+        <p class="muted">Loading the receipt…</p>
+      } @else if (receipt(); as receipt) {
+        <div class="pay-grid">
+          <div class="pay-steps">
+            @if (canPay(invoice)) {
+              <h3 class="step-title">Pay this invoice</h3>
+              @if (paymentInfo()?.has_qr && qrUrl()) {
+                <div class="qr-box">
+                  <img [src]="qrUrl()" alt="Payment QR code" />
+                  <div>
+                    <b>Scan to pay {{ peso(invoice.amount) }}</b>
+                    @if (paymentInfo()?.account_name) {
+                      <p class="muted">{{ paymentInfo()?.account_name }}</p>
+                    }
+                    <p class="muted">Pay the exact amount. A part payment is not accepted.</p>
+                  </div>
+                </div>
+              } @else if (paymentInfo()?.has_qr) {
+                <p class="muted">The QR code could not be loaded. Try again later.</p>
+              } @else {
+                <p class="muted">No payment QR code has been set yet. Ask the administrator.</p>
+              }
+              @if (paymentInfo()?.instructions) {
+                <p class="muted">{{ paymentInfo()?.instructions }}</p>
+              }
+              <ol class="steps">
+                <li>Scan the QR code with your e-wallet or banking app and pay {{ peso(invoice.amount) }} exactly.</li>
+                <li>Save a screenshot of the payment confirmation.</li>
+                <li>Enter the reference number and upload the screenshot, then send it.</li>
+                <li>The administrator checks it. The invoice shows “Waiting for confirmation” until then.</li>
+              </ol>
+
+              <form (ngSubmit)="submitPayment()" novalidate>
+                <div class="field">
+                  <label for="reference-number">Reference number</label>
+                  <input id="reference-number" name="referenceNumber" type="text" class="input mono" placeholder="e.g. GCASH-1001" [(ngModel)]="referenceNumber" [class.invalid]="formErrors()['reference_number']" />
+                  @if (formErrors()['reference_number']) {
+                    <span class="field-error">{{ formErrors()['reference_number'] }}</span>
+                  }
+                </div>
+                <div class="field">
+                  <label for="paid-on">Date paid</label>
+                  <input id="paid-on" name="paidOn" type="date" class="input" [(ngModel)]="paidOn" [max]="today" />
+                </div>
+                <div class="field">
+                  <label for="screenshot">Payment screenshot</label>
+                  <input id="screenshot" name="screenshot" type="file" class="input" accept="image/png,image/jpeg,image/webp" (change)="onScreenshot($event)" />
+                  @if (screenshotName) {
+                    <span class="muted mono">{{ screenshotName }}</span>
+                  }
+                  @if (formErrors()['screenshot']) {
+                    <span class="field-error">{{ formErrors()['screenshot'] }}</span>
+                  }
+                  <span class="muted">PNG, JPG or WEBP, up to 2 MB.</span>
+                </div>
+                <div class="field">
+                  <label for="pay-note">Note <span class="muted">(optional)</span></label>
+                  <input id="pay-note" name="note" type="text" class="input" [(ngModel)]="note" [class.invalid]="formErrors()['note']" />
+                  @if (formErrors()['note']) {
+                    <span class="field-error">{{ formErrors()['note'] }}</span>
+                  }
+                </div>
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary" [disabled]="submittingPayment() || !paymentInfo()?.has_qr">
+                    {{ submittingPayment() ? 'Sending…' : 'Send payment for confirmation' }}
+                  </button>
+                </div>
+              </form>
+            } @else if (invoice.latest_payment_status === 'pending') {
+              <h3 class="step-title">Waiting for confirmation</h3>
+              <p class="muted">Your payment for this invoice was sent. The administrator is checking it.</p>
+            } @else if (invoice.status === 'paid') {
+              <h3 class="step-title">Paid</h3>
+              <p class="muted">
+                Paid {{ invoice.paid_at | date: 'MMM d, y' }}. Keep this receipt for your records.
+              </p>
+            } @else if (invoice.status === 'void') {
+              <h3 class="step-title">Void</h3>
+              <p class="muted">{{ invoice.void_reason || 'This invoice was voided.' }}</p>
+            }
+
+            @if (invoice.latest_payment_status === 'rejected' && invoice.latest_rejection_reason) {
+              <div class="alert" role="alert">
+                <app-icon name="alert" [size]="16" />
+                <span>Your last payment was rejected: {{ invoice.latest_rejection_reason }}</span>
+              </div>
+            }
+          </div>
+
+          <aside class="receipt" aria-label="Receipt">
+            <div class="receipt-top">
+              <span class="mono">AcadSync · Receipt</span>
+              <h3>{{ invoice.invoice_number }}</h3>
+              <p>
+                {{ invoice.plan_name }} · {{ invoice.period_start | date: 'MMM d, y' }} – {{ invoice.period_end | date: 'MMM d, y' }}
+                <br />Due {{ invoice.due_date | date: 'MMM d, y' }}
+              </p>
+            </div>
+            <div class="perf" aria-hidden="true"></div>
+            <div class="receipt-body">
+              <div class="line-item">
+                <div>
+                  <b>{{ invoice.plan_name }}</b>
+                  <p>Subscription · {{ invoice.period_start | date: 'MMM d, y' }} – {{ invoice.period_end | date: 'MMM d, y' }}</p>
+                </div>
+                <span class="price">{{ peso(invoice.amount) }}</span>
+              </div>
+              <div class="totals">
+                <div class="trow total">
+                  <span><b>Total due</b><br /><small>Philippine Peso (PHP)</small></span>
+                  <span class="val">{{ peso(invoice.amount) }}</span>
+                </div>
+                <div class="trow">
+                  <span>Status</span>
+                  <span class="pill {{ invoiceTone(invoice) }}">{{ invoiceLabel(invoice) }}</span>
+                </div>
+                @if (invoice.status === 'paid' && invoice.paid_at) {
+                  <div class="trow">
+                    <span>Paid on</span>
+                    <span class="mono">{{ invoice.paid_at | date: 'MMM d, y' }}</span>
+                  </div>
+                }
+              </div>
+
+              @if (receipt.payments.length > 0) {
+                <h4 class="receipt-sub">Payments</h4>
+                <ul class="plain-list receipt-payments">
+                  @for (payment of receipt.payments; track payment.id) {
+                    <li>
+                      <div class="row-between">
+                        <b>{{ payment.reference_number }}</b>
+                        <span class="pill {{ paymentTone(payment) }}">{{ paymentLabel(payment) }}</span>
+                      </div>
+                      <p class="muted">{{ peso(payment.amount) }} · Paid {{ payment.paid_on | date: 'MMM d, y' }}</p>
+                      @if (payment.status === 'rejected' && payment.rejection_reason) {
+                        <p class="muted">Rejected: {{ payment.rejection_reason }}</p>
+                      }
+                      @if (payment.note) {
+                        <p class="muted">{{ payment.note }}</p>
+                      }
+                    </li>
+                  }
+                </ul>
+              }
+            </div>
+          </aside>
+        </div>
+      }
+    </section>
+  }
+
+  <!-- Invoices -->
+  <section class="card card-pad">
+    <div class="card-head">
+      <h2 class="card-title">Invoices</h2>
+    </div>
+    @if (invoices().length === 0) {
+      <p class="muted">No invoices yet.</p>
+    } @else {
+      <div class="table-scroll">
+        <table class="invoice-table">
+          <thead>
+            <tr>
+              <th>Invoice</th>
+              <th>Plan</th>
+              <th>Issued</th>
+              <th>Due</th>
+              <th class="num">Amount</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (invoice of invoices(); track invoice.id) {
+              <tr [class.selected]="selectedInvoiceId() === invoice.id">
+                <td class="mono"><b>{{ invoice.invoice_number }}</b></td>
+                <td>{{ invoice.plan_name }}</td>
+                <td>{{ invoice.issued_at | date: 'MMM d, y' }}</td>
+                <td>{{ invoice.due_date | date: 'MMM d, y' }}</td>
+                <td class="num">{{ peso(invoice.amount) }}</td>
+                <td>
+                  <span class="pill {{ invoiceTone(invoice) }}">{{ invoiceLabel(invoice) }}</span>
+                  @if (invoice.latest_payment_status === 'rejected' && invoice.latest_rejection_reason) {
+                    <span class="sub">{{ invoice.latest_rejection_reason }}</span>
+                  }
+                </td>
+                <td>
+                  <button type="button" class="btn btn-secondary btn-small" (click)="openReceipt(invoice)">
+                    {{ invoice.status === 'unpaid' && invoice.latest_payment_status !== 'pending' ? 'Pay' : 'Receipt' }}
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </section>
+}

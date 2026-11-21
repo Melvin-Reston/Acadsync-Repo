@@ -1,0 +1,2494 @@
+/* AcadSync design system: warm paper, burnt orange, deep warm-brown sidebar. */
+
+:root {
+  --bg: #f4f1ea;
+  --bg-dot: #e2dccf;
+  --surface: #fffefb;
+  --surface-2: #f9f6ef;
+  --surface-3: #ede8dd;
+  --ink: #1b1712;
+  --ink-2: #5c554b;
+  --muted: #7d7467;
+  --border: #e2dccf;
+  --border-strong: #d4cdbb;
+  --accent: #c84b1f;
+  --accent-deep: #a93e18;
+  --accent-ink: #ffffff;
+  --accent-tint: #fdeee6;
+  --accent-tint-2: #fadbc9;
+  --accent-bright: #ff8657;
+  --red: #b42318;
+  --red-tint: #fdecea;
+  --amber: #8a5f0e;
+  --amber-tint: #fbf0d3;
+  --brown: #6b4a2f;
+  --brown-tint: #efe5d6;
+  --shadow: 0 1px 2px rgba(27, 23, 18, 0.05), 0 16px 40px -24px rgba(27, 23, 18, 0.18);
+  --shadow-lg: 0 24px 64px -16px rgba(33, 23, 18, 0.35);
+  --side-bg: linear-gradient(180deg, #2c1e14 0%, #211712 58%, #17110d 100%);
+  --side-ink: #faf3e7;
+  --side-muted: #a98f76;
+  --side-border: rgba(250, 243, 231, 0.16);
+  --radius: 8px;
+  --font-serif: 'Newsreader', Georgia, serif;
+  --font-sans: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, Consolas, monospace;
+}
+
+:root[data-theme='dark'] {
+  --bg: #14110e;
+  --bg-dot: #221c16;
+  --surface: #201c17;
+  --surface-2: #27221c;
+  --surface-3: #2e2820;
+  --ink: #f5efe6;
+  --ink-2: #c9bfb0;
+  --muted: #9a8e7e;
+  --border: #383128;
+  --border-strong: #453c30;
+  --accent: #ff6b35;
+  --accent-deep: #ff8657;
+  --accent-ink: #1b0f08;
+  --accent-tint: #3a2318;
+  --accent-tint-2: #4a2c1c;
+  --red: #ff8a7a;
+  --red-tint: #3d1e1a;
+  --amber: #f5c35c;
+  --amber-tint: #332a12;
+  --brown: #d9bfa3;
+  --brown-tint: #332a20;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 16px 40px -24px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 24px 64px -16px rgba(0, 0, 0, 0.7);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background-color: var(--bg);
+  background-image: radial-gradient(var(--bg-dot) 1px, transparent 1.1px);
+  background-size: 22px 22px;
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+/* ---------- Page heading ---------- */
+.page-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+
+.page-title {
+  font-family: var(--font-serif);
+  font-size: clamp(28px, 4vw, 38px);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+
+.head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 14px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.btn:hover {
+  border-color: var(--muted);
+  text-decoration: none;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.btn-primary:hover {
+  background: var(--accent-deep);
+  border-color: var(--accent-deep);
+}
+
+.btn-danger {
+  background: var(--red-tint);
+  border-color: transparent;
+  color: var(--red);
+}
+
+.btn-danger:hover {
+  border-color: var(--red);
+}
+
+.btn-small {
+  min-height: 34px;
+  padding: 0 12px;
+  font-size: 13px;
+  border-radius: 6px;
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.icon-btn {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-2);
+}
+
+.icon-btn:hover {
+  border-color: var(--border-strong);
+  color: var(--ink);
+}
+
+/* ---------- Cards ---------- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  min-width: 0;
+}
+
+.card-pad {
+  padding: 20px;
+}
+
+.card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.card-title {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ---------- KPI cards ---------- */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.kpi {
+  padding: 18px 20px;
+}
+
+.kpi-value {
+  font-family: var(--font-serif);
+  font-size: 38px;
+  font-weight: 600;
+  line-height: 1.15;
+  margin-top: 6px;
+}
+
+/* ---------- Toolbar and form controls ---------- */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.toolbar .search {
+  flex: 1 1 240px;
+}
+
+.toolbar > .input,
+.toolbar > .select {
+  flex: 1 1 160px;
+  width: auto;
+}
+
+.input,
+.select,
+.textarea {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  font-size: 14px;
+}
+
+.textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.input::placeholder,
+.textarea::placeholder {
+  color: var(--muted);
+}
+
+.input:focus,
+.select:focus,
+.textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-tint-2);
+}
+
+.input.invalid,
+.select.invalid,
+.textarea.invalid {
+  border-color: var(--red);
+}
+
+.input:disabled {
+  background: var(--surface-3);
+  color: var(--ink-2);
+}
+
+.search {
+  position: relative;
+}
+
+.search app-icon {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.search .input {
+  padding-left: 38px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.field > label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink-2);
+}
+
+.field-error {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--red);
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.form-grid .full {
+  grid-column: 1 / -1;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.input-row .input {
+  flex: 1;
+}
+
+/* ---------- Messages ---------- */
+.alert {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 11px 14px;
+  border-radius: 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+  background: var(--red-tint);
+  color: var(--red);
+  margin-bottom: 14px;
+  overflow-wrap: anywhere;
+}
+
+.alert.info {
+  background: var(--accent-tint);
+  color: var(--accent-deep);
+}
+
+.alert.warn {
+  background: var(--amber-tint);
+  color: var(--amber);
+}
+
+.alert app-icon {
+  margin-top: 1px;
+}
+
+.empty {
+  padding: 44px 20px;
+  text-align: center;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.empty .btn {
+  margin-top: 14px;
+}
+
+/* ---------- Tables ---------- */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: left;
+  padding: 12px 16px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.table tbody tr:hover td {
+  background: var(--surface-2);
+}
+
+.table .right {
+  text-align: right;
+}
+
+.table .nowrap {
+  white-space: nowrap;
+}
+
+.cell-main {
+  display: block;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.cell-sub {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---------- Pills ---------- */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  background: var(--brown-tint);
+  color: var(--brown);
+}
+
+.pill::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.pill.plain::before {
+  display: none;
+}
+
+.pill.accent {
+  background: var(--accent-tint);
+  color: var(--accent-deep);
+}
+
+.pill.red {
+  background: var(--red-tint);
+  color: var(--red);
+}
+
+.pill.amber {
+  background: var(--amber-tint);
+  color: var(--amber);
+}
+
+/* ---------- Stats ledger ---------- */
+/* A row of big-number cells, shared by Attendance, Grades and Consolidation.
+   Pages set their own column count; the narrow-screen reflow lives in each page. */
+.ledger {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.ledger .cell {
+  padding: 16px 18px;
+  border-left: 1px solid var(--border);
+  min-width: 0;
+}
+
+.ledger .cell:first-child {
+  border-left: none;
+}
+
+.ledger .k {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.ledger .v {
+  display: block;
+  font-family: var(--font-serif);
+  font-size: 26px;
+  font-weight: 600;
+  margin: 4px 0 2px;
+}
+
+.ledger .s {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Filter chips ---------- */
+.chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 99px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* ---------- Saved / unsaved note ---------- */
+.saved-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.unsaved-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: none;
+}
+
+.saved-note.dirty {
+  color: var(--accent-deep);
+}
+
+.saved-note.dirty .unsaved-dot {
+  display: inline-block;
+}
+
+/* ---------- Details list ---------- */
+.details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 24px;
+  margin: 0;
+}
+
+.details dt {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.details dd {
+  margin: 3px 0 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.details .full {
+  grid-column: 1 / -1;
+}
+
+/* ---------- Temporary password box ---------- */
+.secret {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px dashed var(--accent);
+  border-radius: 8px;
+  background: var(--accent-tint);
+  margin: 14px 0;
+}
+
+.secret code {
+  font-family: var(--font-mono);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Auth pages (sign in, create account, forgot, reset) ---------- */
+/* Top bar, centered card (brand panel + form), footer — the arrangement of the
+   earlier teacher login, in warm paper / burnt-orange. The dotted backdrop comes
+   from the body background. */
+.auth-page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 20px 20px 16px;
+}
+
+.auth-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 2px 22px;
+}
+
+.topbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.topbar-mark {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--side-bg);
+  border: 1px solid var(--side-border);
+  color: var(--accent-bright);
+  font-family: var(--font-serif);
+  font-size: 19px;
+  font-weight: 700;
+  box-shadow: var(--shadow);
+}
+
+.wordmark {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.v-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border-strong);
+  flex: none;
+}
+
+.dept {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 12px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: var(--shadow);
+  flex: none;
+}
+
+.theme-toggle:hover {
+  border-color: var(--border-strong);
+}
+
+.auth-layout {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 0 18px;
+}
+
+.auth-shell-card {
+  display: grid;
+  grid-template-columns: 1.02fr 0.98fr;
+  width: 100%;
+  max-width: 960px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+
+/* Deep warm-brown brand panel (same gradient as the sidebar). */
+.auth-brand {
+  position: relative;
+  background: var(--side-bg);
+  color: var(--side-ink);
+  padding: 40px 38px 34px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Faint grid on the panel, fading towards the bottom. */
+.auth-brand::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(250, 243, 231, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(250, 243, 231, 0.045) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: radial-gradient(ellipse 100% 80% at 20% 0%, black, transparent 75%);
+  -webkit-mask-image: radial-gradient(ellipse 100% 80% at 20% 0%, black, transparent 75%);
+}
+
+.auth-brand > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Brand lockup at the top of the panel. */
+.auth-brand .brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.auth-brand .brand-mark {
+  width: 46px;
+  height: 46px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 134, 87, 0.32);
+  background: rgba(255, 134, 87, 0.1);
+  color: var(--accent-bright);
+  font-family: var(--font-serif);
+  font-size: 25px;
+  font-weight: 700;
+}
+
+.auth-brand .brand-name {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.05;
+  color: var(--side-ink);
+}
+
+.auth-brand .brand-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent-bright);
+  margin-top: 3px;
+}
+
+.auth-tagline {
+  font-family: var(--font-serif);
+  font-size: clamp(28px, 3.4vw, 34px);
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -0.01em;
+  margin: 26px 0 0;
+}
+
+.auth-tagline em {
+  font-style: normal;
+  color: var(--accent-bright);
+}
+
+.auth-lede {
+  margin: 10px 0 0;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--side-muted);
+  max-width: 36ch;
+}
+
+.auth-foot {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--side-muted);
+  margin: auto 0 0;
+  padding-top: 28px;
+}
+
+/* Today-classes card on the teacher panel. */
+.today-card {
+  margin-top: 26px;
+  background: rgba(250, 243, 231, 0.04);
+  border: 1px solid var(--side-border);
+  border-radius: 8px;
+  padding: 14px 16px;
+}
+
+.today-head {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--side-muted);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.today-empty {
+  font-size: 13px;
+  color: var(--side-muted);
+  margin: 6px 0 2px;
+}
+
+.today-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.today-row + .today-row {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--side-border);
+}
+
+.today-row app-icon {
+  color: var(--side-muted);
+  flex: none;
+}
+
+.today-class {
+  min-width: 0;
+  flex: 1;
+}
+
+.today-class b {
+  display: block;
+  font-size: 13px;
+  color: var(--side-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.today-class span {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--side-muted);
+}
+
+.today-card .pill {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  padding: 3px 8px;
+}
+
+.today-card .pill.now {
+  background: rgba(255, 134, 87, 0.14);
+  color: #ff8657;
+  border: 1px solid rgba(255, 134, 87, 0.3);
+}
+
+.today-card .pill.next {
+  background: rgba(245, 195, 92, 0.12);
+  color: #f5c35c;
+  border: 1px solid rgba(245, 195, 92, 0.3);
+}
+
+.auth-features {
+  list-style: none;
+  margin: 28px 0 0;
+  padding: 22px 0 0;
+  border-top: 1px solid var(--side-border);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-features li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.feature-icon {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: rgba(250, 243, 231, 0.06);
+  border: 1px solid var(--side-border);
+  color: var(--accent-bright);
+}
+
+.auth-features b {
+  display: block;
+  font-size: 13.5px;
+  color: var(--side-ink);
+}
+
+.auth-features span {
+  display: block;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--side-muted);
+  margin-top: 1px;
+}
+
+.auth-status {
+  margin: auto 0 0;
+  padding-top: 28px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--side-muted);
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--accent-bright);
+  box-shadow: 0 0 0 4px rgba(255, 134, 87, 0.15);
+}
+
+.auth-form {
+  padding: 44px 44px 36px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.auth-form .page-title {
+  font-size: 32px;
+  margin-bottom: 0;
+}
+
+.auth-sub {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.auth-form > form,
+.auth-form > .steps {
+  margin-top: 26px;
+}
+
+.auth-form > .alert {
+  margin-top: 20px;
+}
+
+.auth-form form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.auth-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  font-size: 13.5px;
+}
+
+.row-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.remember {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.remember input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 17px;
+  height: 17px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 5px;
+  background: var(--surface);
+  margin: 0;
+  cursor: pointer;
+  position: relative;
+  flex: none;
+}
+
+.remember input:checked {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.remember input:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--accent-ink);
+  border-width: 0 2px 2px 0;
+  transform: rotate(42deg);
+}
+
+.remember input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 22px 0 16px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.btn-secondary {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.btn-secondary:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+}
+
+.secure-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12.5px;
+  font-weight: 500;
+}
+
+.secure-row app-icon {
+  color: var(--accent);
+}
+
+.auth-page-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 2px 2px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.foot-link {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--ink-2);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.foot-link:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+/* ---------- Phones and small tablets ---------- */
+@media (max-width: 900px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .auth-page {
+    padding: 14px 14px 12px;
+  }
+
+  .auth-topbar {
+    padding-bottom: 16px;
+  }
+
+  .auth-topbar .dept {
+    display: none;
+  }
+
+  .auth-shell-card {
+    grid-template-columns: minmax(0, 1fr);
+    max-width: 520px;
+  }
+
+  .auth-brand {
+    padding: 28px 26px 24px;
+  }
+
+  .auth-tagline {
+    font-size: 24px;
+    margin-top: 18px;
+  }
+
+  .auth-lede {
+    max-width: none;
+  }
+
+  .auth-features,
+  .today-card {
+    display: none;
+  }
+
+  .auth-status,
+  .auth-foot {
+    padding-top: 18px;
+  }
+
+  .auth-form {
+    padding: 30px 26px 28px;
+  }
+}
+
+@media (max-width: 720px) {
+  .form-grid,
+  .details {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .kpi {
+    padding: 14px 16px;
+  }
+
+  .kpi-value {
+    font-size: 30px;
+  }
+
+  .head-actions,
+  .head-actions .btn {
+    width: 100%;
+  }
+
+  /* Tables turn into stacked cards. Each cell shows its column name from data-label. */
+  .table thead {
+    display: none;
+  }
+
+  .table,
+  .table tbody,
+  .table tr,
+  .table td {
+    display: block;
+    width: 100%;
+  }
+
+  .table tr {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .table tbody tr:last-child {
+    border-bottom: 0;
+  }
+
+  .table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 14px;
+    padding: 5px 0;
+    border: 0;
+    text-align: right;
+  }
+
+  .table td > * {
+    min-width: 0;
+  }
+
+  .table td::before {
+    content: attr(data-label);
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    text-align: left;
+    padding-top: 2px;
+  }
+
+  .table td:not([data-label])::before {
+    display: none;
+  }
+
+  .table td.right {
+    justify-content: flex-end;
+  }
+
+  .table .nowrap {
+    white-space: normal;
+  }
+
+  .table tbody tr:hover td {
+    background: transparent;
+  }
+}
+
+@media (max-width: 420px) {
+  .kpi-grid {
+    gap: 10px;
+  }
+
+  .auth-form {
+    padding: 26px 20px 24px;
+  }
+
+  .auth-brand {
+    padding: 24px 20px 20px;
+  }
+}
+
+/* ---------- Small helpers used on detail pages ---------- */
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 14px;
+  font-size: 13.5px;
+}
+
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+
+.stack {
+  margin-bottom: 16px;
+}
+
+.merge-note {
+  margin: 14px 0 0;
+}
+
+/* ---------- Part 2: tabs, money and small extras ---------- */
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 99px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--ink-2);
+  font-weight: 700;
+  font-size: 13.5px;
+  cursor: pointer;
+}
+
+.tab:hover {
+  border-color: var(--muted);
+  text-decoration: none;
+}
+
+.tab.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.tab .count {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  padding: 1px 7px;
+  border-radius: 99px;
+  background: var(--amber-tint);
+  color: var(--amber);
+}
+
+.money {
+  font-family: var(--font-mono);
+  white-space: nowrap;
+}
+
+.kpi-sub {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.kpi-value.small {
+  font-size: 30px;
+}
+
+.kpi-grid.three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+a.kpi {
+  display: block;
+  color: inherit;
+  font-weight: inherit;
+}
+
+a.kpi:hover {
+  text-decoration: none;
+  border-color: var(--border-strong);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.check input {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  accent-color: var(--accent);
+}
+
+.hint {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.proof {
+  display: block;
+  max-width: 100%;
+  max-height: 420px;
+  margin: 0 auto;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.pre-line {
+  white-space: pre-line;
+}
+
+@media (max-width: 900px) {
+  .kpi-grid.three {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.row-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.body-text {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+/* A chosen item and the list to pick one from (Add subscription). */
+.chosen {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.picker {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.picker button {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.picker button:hover {
+  background: var(--accent-tint);
+}
+
+form > .field + .field,
+form > .field + .alert,
+form > .form-grid + .alert {
+  margin-top: 14px;
+}
+
+/* A KPI card that is also a button (filters the list below it). */
+.kpi-button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.kpi-button:hover {
+  border-color: var(--border-strong);
+}
+
+.kpi-button > span {
+  display: block;
+}
+
+.kpi-value.warn {
+  color: var(--red);
+}
+
+.section-label {
+  margin: 18px 0 8px;
+}
+
+.plain-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.plain-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.plain-list li + li {
+  border-top: 1px solid var(--border);
+}
+
+.plain-list li > span:first-child {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+/* Reports: the date range row and small "label ... number" rows inside a card. */
+.toolbar.range {
+  align-items: flex-end;
+  border-bottom: 0;
+}
+
+.toolbar.range .field {
+  flex: 1 1 160px;
+}
+
+.split {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.no-plan {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* ---------- Teacher Batch 1: plan cards (sign-up and dashboard) ---------- */
+/* Plan cards */
+.plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.plan-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.plan-card:hover {
+  border-color: var(--accent);
+}
+
+.plan-card.selected {
+  border: 2px solid var(--accent);
+  background: var(--accent-tint);
+}
+
+.plan-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+}
+
+.plan-price {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.plan-trial {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--brown);
+}
+
+.plan-features {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+/* ---------- Teacher Batch 1: two-column page layout ---------- */
+.dash-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 960px) {
+  .dash-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* ---------- Print: only the report card prints ---------- */
+/* The Report Card (Batch 5) is the one page that prints. The app chrome —
+   sidebar, top bar, scrim and anything marked .no-print — never prints, and
+   the page is true A5 with no margins. The card's own print rules live in
+   the report card component. */
+@media print {
+  @page {
+    size: A5 portrait;
+    margin: 0;
+  }
+
+  body {
+    background: #fff !important;
+  }
+
+  .no-print {
+    display: none !important;
+  }
+
+  .app {
+    display: block !important;
+  }
+
+  .app .sidebar,
+  .app .topbar,
+  .app .scrim {
+    display: none !important;
+  }
+
+  .app .main-wrap {
+    display: block !important;
+  }
+
+  .app .content {
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}
+
+/* ---------- Report Card (Teacher Batch 5): the printed SF9 card ---------- */
+/* The card is strictly black and white, plain white paper, in any mode.
+   These rules are scoped under .report-card so they only ever touch the
+   card on the Report Card page. The component budget (6 kB) cannot hold
+   a full A5 form, so the card styles live here, as the shared ledger
+   styles already do. */
+/* ---------- A5 sheet: pure black & white ---------- */
+.report-card .sheet {
+  background: #fff;
+  color: #000;
+  width: 100%;
+  aspect-ratio: 148 / 210;
+  box-shadow: 0 4px 24px rgba(28, 25, 23, 0.14), 0 1px 3px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e7e5e4;
+  padding: 5.2% 5.5% 4.5%;
+  position: relative;
+  overflow: hidden;
+  font-family: Arial, Helvetica, sans-serif;
+  display: flex;
+  flex-direction: column;
+}
+
+.report-card .sheet * {
+  color: #000;
+  border-color: #000;
+}
+
+/* ----- Front: header ----- */
+.report-card .rep {
+  text-align: center;
+  line-height: 1.15;
+  position: relative;
+}
+
+.report-card .seals {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 2px;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+}
+
+.report-card .seal {
+  width: 44px;
+  height: 44px;
+  border: 1.5px solid #000;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  font-size: 6.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.1;
+  font-weight: 700;
+  background: #fff;
+}
+
+.report-card .rep p {
+  margin: 0;
+  font-size: 8.5px;
+  letter-spacing: 0.02em;
+}
+
+.report-card .rep .dept {
+  font-weight: 700;
+  font-size: 9px;
+}
+
+.report-card .rep .region {
+  font-size: 7.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
+.report-card .rep .region-sub {
+  font-size: 7.5px;
+}
+
+.report-card .school {
+  margin-top: 10px;
+  text-align: center;
+}
+
+.report-card .school h1 {
+  margin: 0;
+  font-family: Georgia, serif;
+  font-size: 19px;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.report-card .school h1 + p {
+  margin: 3px 0 0;
+  font-size: 7.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.report-card .rule {
+  height: 3px;
+  background: #000;
+  margin: 8px 0 0;
+  position: relative;
+}
+
+.report-card .rule::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 4px;
+  height: 1px;
+  background: #000;
+}
+
+.report-card .title-block {
+  text-align: center;
+  margin: 12px 0 8px;
+}
+
+.report-card .title-block h2 {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.report-card .title-block p {
+  margin: 3px 0 0;
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ----- Front: learner information ----- */
+.report-card .info {
+  display: grid;
+  grid-template-columns: 1.6fr 0.7fr 0.7fr;
+  gap: 6px 10px;
+  border: 1px solid #000;
+  padding: 8px 9px 7px;
+  background: #fff;
+}
+
+.report-card .info .full {
+  grid-column: 1 / -1;
+}
+
+.report-card .info-row {
+  display: flex;
+  gap: 5px;
+  align-items: baseline;
+  border-bottom: 1px dotted #000;
+  padding-bottom: 2px;
+  min-width: 0;
+}
+
+.report-card .info-row label {
+  font-size: 7px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  font-weight: 700;
+}
+
+.report-card .info-row span {
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.report-card .info-row.name-row {
+  gap: 7px;
+  padding: 3px 0 6px;
+  align-items: center;
+}
+
+.report-card .info-row.name-row label {
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+}
+
+.report-card .info-row.name-row span {
+  font-size: 13.5px;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+}
+
+.report-card .letter {
+  font-size: 7.8px;
+  line-height: 1.45;
+  margin: 7px 1px 0;
+}
+
+.report-card .sigs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 7px;
+}
+
+.report-card .sig {
+  text-align: center;
+}
+
+.report-card .sig-line {
+  border-bottom: 1px solid #000;
+  height: 14px;
+}
+
+.report-card .sig span {
+  display: block;
+  font-size: 7px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-top: 3px;
+  font-weight: 700;
+}
+
+.report-card .sig strong {
+  display: block;
+  font-size: 8px;
+  margin-top: 1px;
+}
+
+/* ----- Front: grades ----- */
+.report-card .section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 10px 0 4px;
+}
+
+.report-card .section-head h3 {
+  margin: 0;
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.report-card .section-head span {
+  font-size: 7px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.report-card .sheet table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.grades th,
+.report-card .grades td {
+  border: 1px solid #000;
+  padding: 2.8px 4px;
+  font-size: 7.8px;
+  line-height: 1.2;
+}
+
+.report-card .grades thead th {
+  font-size: 7px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.report-card .grades thead tr:first-child th {
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+.report-card .grades thead tr:last-child th {
+  padding-top: 1.8px;
+  padding-bottom: 1.8px;
+}
+
+.report-card .grades thead th:first-child {
+  text-align: left;
+}
+
+.grades td.c,
+.report-card .grades th.c {
+  text-align: center;
+  width: 11%;
+}
+
+.report-card .grades td.ga {
+  font-weight: 800;
+}
+
+.report-card .grades tbody td {
+  padding: 5.2px 4px;
+  font-size: 8.4px;
+  line-height: 1.25;
+}
+
+.report-card .grades td.final {
+  font-weight: 800;
+}
+
+.report-card .remark {
+  font-size: 7.5px;
+  font-weight: 700;
+}
+
+.report-card .bottom-grid {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 10px;
+  margin-top: 8px;
+  align-items: start;
+}
+
+.desc th,
+.report-card .desc td {
+  border: 1px solid #000;
+  padding: 2.5px 4px;
+  font-size: 7.2px;
+}
+
+.report-card .desc th {
+  text-align: left;
+  font-size: 6.8px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.report-card .desc td:nth-child(1) {
+  font-weight: 800;
+  text-align: center;
+  width: 22%;
+}
+
+.report-card .desc td:nth-child(3) {
+  text-align: center;
+  font-weight: 700;
+}
+
+.report-card .note-box {
+  border: 1px solid #000;
+  padding: 6px 7px;
+}
+
+.report-card .note-box h4 {
+  margin: 0 0 3px;
+  font-size: 7px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.report-card .note-box p {
+  margin: 0;
+  font-size: 7.2px;
+  line-height: 1.5;
+}
+
+.report-card .sheet-foot {
+  margin-top: auto;
+  padding-top: 6px;
+  border-top: 1px dotted #000;
+  display: flex;
+  justify-content: space-between;
+  font-size: 6.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* ----- Back ----- */
+.report-card .back-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 2px solid #000;
+  padding-bottom: 6px;
+}
+
+.report-card .back-head h2 {
+  margin: 0;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  line-height: 1.2;
+}
+
+.report-card .back-head p {
+  margin: 2px 0 0;
+  font-size: 7.5px;
+}
+
+.report-card .back-head .a5tag {
+  font-family: var(--font-mono);
+  font-size: 7px;
+  border: 1px solid #000;
+  padding: 4px 6px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.report-card .sheet-back h3 {
+  font-size: 8.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin: 10px 0 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.report-card .sheet-back h3 span {
+  font-size: 7px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-weight: 400;
+}
+
+.attend th,
+.report-card .attend td {
+  border: 1px solid #000;
+  font-size: 7.3px;
+  padding: 3.4px 1px;
+  text-align: center;
+  line-height: 1.25;
+}
+
+.report-card .attend tbody td {
+  padding: 6.4px 1px;
+  font-size: 7.5px;
+  line-height: 1.3;
+}
+
+.report-card .attend th {
+  font-size: 6.6px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.attend th:first-child,
+.report-card .attend td:first-child {
+  text-align: left;
+  padding-left: 4px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.attend td.total,
+.report-card .attend th.total {
+  font-weight: 800;
+}
+
+.report-card .comment-box {
+  border: 1px solid #000;
+}
+
+.report-card .comment-row {
+  display: grid;
+  grid-template-columns: 52px 1fr;
+  border-bottom: 1px solid #000;
+}
+
+.report-card .comment-row:last-child {
+  border-bottom: 0;
+}
+
+.report-card .comment-row > label {
+  border-right: 1px solid #000;
+  padding: 7px 6px;
+  font-size: 7px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.report-card .comment-row > label span {
+  display: block;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.report-card .comment-cell {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+  padding: 6px;
+}
+
+/* On screen the teacher types in the textarea; on paper the saved comment
+   prints as plain text (or ruled lines when there is no comment yet). */
+.report-card .comment-print {
+  display: none;
+  flex: 1;
+  min-width: 0;
+  font-size: 7.8px;
+  line-height: 1.5;
+}
+
+.report-card .comment-print p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.report-card .comment-print i {
+  display: block;
+  height: 16.5px;
+  border-bottom: 1px dotted #000;
+}
+
+.report-card .comment-print i:last-child {
+  border-bottom: 0;
+}
+
+.report-card .comment-edit {
+  width: 100%;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  resize: vertical;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 7.8px;
+  line-height: 1.5;
+  background: transparent;
+  color: #000;
+  padding: 0;
+  min-height: 36px;
+}
+
+.report-card .comment-edit:focus {
+  background: #fff;
+  outline: 1px solid #000;
+  outline-offset: 2px;
+}
+
+.report-card .comment-save {
+  flex: 0 0 auto;
+  margin-top: 0;
+}
+
+.report-card .parent-sigs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.report-card .parent-sig {
+  border: 1px solid #000;
+  padding: 8px 7px 7px;
+  text-align: center;
+}
+
+.report-card .parent-sig .line {
+  height: 26px;
+  border-bottom: 1px solid #000;
+}
+
+.report-card .parent-sig span {
+  display: block;
+  font-size: 6.8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-top: 5px;
+  font-weight: 700;
+}
+
+.report-card .cert {
+  border: 1.5px solid #000;
+  padding: 9px 8px 10px;
+  margin-top: 10px;
+}
+
+.report-card .cert h3 {
+  margin-top: 0;
+  justify-content: center;
+  text-align: center;
+}
+
+.report-card .cert p {
+  font-size: 7.5px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.report-card .cert-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px 12px;
+  margin-top: 7px;
+}
+
+.report-card .cert-field {
+  display: flex;
+  gap: 5px;
+  align-items: baseline;
+  border-bottom: 1px dotted #000;
+  padding-bottom: 5px;
+}
+
+.report-card .cert-field label {
+  font-size: 7px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.report-card .cert-approved {
+  margin-top: 6px;
+  font-size: 7px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.report-card .cert-sigs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 11px;
+  text-align: center;
+}
+
+.report-card .cert-sigs .sig-line {
+  height: 18px;
+}
+
+.report-card .cert-sigs.single {
+  grid-template-columns: 1fr;
+  max-width: 220px;
+  margin-left: auto;
+}
+
+.report-card .cancel {
+  border: 1px dashed #000;
+  padding: 9px 8px 10px;
+  margin-top: 8px;
+}
+
+.report-card .cancel h3 {
+  margin-top: 0;
+}
+
+/* ---------- Phones ---------- */
+@media (max-width: 640px) {
+  .report-card .bottom-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .report-card .school h1 {
+    font-size: 16px;
+  }
+
+  .report-card .seal {
+    width: 36px;
+    height: 36px;
+    font-size: 5.5px;
+  }
+
+  .report-card .info {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .report-card .parent-sigs {
+    grid-template-columns: 1fr;
+  }
+
+  /* On phones let the card grow taller instead of clipping the last rows. */
+  .report-card .sheet {
+    aspect-ratio: auto;
+    min-height: 0;
+    overflow: visible;
+    padding: 18px 14px 16px;
+  }
+
+  .report-card .sheet-foot {
+    margin-top: 10px;
+  }
+}
+
+/* ---------- Print: true A5 ---------- */
+@media print {
+  .report-card .sheet-wrap {
+    width: auto;
+    max-width: none;
+  }
+
+  .report-card .sheet {
+    width: 148mm;
+    height: 210mm;
+    aspect-ratio: auto;
+    box-shadow: none;
+    border: 0;
+    padding: 10mm 9mm 8mm;
+    page-break-after: always;
+    break-after: page;
+    overflow: hidden;
+  }
+
+  .report-card .sheet-wrap:last-child .sheet {
+    page-break-after: auto;
+    break-after: auto;
+  }
+
+  /* The saved comment prints as text; the textarea stays on screen. */
+  .report-card .comment-print {
+    display: block;
+  }
+
+  .comment-edit,
+  .report-card .comment-save {
+    display: none !important;
+  }
+}

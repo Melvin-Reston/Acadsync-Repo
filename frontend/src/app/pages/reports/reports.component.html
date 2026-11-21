@@ -1,0 +1,233 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Insights</div>
+    <h1 class="page-title">Reports</h1>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn btn-primary" [disabled]="exporting() || loading()" (click)="exportCsv()">
+      <app-icon name="download" [size]="16" /> {{ exporting() ? 'Exporting…' : 'Export CSV' }}
+    </button>
+  </div>
+</div>
+
+<div class="tabs" role="tablist">
+  @for (tab of tabs; track tab.name) {
+    <button
+      type="button"
+      class="tab"
+      role="tab"
+      [class.active]="report() === tab.name"
+      [attr.aria-selected]="report() === tab.name"
+      (click)="show(tab.name)"
+    >
+      {{ tab.label }}
+    </button>
+  }
+</div>
+
+<section class="card stack">
+  <div class="toolbar range">
+    <div class="field">
+      <label for="r-from">From</label>
+      <input id="r-from" type="date" class="input" [(ngModel)]="from" />
+    </div>
+    <div class="field">
+      <label for="r-to">To</label>
+      <input id="r-to" type="date" class="input" [(ngModel)]="to" />
+    </div>
+    <button type="button" class="btn" [disabled]="loading()" (click)="load()">Apply</button>
+  </div>
+</section>
+
+@if (error()) {
+  <div class="alert" role="alert">
+    <app-icon name="alert" [size]="16" />
+    <span>{{ error() }}</span>
+  </div>
+}
+
+@switch (report()) {
+  @case ('income') {
+    @if (income(); as r) {
+      <section class="kpi-grid three">
+        <div class="card kpi">
+          <div class="label">Income</div>
+          <div class="kpi-value small">{{ peso(r.summary.total) }}</div>
+        </div>
+        <div class="card kpi">
+          <div class="label">Confirmed payments</div>
+          <div class="kpi-value small">{{ r.summary.payment_count }}</div>
+        </div>
+        <div class="card kpi">
+          <div class="label">By plan</div>
+          @for (row of r.by_plan; track row.plan_name) {
+            <div class="split">
+              <span>{{ row.plan_name }}</span>
+              <span class="money">{{ peso(row.total) }}</span>
+            </div>
+          } @empty {
+            <div class="kpi-sub">—</div>
+          }
+        </div>
+      </section>
+
+      <section class="card">
+        @if (r.items.length > 0) {
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Date paid</th>
+                <th>Teacher</th>
+                <th>School</th>
+                <th>Plan</th>
+                <th>Invoice</th>
+                <th>Reference no.</th>
+                <th class="right">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of r.items; track row.id) {
+                <tr>
+                  <td data-label="Date paid" class="nowrap">{{ row.paid_on | date: 'MMM d, y' }}</td>
+                  <td data-label="Teacher"><span class="cell-main">{{ row.teacher_name }}</span></td>
+                  <td data-label="School">{{ row.school_name }}</td>
+                  <td data-label="Plan">{{ row.plan_name }}</td>
+                  <td data-label="Invoice" class="mono nowrap">{{ row.invoice_number }}</td>
+                  <td data-label="Reference no." class="mono">{{ row.reference_number }}</td>
+                  <td data-label="Amount" class="money right">{{ peso(row.amount) }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <div class="empty">No confirmed payments in these dates.</div>
+        }
+      </section>
+    }
+  }
+  @case ('subscriptions') {
+    @if (subscriptions(); as r) {
+      <section class="kpi-grid three">
+        <div class="card kpi">
+          <div class="label">Subscriptions started</div>
+          <div class="kpi-value small">{{ r.summary.total }}</div>
+        </div>
+        <div class="card kpi">
+          <div class="label">By status</div>
+          @for (status of statuses; track status) {
+            <div class="split">
+              <span>{{ statusLabel(status) }}</span>
+              <span class="mono">{{ r.summary[status] }}</span>
+            </div>
+          }
+        </div>
+        <div class="card kpi">
+          <div class="label">By plan</div>
+          @for (row of r.by_plan; track row.plan_name) {
+            <div class="split">
+              <span>{{ row.plan_name }}</span>
+              <span class="mono">{{ row.subscription_count }}</span>
+            </div>
+          } @empty {
+            <div class="kpi-sub">—</div>
+          }
+        </div>
+      </section>
+
+      <section class="card">
+        @if (r.items.length > 0) {
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Started</th>
+                <th>Teacher</th>
+                <th>School</th>
+                <th>Plan</th>
+                <th>Price</th>
+                <th>Status</th>
+                <th>Period ends</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of r.items; track row.id) {
+                <tr>
+                  <td data-label="Started" class="nowrap">{{ row.started_at | date: 'MMM d, y' }}</td>
+                  <td data-label="Teacher"><span class="cell-main">{{ row.teacher_name }}</span></td>
+                  <td data-label="School">{{ row.school_name }}</td>
+                  <td data-label="Plan">{{ row.plan_name }}</td>
+                  <td data-label="Price" class="money">
+                    {{ peso(row.price) }} · {{ billingCycleLabel(row.billing_cycle) }}
+                  </td>
+                  <td data-label="Status">
+                    <span class="pill" [class]="statusTone(row.status)">
+                      {{ statusLabel(row.status) }}
+                    </span>
+                  </td>
+                  <td data-label="Period ends" class="nowrap">
+                    {{ row.ended_at ?? row.current_period_end | date: 'MMM d, y' }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <div class="empty">No subscriptions started in these dates.</div>
+        }
+      </section>
+    }
+  }
+  @case ('teachers-per-school') {
+    @if (schools(); as r) {
+      <section class="kpi-grid three">
+        <div class="card kpi">
+          <div class="label">Schools</div>
+          <div class="kpi-value small">{{ r.summary.school_count }}</div>
+        </div>
+        <div class="card kpi">
+          <div class="label">Teachers</div>
+          <div class="kpi-value small">{{ r.summary.teacher_count }}</div>
+        </div>
+        <div class="card kpi">
+          <div class="label">Added in these dates</div>
+          <div class="kpi-value small">{{ r.summary.added_in_range }}</div>
+        </div>
+      </section>
+
+      <section class="card">
+        @if (r.items.length > 0) {
+          <table class="table">
+            <thead>
+              <tr>
+                <th>School</th>
+                <th>City or region</th>
+                <th class="right">Teachers</th>
+                <th class="right">Added in these dates</th>
+                <th class="right">Restricted</th>
+                <th class="right">On a paid plan</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of r.items; track row.id) {
+                <tr>
+                  <td data-label="School">
+                    <span>
+                      <span class="cell-main">{{ row.name }}</span>
+                      <span class="cell-sub">{{ row.category }} · {{ row.school_type }}</span>
+                    </span>
+                  </td>
+                  <td data-label="City or region">{{ row.city_region }}</td>
+                  <td data-label="Teachers" class="mono right">{{ row.teacher_count }}</td>
+                  <td data-label="Added in these dates" class="mono right">{{ row.added_in_range }}</td>
+                  <td data-label="Restricted" class="mono right">{{ row.restricted_count }}</td>
+                  <td data-label="On a paid plan" class="mono right">{{ row.paid_plan_count }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        } @else {
+          <div class="empty">No schools yet.</div>
+        }
+      </section>
+    }
+  }
+}

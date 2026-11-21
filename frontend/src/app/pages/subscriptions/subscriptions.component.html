@@ -1,0 +1,233 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Billing</div>
+    <h1 class="page-title">Subscriptions</h1>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn btn-primary" (click)="openForm()">
+      <app-icon name="plus" [size]="16" /> Add subscription
+    </button>
+  </div>
+</div>
+
+@if (error()) {
+  <div class="alert" role="alert">
+    <app-icon name="alert" [size]="16" />
+    <span>{{ error() }}</span>
+  </div>
+}
+
+<div class="tabs" role="group" aria-label="Filter by status">
+  @for (status of statuses; track status) {
+    <button
+      type="button"
+      class="tab"
+      [class.active]="filters.status === status"
+      (click)="filterByStatus(status)"
+    >
+      {{ statusLabel(status) }}
+      <span class="mono">{{ counts()[status] }}</span>
+    </button>
+  }
+</div>
+
+<section class="card">
+  <div class="toolbar">
+    <div class="search">
+      <app-icon name="search" [size]="16" />
+      <input
+        type="search"
+        class="input"
+        placeholder="Search teacher, username or school"
+        aria-label="Search subscriptions"
+        [(ngModel)]="filters.search"
+        (ngModelChange)="onSearch()"
+      />
+    </div>
+    <app-dropdown
+      [options]="planFilterOptions()"
+      [ngModel]="filters.plan_id"
+      (ngModelChange)="filters.plan_id = $event === '' ? null : $event; applyFilters()"
+      placeholder="All plans"
+      countSingular="plan"
+      countPlural="plans"
+    />
+    <app-dropdown
+      [options]="statusFilterOptions"
+      [(ngModel)]="filters.status"
+      (ngModelChange)="applyFilters()"
+      placeholder="All statuses"
+      countSingular="status"
+      countPlural="statuses"
+    />
+  </div>
+
+  @if (subscriptions().length > 0) {
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Teacher</th>
+          <th>School</th>
+          <th>Plan</th>
+          <th>Price</th>
+          <th>Status</th>
+          <th>Period ends</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (subscription of subscriptions(); track subscription.id) {
+          <tr>
+            <td data-label="Teacher">
+              <span>
+                <a class="cell-main" [routerLink]="['/teachers', subscription.teacher_id]">
+                  {{ subscription.last_name }}, {{ subscription.first_name }}
+                </a>
+                <span class="cell-sub">{{ subscription.username }}</span>
+              </span>
+            </td>
+            <td data-label="School">{{ subscription.school_name }}</td>
+            <td data-label="Plan">{{ subscription.plan_name }}</td>
+            <td data-label="Price" class="money">{{ planPrice(subscription) }}</td>
+            <td data-label="Status">
+              <span class="pill" [class]="statusTone(subscription.status)">
+                {{ statusLabel(subscription.status) }}
+              </span>
+            </td>
+            <td data-label="Period ends" class="nowrap">
+              @if (subscription.ended_at) {
+                <span class="muted">Ended {{ subscription.ended_at | date: 'MMM d, y' }}</span>
+              } @else {
+                {{ subscription.current_period_end | date: 'MMM d, y' }}
+              }
+            </td>
+            <td class="right">
+              <a class="btn btn-small" [routerLink]="['/subscriptions', subscription.id]">View</a>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  } @else if (!loading()) {
+    <div class="empty">
+      @if (hasFilters) {
+        No subscriptions match your search.
+      } @else {
+        No subscriptions yet.
+        <div>
+          <button type="button" class="btn btn-primary" (click)="openForm()">
+            <app-icon name="plus" [size]="16" /> Add subscription
+          </button>
+        </div>
+      }
+    </div>
+  } @else {
+    <div class="empty">Loading…</div>
+  }
+
+  <app-pagination
+    [page]="filters.page"
+    [pageSize]="filters.page_size"
+    [total]="total()"
+    (pageChange)="goToPage($event)"
+  />
+</section>
+
+@if (showForm()) {
+  <app-modal title="Add subscription" (closed)="showForm.set(false)">
+    @if (dialogError()) {
+      <div class="alert" role="alert">
+        <app-icon name="alert" [size]="16" />
+        <span>{{ dialogError() }}</span>
+      </div>
+    }
+
+    <form (ngSubmit)="saveSubscription()" novalidate>
+      <div class="form-grid">
+        <div class="field full">
+          <label for="sub-teacher">Teacher</label>
+          @if (chosenTeacher(); as teacher) {
+            <div class="chosen">
+              <span>
+                <span class="cell-main">{{ teacher.last_name }}, {{ teacher.first_name }}</span>
+                <span class="cell-sub">{{ teacher.username }} · {{ teacher.school_name }}</span>
+              </span>
+              <button type="button" class="btn btn-small" (click)="chooseTeacher(null)">Change</button>
+            </div>
+            @if (hasCurrent(teacher)) {
+              <span class="field-error">
+                This teacher already has a current subscription ({{ teacher.plan_name }}).
+              </span>
+            }
+          } @else {
+            <input
+              id="sub-teacher"
+              name="teacher_search"
+              type="search"
+              class="input"
+              placeholder="Type a name, username or email"
+              autocomplete="off"
+              [class.invalid]="errors()['teacher_id']"
+              [(ngModel)]="teacherSearch"
+              (ngModelChange)="onTeacherSearch()"
+            />
+            @if (teacherResults().length > 0) {
+              <ul class="picker">
+                @for (teacher of teacherResults(); track teacher.id) {
+                  <li>
+                    <button type="button" (click)="chooseTeacher(teacher)">
+                      <span class="cell-main">{{ teacher.last_name }}, {{ teacher.first_name }}</span>
+                      <span class="cell-sub">
+                        {{ teacher.username }} · {{ teacher.school_name }}
+                        @if (hasCurrent(teacher)) {
+                          · {{ teacher.plan_name }}
+                        }
+                      </span>
+                    </button>
+                  </li>
+                }
+              </ul>
+            }
+          }
+          @if (errors()['teacher_id']) {
+            <span class="field-error">{{ errors()['teacher_id'] }}</span>
+          }
+        </div>
+
+        <div class="field full">
+          <label>Plan</label>
+          <app-dropdown
+            name="plan_id"
+            [options]="planOptions()"
+            [(ngModel)]="planId"
+            [invalid]="!!errors()['plan_id']"
+            placeholder="Choose a plan"
+            countSingular="plan"
+            countPlural="plans"
+          />
+          @if (errors()['plan_id']) {
+            <span class="field-error">{{ errors()['plan_id'] }}</span>
+          }
+        </div>
+
+        @if (chosenPlan; as plan) {
+          @if (plan.trial_days > 0) {
+            <div class="field full">
+              <label class="check">
+                <input type="checkbox" name="with_trial" [(ngModel)]="withTrial" />
+                Start with the {{ plan.trial_days }}-day trial
+              </label>
+            </div>
+          }
+        }
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="btn" (click)="showForm.set(false)">Cancel</button>
+        <button type="submit" class="btn btn-primary" [disabled]="saving()">
+          {{ saving() ? 'Saving…' : 'Add subscription' }}
+        </button>
+      </div>
+    </form>
+  </app-modal>
+}

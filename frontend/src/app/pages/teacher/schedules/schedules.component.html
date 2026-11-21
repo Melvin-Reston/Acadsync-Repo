@@ -1,0 +1,337 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Teacher Portal</div>
+    <h1 class="page-title">Schedules</h1>
+    <p class="muted">
+      Weekly timetable
+      @if (academicYear()) {
+        · AY {{ academicYear() }}
+      }
+      @if (refreshedAt()) {
+        · Refreshed {{ refreshedAt()!.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' }) }}
+      }
+    </p>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn btn-secondary" (click)="refresh()">
+      <app-icon name="check" [size]="16" /> Refresh
+    </button>
+    <button type="button" class="btn btn-secondary" (click)="exportCsv()">
+      <app-icon name="download" [size]="16" /> Export CSV
+    </button>
+    <button type="button" class="btn btn-primary" (click)="openManage()">
+      <app-icon name="plus" [size]="16" /> Manage Class Schedules
+    </button>
+  </div>
+</div>
+
+@if (error()) {
+  <div class="alert" role="alert">
+    <app-icon name="alert" [size]="16" />
+    <span>{{ error() }}</span>
+  </div>
+}
+
+@if (unscheduledClasses().length > 0) {
+  <div class="alert warn" role="status">
+    <app-icon name="alert" [size]="16" />
+    <span>
+      {{ unscheduledClasses().length }}
+      {{ unscheduledClasses().length === 1 ? 'class' : 'classes' }} without a saved meeting schedule:
+      @for (klass of unscheduledClasses(); track klass.id) {
+        {{ klass.subject_name }} · {{ klass.section_name }}@if (!$last) {, }
+      }
+    </span>
+    <button type="button" class="btn btn-small" (click)="openManage(unscheduledClasses()[0].id)">Add a meeting</button>
+  </div>
+}
+
+<div class="week-nav card">
+  <button type="button" class="btn btn-small" (click)="prevWeek()" aria-label="Previous week">
+    <app-icon name="chevron-left" [size]="16" />
+  </button>
+  <div class="week-label">
+    <b>{{ weekLabel() }}</b>
+    <span class="muted mono">Week of {{ schedule()?.week_start }}</span>
+  </div>
+  <button type="button" class="btn btn-small" (click)="nextWeek()" aria-label="Next week">
+    <app-icon name="chevron-right" [size]="16" />
+  </button>
+  <button type="button" class="btn btn-small" (click)="goToday()">Today</button>
+</div>
+
+<div class="tabs" role="tablist">
+  <button type="button" class="tab" [class.active]="tab() === 'grid'" (click)="tab.set('grid')">Weekly Timetable Grid</button>
+  <button type="button" class="tab" [class.active]="tab() === 'agenda'" (click)="tab.set('agenda')">Daily Agenda</button>
+  <button type="button" class="tab" [class.active]="tab() === 'faculty'" (click)="tab.set('faculty')">Faculty Matrix</button>
+  <button type="button" class="tab" [class.active]="tab() === 'rooms'" (click)="tab.set('rooms')">Room Occupancy</button>
+</div>
+
+<div class="card">
+  <div class="toolbar">
+    <app-dropdown
+      [options]="[{ value: '', label: 'All classes' }, ...classOptions()]"
+      [ngModel]="classFilter()"
+      (ngModelChange)="classFilter.set($event)"
+      placeholder="All classes"
+      countSingular="class"
+      countPlural="classes"
+    />
+  </div>
+
+  @if (loading()) {
+    <p class="muted" style="padding: 20px">Loading your timetable…</p>
+  } @else if (tab() === 'grid') {
+    @if (filteredMeetings().length === 0) {
+      <div class="empty">
+        <p><b>No meetings this week.</b></p>
+        <p>Add meetings with Manage Class Schedules.</p>
+        <button type="button" class="btn btn-primary" (click)="openManage()">Manage Class Schedules</button>
+      </div>
+    } @else {
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            @for (day of schedule()?.days ?? []; track day.date) {
+              <th>{{ day.day_name }} · {{ dayLabel(day.date) }}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (hour of gridHours(); track hour) {
+            <tr>
+              <td data-label="Time" class="mono nowrap">{{ time12(hour + ':00') }}</td>
+              @for (day of schedule()?.days ?? []; track day.date) {
+                <td [attr.data-label]="day.day_name">
+                  @for (meeting of meetingsAt(day.date, hour); track meeting.id) {
+                    <div class="meeting-block">
+                      <b>{{ meeting.subject_name }} · {{ meeting.section_name }}</b>
+                      <span>{{ meeting.room }} · {{ time12(meeting.start_time) }} – {{ time12(meeting.end_time) }}</span>
+                    </div>
+                  }
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  } @else if (tab() === 'agenda') {
+    <div class="day-chips">
+      @for (day of schedule()?.days ?? []; track day.date) {
+        <button type="button" class="chip" [class.active]="agendaDay() === day.date" (click)="agendaDay.set(day.date)">
+          {{ day.day_name }} · {{ dayLabel(day.date) }}
+        </button>
+      }
+    </div>
+
+    <h2 class="agenda-title">{{ agendaLabel() }}</h2>
+    @if (agendaMeetings().length === 0) {
+      <div class="empty">
+        <p><b>No classes on this day.</b></p>
+      </div>
+    } @else {
+      <ul class="plain-list agenda-list">
+        @for (meeting of agendaMeetings(); track meeting.id) {
+          <li>
+            <div class="row-between">
+              <div>
+                <b>{{ meeting.subject_name }} · {{ meeting.section_name }}</b>
+                <p class="muted">{{ meeting.room }} · {{ time12(meeting.start_time) }} – {{ time12(meeting.end_time) }}</p>
+              </div>
+              <span class="nowrap">
+                @if (agendaStatus(meeting) === 'now') {
+                  <span class="pill accent">Now</span>
+                } @else if (agendaStatus(meeting) === 'next') {
+                  <span class="pill plain">Next</span>
+                }
+                <button type="button" class="btn btn-small" (click)="openEditMeeting(meeting)">Edit</button>
+                <button type="button" class="btn btn-small btn-danger" (click)="deleteMeetingTarget.set(meeting)">Delete</button>
+              </span>
+            </div>
+          </li>
+        }
+      </ul>
+    }
+  } @else if (tab() === 'faculty') {
+    @if (filteredClasses().length === 0) {
+      <div class="empty">
+        <p><b>No classes yet.</b></p>
+        <p>Add a class first, then give it meetings.</p>
+      </div>
+    } @else {
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Class</th>
+            @for (day of schedule()?.days ?? []; track day.date) {
+              <th>{{ day.day_name }}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (klass of filteredClasses(); track klass.id) {
+            <tr>
+              <td data-label="Class"><b>{{ klass.subject_name }} · {{ klass.section_name }}</b><br /><span class="muted">Grade {{ klass.grade_level }} · {{ klass.room }}</span></td>
+              @for (day of schedule()?.days ?? []; track day.date) {
+                <td [attr.data-label]="day.day_name">
+                  @for (meeting of meetingsForClassDay(klass.id, day.date); track meeting.id) {
+                    <div class="meeting-block">
+                      <span>{{ time12(meeting.start_time) }} – {{ time12(meeting.end_time) }} · {{ meeting.room }}</span>
+                    </div>
+                  }
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  } @else {
+    @if (rooms().length === 0) {
+      <div class="empty">
+        <p><b>No rooms in use this week.</b></p>
+        <p>Add meetings with Manage Class Schedules.</p>
+      </div>
+    } @else {
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Room</th>
+            @for (day of schedule()?.days ?? []; track day.date) {
+              <th>{{ day.day_name }}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (room of rooms(); track room) {
+            <tr>
+              <td data-label="Room"><b>{{ room }}</b></td>
+              @for (day of schedule()?.days ?? []; track day.date) {
+                <td [attr.data-label]="day.day_name">
+                  @for (meeting of meetingsForRoomDay(room, day.date); track meeting.id) {
+                    <div class="meeting-block">
+                      <b>{{ meeting.subject_name }} · {{ meeting.section_name }}</b>
+                      <span>{{ time12(meeting.start_time) }} – {{ time12(meeting.end_time) }}</span>
+                    </div>
+                  }
+                </td>
+              }
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  }
+</div>
+
+<!-- Manage Class Schedules -->
+@if (manageOpen()) {
+  <app-modal title="Manage Class Schedules" (closed)="manageOpen.set(false)">
+    <form class="manage-form" (ngSubmit)="saveMeeting()" novalidate>
+      <h3 class="card-title" style="margin-bottom: 12px">{{ editingMeeting ? 'Edit meeting' : 'Add a meeting' }}</h3>
+      <div class="form-grid">
+        <div class="field">
+          <label>Class</label>
+          <app-dropdown
+            name="formClassId"
+            [options]="classOptions()"
+            [ngModel]="formClassId"
+            (ngModelChange)="formClassId = $event; onClassChange()"
+            placeholder="Choose a class"
+            countSingular="class"
+            countPlural="classes"
+          />
+          @if (formErrors()['class_id']) {
+            <span class="field-error">{{ formErrors()['class_id'] }}</span>
+          }
+        </div>
+        <div class="field">
+          <label>Day</label>
+          <app-dropdown
+            name="formDay"
+            [options]="dayOptions"
+            [ngModel]="formDay"
+            (ngModelChange)="formDay = $event"
+            [disabled]="repeatWeek"
+            placeholder="Choose a day"
+            countSingular="day"
+            countPlural="days"
+          />
+        </div>
+        <div class="field">
+          <label for="meeting-start">Start time</label>
+          <input id="meeting-start" name="formStart" type="time" class="input" [(ngModel)]="formStart" [class.invalid]="formErrors()['start_time']" />
+          @if (formErrors()['start_time']) {
+            <span class="field-error">{{ formErrors()['start_time'] }}</span>
+          }
+        </div>
+        <div class="field">
+          <label for="meeting-end">End time</label>
+          <input id="meeting-end" name="formEnd" type="time" class="input" [(ngModel)]="formEnd" [class.invalid]="formErrors()['end_time']" />
+          @if (formErrors()['end_time']) {
+            <span class="field-error">{{ formErrors()['end_time'] }}</span>
+          }
+        </div>
+        <div class="field full">
+          <label for="meeting-room">Room</label>
+          <input id="meeting-room" name="formRoom" type="text" class="input" placeholder="e.g. Room 8" maxlength="60" [(ngModel)]="formRoom" [class.invalid]="formErrors()['room']" />
+          @if (formErrors()['room']) {
+            <span class="field-error">{{ formErrors()['room'] }}</span>
+          }
+        </div>
+        @if (!editingMeeting) {
+          <div class="field full">
+            <label class="check">
+              <input type="checkbox" name="repeatWeek" [(ngModel)]="repeatWeek" />
+              Repeat for the whole week (Monday–Friday)
+            </label>
+            <span class="field-hint">One meeting per weekday, same time and room. Conflicting days are skipped and reported.</span>
+          </div>
+        }
+      </div>
+
+      @if (weekResult(); as result) {
+        <div class="week-result" role="status">
+          <p><b>Added {{ result.created.length }} {{ result.created.length === 1 ? 'meeting' : 'meetings' }}:</b> {{ result.created.join(', ') }}.</p>
+          @if (result.skipped.length > 0) {
+            <p><b>Skipped:</b></p>
+            <ul>
+              @for (skip of result.skipped; track skip.day_name) {
+                <li>{{ skip.day_name }} — {{ skip.reason }}</li>
+              }
+            </ul>
+          }
+        </div>
+      }
+
+      @if (error()) {
+        <div class="alert" role="alert" style="margin-top: 14px">
+          <app-icon name="alert" [size]="16" />
+          <span>{{ error() }}</span>
+        </div>
+      }
+
+      <div class="form-actions">
+        @if (editingMeeting) {
+          <button type="button" class="btn btn-secondary" (click)="editingMeeting = null; manageOpen.set(false)">Cancel</button>
+        }
+        <button type="submit" class="btn btn-primary" [disabled]="saving() || !formClassId">
+          {{ saving() ? 'Saving…' : editingMeeting ? 'Save changes' : repeatWeek ? 'Add for the whole week' : 'Add meeting' }}
+        </button>
+      </div>
+    </form>
+  </app-modal>
+}
+
+<!-- Delete meeting confirmation -->
+@if (deleteMeetingTarget(); as meeting) {
+  <app-modal title="Delete this meeting?" (closed)="deleteMeetingTarget.set(null)">
+    <p>{{ meeting.subject_name }} · {{ meeting.section_name }} — {{ meeting.day_name }}, {{ time12(meeting.start_time) }} – {{ time12(meeting.end_time) }} in {{ meeting.room }}.</p>
+    <div class="form-actions">
+      <button type="button" class="btn btn-secondary" (click)="deleteMeetingTarget.set(null)">Keep it</button>
+      <button type="button" class="btn btn-danger" (click)="confirmDeleteMeeting()">Delete</button>
+    </div>
+  </app-modal>
+}

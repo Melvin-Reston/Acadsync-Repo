@@ -1,0 +1,186 @@
+<app-modal [title]="teacher() ? 'Edit teacher' : 'Add teacher'" (closed)="closed.emit()">
+  @if (error()) {
+    <div class="alert" role="alert">
+      <app-icon name="alert" [size]="16" />
+      <span>{{ error() }}</span>
+    </div>
+  }
+
+  @if (schoolsLoaded() && schools().length === 0) {
+    <div class="alert warn" role="status">
+      <app-icon name="school" [size]="16" />
+      <span>
+        Add a school before adding a teacher.
+        <a routerLink="/schools" (click)="closed.emit()">Go to Schools</a>
+      </span>
+    </div>
+  }
+
+  <form (ngSubmit)="submit()" novalidate>
+    <div class="form-grid">
+      <div class="field">
+        <label for="t-first">First name</label>
+        <input
+          id="t-first"
+          name="first_name"
+          class="input"
+          autocomplete="off"
+          [class.invalid]="errors()['first_name']"
+          [(ngModel)]="form.first_name"
+        />
+        @if (errors()['first_name']) {
+          <span class="field-error">{{ errors()['first_name'] }}</span>
+        }
+      </div>
+
+      <div class="field">
+        <label for="t-last">Last name</label>
+        <input
+          id="t-last"
+          name="last_name"
+          class="input"
+          autocomplete="off"
+          [class.invalid]="errors()['last_name']"
+          [(ngModel)]="form.last_name"
+        />
+        @if (errors()['last_name']) {
+          <span class="field-error">{{ errors()['last_name'] }}</span>
+        }
+      </div>
+
+      <div class="field">
+        <label for="t-email">Email</label>
+        <input
+          id="t-email"
+          name="email"
+          type="email"
+          class="input"
+          autocomplete="off"
+          [class.invalid]="errors()['email']"
+          [(ngModel)]="form.email"
+        />
+        @if (errors()['email']) {
+          <span class="field-error">{{ errors()['email'] }}</span>
+        }
+      </div>
+
+      <div class="field">
+        <label for="t-mobile">Mobile number</label>
+        <input
+          id="t-mobile"
+          name="mobile"
+          type="tel"
+          class="input"
+          autocomplete="off"
+          placeholder="09XXXXXXXXX"
+          [class.invalid]="errors()['mobile']"
+          [(ngModel)]="form.mobile"
+        />
+        @if (errors()['mobile']) {
+          <span class="field-error">{{ errors()['mobile'] }}</span>
+        }
+      </div>
+
+      <div class="field">
+        <label for="t-username">Username</label>
+        <input
+          id="t-username"
+          name="username"
+          class="input"
+          autocomplete="off"
+          [class.invalid]="errors()['username']"
+          [(ngModel)]="form.username"
+        />
+        @if (errors()['username']) {
+          <span class="field-error">{{ errors()['username'] }}</span>
+        }
+      </div>
+
+      <div class="field">
+        <label>School</label>
+        <app-dropdown
+          name="school_id"
+          [options]="schoolOptions()"
+          [(ngModel)]="form.school_id"
+          [invalid]="!!errors()['school_id']"
+          placeholder="Choose a school"
+          countSingular="school"
+          countPlural="schools"
+        />
+        @if (errors()['school_id']) {
+          <span class="field-error">Choose a school from the list.</span>
+        }
+      </div>
+
+      <div class="field full">
+        <label for="t-address">Present address</label>
+        <input
+          id="t-address"
+          name="present_address"
+          class="input"
+          autocomplete="off"
+          [class.invalid]="errors()['present_address']"
+          [(ngModel)]="form.present_address"
+        />
+        @if (errors()['present_address']) {
+          <span class="field-error">{{ errors()['present_address'] }}</span>
+        }
+      </div>
+
+      @if (!teacher()) {
+        <div class="field full">
+          <label for="t-password">Temporary password</label>
+          <div class="input-row">
+            <input
+              id="t-password"
+              name="temporary_password"
+              class="input mono"
+              autocomplete="off"
+              [class.invalid]="errors()['temporary_password']"
+              [(ngModel)]="form.temporary_password"
+            />
+            <button type="button" class="btn" (click)="generatePassword()">Generate</button>
+          </div>
+          @if (errors()['temporary_password']) {
+            <span class="field-error">{{ errors()['temporary_password'] }}</span>
+          }
+        </div>
+
+        <div class="field full">
+          <label>Plan (optional)</label>
+          <app-dropdown
+            name="plan_id"
+            [options]="planOptions()"
+            [ngModel]="form.plan_id"
+            (ngModelChange)="form.plan_id = $event === '' ? null : $event"
+            [invalid]="!!errors()['plan_id']"
+            placeholder="No plan yet"
+            countSingular="plan"
+            countPlural="plans"
+          />
+          @if (errors()['plan_id']) {
+            <span class="field-error">{{ errors()['plan_id'] }}</span>
+          }
+        </div>
+
+        @if (chosenPlan; as plan) {
+          @if (plan.trial_days > 0) {
+            <div class="field full">
+              <label class="check">
+                <input type="checkbox" name="with_trial" [(ngModel)]="form.with_trial" />
+                Start with the {{ plan.trial_days }}-day trial
+              </label>
+            </div>
+          }
+        }
+      }
+    </div>
+
+    <div class="form-actions">
+      <button type="button" class="btn" (click)="closed.emit()">Cancel</button>
+      <button type="submit" class="btn btn-primary" [disabled]="saving()">
+        {{ saving() ? 'Saving…' : teacher() ? 'Save changes' : 'Add teacher' }}
+      </button>
+    </div>
+  </form>
+</app-modal>

@@ -1,0 +1,150 @@
+@if (loading()) {
+  <p class="muted">Loading your profile…</p>
+} @else if (error() && !teacher()) {
+  <div class="alert" role="alert">
+    <app-icon name="alert" [size]="16" />
+    <span>{{ error() }}</span>
+  </div>
+} @else if (teacher(); as teacher) {
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Teacher Portal</div>
+      <h1 class="page-title">Profile</h1>
+    </div>
+  </div>
+
+  @if (error()) {
+    <div class="alert" role="alert">
+      <app-icon name="alert" [size]="16" />
+      <span>{{ error() }}</span>
+    </div>
+  }
+
+  <div class="dash-grid">
+    <div class="stack">
+      <section class="card card-pad">
+        <div class="card-head">
+          <h2 class="card-title">Personal details</h2>
+        </div>
+
+        <form (ngSubmit)="saveProfile()" novalidate>
+          <div class="form-grid">
+            <div class="field">
+              <label for="first-name">First Name</label>
+              <input id="first-name" name="firstName" type="text" class="input" [class.invalid]="errors()['first_name']" [(ngModel)]="firstName" />
+              @if (errors()['first_name']) {
+                <span class="field-error">{{ errors()['first_name'] }}</span>
+              }
+            </div>
+            <div class="field">
+              <label for="last-name">Surname</label>
+              <input id="last-name" name="lastName" type="text" class="input" [class.invalid]="errors()['last_name']" [(ngModel)]="lastName" />
+              @if (errors()['last_name']) {
+                <span class="field-error">{{ errors()['last_name'] }}</span>
+              }
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="email">Email Address</label>
+            <input id="email" name="email" type="email" class="input" [class.invalid]="errors()['email']" [(ngModel)]="email" />
+            @if (errors()['email']) {
+              <span class="field-error">{{ errors()['email'] }}</span>
+            }
+          </div>
+
+          <div class="field">
+            <label for="mobile">Mobile Number</label>
+            <input id="mobile" name="mobile" type="tel" class="input" [class.invalid]="errors()['mobile']" [(ngModel)]="mobile" />
+            @if (errors()['mobile']) {
+              <span class="field-error">{{ errors()['mobile'] }}</span>
+            }
+          </div>
+
+          <div class="field">
+            <label for="address">Present Address</label>
+            <input id="address" name="presentAddress" type="text" class="input" [(ngModel)]="presentAddress" />
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" [disabled]="saving()">
+              {{ saving() ? 'Saving…' : 'Save profile' }}
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section class="card card-pad">
+        <div class="card-head">
+          <h2 class="card-title">Change password</h2>
+        </div>
+
+        <form (ngSubmit)="changePassword()" novalidate>
+          <div class="field">
+            <label for="current-password">Current password</label>
+            <input id="current-password" name="currentPassword" type="password" class="input" autocomplete="current-password" [class.invalid]="passwordErrors()['current_password']" [(ngModel)]="currentPassword" />
+            @if (passwordErrors()['current_password']) {
+              <span class="field-error">{{ passwordErrors()['current_password'] }}</span>
+            }
+          </div>
+
+          <div class="field">
+            <label for="new-password">New password</label>
+            <input id="new-password" name="newPassword" type="password" class="input" autocomplete="new-password" [class.invalid]="passwordErrors()['new_password']" [(ngModel)]="newPassword" />
+            @if (passwordErrors()['new_password']) {
+              <span class="field-error">{{ passwordErrors()['new_password'] }}</span>
+            }
+            <span class="hint">Use at least 8 characters with a letter and a number.</span>
+          </div>
+
+          <div class="field">
+            <label for="confirm-password">Confirm new password</label>
+            <input id="confirm-password" name="confirmPassword" type="password" class="input" autocomplete="new-password" [class.invalid]="passwordErrors()['confirm']" [(ngModel)]="confirmPassword" />
+            @if (passwordErrors()['confirm']) {
+              <span class="field-error">{{ passwordErrors()['confirm'] }}</span>
+            }
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" [disabled]="changingPassword()">
+              {{ changingPassword() ? 'Changing…' : 'Change password' }}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+
+    <div class="stack">
+      <section class="card card-pad">
+        <div class="card-head">
+          <h2 class="card-title">Teaching assignment</h2>
+        </div>
+        <dl class="details">
+          <div>
+            <dt>Username</dt>
+            <dd class="mono">{{ teacher.username }}</dd>
+          </div>
+          <div>
+            <dt>School</dt>
+            <dd>{{ teacher.school_name }}</dd>
+          </div>
+          <div>
+            <dt>Adviser</dt>
+            <dd>{{ teacher.is_adviser ? 'Yes' : 'No' }}</dd>
+          </div>
+          @if (teacher.is_adviser) {
+            <div>
+              <dt>Advisory grade</dt>
+              <dd>Grade {{ teacher.advisory_grade }}</dd>
+            </div>
+            <div>
+              <dt>Advisory section</dt>
+              <dd>{{ teacher.advisory_section }}</dd>
+            </div>
+          }
+        </dl>
+        <p class="muted">Your assignment is read-only here. Change it on the dashboard.</p>
+      </section>
+    </div>
+  </div>
+}

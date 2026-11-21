@@ -1,0 +1,265 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Billing</div>
+    <h1 class="page-title">Plans &amp; Packages</h1>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn btn-primary" (click)="openForm(null)">
+      <app-icon name="plus" [size]="16" /> Add plan
+    </button>
+  </div>
+</div>
+
+@if (error()) {
+  <div class="alert" role="alert">
+    <app-icon name="alert" [size]="16" />
+    <span>{{ error() }}</span>
+  </div>
+}
+
+<section class="card">
+  @if (plans().length > 0) {
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Plan</th>
+          <th>Price</th>
+          <th>Trial</th>
+          <th>Features</th>
+          <th>Teachers</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (plan of plans(); track plan.id) {
+          <tr>
+            <td data-label="Plan">
+              <span>
+                <span class="cell-main">{{ plan.name }}</span>
+                @if (plan.is_popular) {
+                  <span class="pill plain accent">Popular</span>
+                }
+              </span>
+            </td>
+            <td data-label="Price" class="money">{{ planPrice(plan) }}</td>
+            <td data-label="Trial" class="nowrap">{{ trialLabel(plan) }}</td>
+            <td data-label="Features">
+              @if (plan.features.length > 0) {
+                <span>{{ plan.features.join(', ') }}</span>
+              } @else {
+                <span class="muted">—</span>
+              }
+            </td>
+            <td data-label="Teachers">
+              @if (plan.current_subscription_count) {
+                <a
+                  routerLink="/subscriptions"
+                  [queryParams]="{ plan_id: plan.id, status: 'current' }"
+                  class="mono"
+                  >{{ plan.current_subscription_count }}</a
+                >
+              } @else {
+                <span class="mono muted">0</span>
+              }
+            </td>
+            <td data-label="Status">
+              @if (plan.is_active) {
+                <span class="pill accent">Active</span>
+              } @else {
+                <span class="pill plain">Inactive</span>
+              }
+            </td>
+            <td class="right">
+              <div class="row-actions">
+                <button type="button" class="btn btn-small" (click)="openForm(plan)">Edit</button>
+                @if (plan.is_active) {
+                  <button type="button" class="btn btn-small" (click)="setActive(plan, false)">
+                    Deactivate
+                  </button>
+                } @else {
+                  <button type="button" class="btn btn-small" (click)="setActive(plan, true)">
+                    Activate
+                  </button>
+                }
+                @if (!plan.subscription_count) {
+                  <button type="button" class="btn btn-small btn-danger" (click)="openDelete(plan)">
+                    Delete
+                  </button>
+                }
+              </div>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  } @else if (!loading()) {
+    <div class="empty">No plans yet.</div>
+  } @else {
+    <div class="empty">Loading…</div>
+  }
+</section>
+
+@if (dialog() === 'form') {
+  <app-modal [title]="selected() ? 'Edit plan' : 'Add plan'" (closed)="close()">
+    @if (dialogError()) {
+      <div class="alert" role="alert">
+        <app-icon name="alert" [size]="16" />
+        <span>{{ dialogError() }}</span>
+      </div>
+    }
+
+    <form (ngSubmit)="savePlan()" novalidate>
+      <div class="form-grid">
+        <div class="field full">
+          <label for="pl-name">Plan name</label>
+          <input
+            id="pl-name"
+            name="name"
+            class="input"
+            autocomplete="off"
+            [class.invalid]="errors()['name']"
+            [(ngModel)]="form.name"
+          />
+          @if (errors()['name']) {
+            <span class="field-error">{{ errors()['name'] }}</span>
+          }
+        </div>
+
+        <div class="field">
+          <label for="pl-price">Price (₱)</label>
+          <input
+            id="pl-price"
+            name="price"
+            class="input mono"
+            inputmode="decimal"
+            placeholder="0.00"
+            autocomplete="off"
+            [class.invalid]="errors()['price']"
+            [(ngModel)]="form.price"
+          />
+          @if (errors()['price']) {
+            <span class="field-error">{{ errors()['price'] }}</span>
+          }
+        </div>
+
+        <div class="field">
+          <label>Billing cycle</label>
+          <app-dropdown
+            name="billing_cycle"
+            [options]="billingCycleOptions"
+            [(ngModel)]="form.billing_cycle"
+            [invalid]="!!errors()['billing_cycle']"
+            placeholder="Monthly"
+            countSingular="cycle"
+            countPlural="cycles"
+          />
+        </div>
+
+        @if (form.billing_cycle === 'one_time') {
+          <div class="field">
+            <label for="pl-duration">Duration (months)</label>
+            <input
+              id="pl-duration"
+              name="duration_months"
+              type="number"
+              min="1"
+              max="120"
+              class="input mono"
+              [class.invalid]="errors()['duration_months']"
+              [(ngModel)]="form.duration_months"
+            />
+            @if (errors()['duration_months']) {
+              <span class="field-error">{{ errors()['duration_months'] }}</span>
+            }
+          </div>
+        }
+
+        @if (!isFree) {
+          <div class="field">
+            <label for="pl-trial">Trial days</label>
+            <input
+              id="pl-trial"
+              name="trial_days"
+              type="number"
+              min="0"
+              max="365"
+              class="input mono"
+              [class.invalid]="errors()['trial_days']"
+              [(ngModel)]="form.trial_days"
+            />
+            @if (errors()['trial_days']) {
+              <span class="field-error">{{ errors()['trial_days'] }}</span>
+            }
+          </div>
+        }
+
+        <div class="field">
+          <label for="pl-sort">Sort order</label>
+          <input
+            id="pl-sort"
+            name="sort_order"
+            type="number"
+            min="0"
+            class="input mono"
+            [class.invalid]="errors()['sort_order']"
+            [(ngModel)]="form.sort_order"
+          />
+          @if (errors()['sort_order']) {
+            <span class="field-error">{{ errors()['sort_order'] }}</span>
+          }
+        </div>
+
+        <div class="field full">
+          <label for="pl-features">Features (one per line)</label>
+          <textarea
+            id="pl-features"
+            name="features"
+            class="textarea"
+            rows="4"
+            [class.invalid]="errors()['features']"
+            [(ngModel)]="form.features"
+          ></textarea>
+          @if (errors()['features']) {
+            <span class="field-error">{{ errors()['features'] }}</span>
+          }
+        </div>
+
+        <div class="field full">
+          <label class="check">
+            <input type="checkbox" name="is_popular" [(ngModel)]="form.is_popular" />
+            Mark as popular
+          </label>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="btn" (click)="close()">Cancel</button>
+        <button type="submit" class="btn btn-primary" [disabled]="saving()">
+          {{ saving() ? 'Saving…' : selected() ? 'Save changes' : 'Add plan' }}
+        </button>
+      </div>
+    </form>
+  </app-modal>
+}
+
+@if (dialog() === 'delete') {
+  <app-modal title="Delete plan" (closed)="close()">
+    @if (dialogError()) {
+      <div class="alert" role="alert">
+        <app-icon name="alert" [size]="16" />
+        <span>{{ dialogError() }}</span>
+      </div>
+    }
+    <p>
+      Delete <strong>{{ selected()?.name }}</strong
+      >? This cannot be undone.
+    </p>
+    <div class="form-actions">
+      <button type="button" class="btn" (click)="close()">Cancel</button>
+      <button type="button" class="btn btn-danger" [disabled]="saving()" (click)="deletePlan()">
+        {{ saving() ? 'Deleting…' : 'Delete plan' }}
+      </button>
+    </div>
+  </app-modal>
+}

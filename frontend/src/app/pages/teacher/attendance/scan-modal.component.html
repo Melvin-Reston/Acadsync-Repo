@@ -1,0 +1,96 @@
+<!-- The QR check-in modal (modal-only: no in-page scanner panel). -->
+<div class="scan-overlay" role="dialog" aria-modal="true" aria-labelledby="scan-title">
+  <div class="scan-modal" [class.live]="scanning()">
+    <div class="scan-top">
+      <div>
+        <div class="scan-kicker">Attendance check-in</div>
+        <h2 id="scan-title">Scan student QR code</h2>
+        <p class="scan-sub">Point the camera at the QR code on the student’s pass.</p>
+      </div>
+      <button type="button" class="scan-close" aria-label="Close scanner" (click)="close()">×</button>
+    </div>
+
+    @if (!scanResult()) {
+      <div class="viewfinder">
+        <span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+        <span class="scanline"></span>
+        <video #scanVideo class="scan-video" playsinline muted autoplay [hidden]="!scanning()"></video>
+        @if (!scanning()) {
+          <app-icon name="scan" [size]="92" class="scan-placeholder" />
+        }
+      </div>
+      <div class="scan-status-row">
+        <span class="scanner-status">
+          <span class="pulse"></span>
+          {{ scanning() ? 'Scanning…' : cameraError() ? 'Camera unavailable' : 'Camera off' }}
+        </span>
+        <span class="scan-class mono">{{ classLabel() }}</span>
+      </div>
+      @if (cameraError()) {
+        <p class="scan-camera-error">{{ cameraError() }}</p>
+      }
+      <div class="scan-actions">
+        @if (scanning()) {
+          <button type="button" class="btn scan-stop" (click)="stopScanning()">Stop scanning</button>
+        } @else {
+          <button type="button" class="btn scan-start" (click)="startScanning()">Start scanning</button>
+        }
+        <button type="button" class="btn scan-sim" (click)="simulateScan()">Simulate a pass scan</button>
+      </div>
+
+      <div class="scan-divider">
+        <label for="manual-id">Or enter a student ID</label>
+        <div class="manual-row">
+          <input
+            id="manual-id"
+            type="text"
+            placeholder="Scan with a connected reader or type ID"
+            autocomplete="off"
+            [ngModel]="manualId()"
+            (ngModelChange)="manualId.set($event)"
+            (keydown.enter)="manualCheckIn()"
+          />
+          <button type="button" class="btn scan-checkin" (click)="manualCheckIn()" [disabled]="!manualId().trim()">Check in</button>
+        </div>
+        @if (scanError()) {
+          <p class="scan-error" role="alert">{{ scanError() }}</p>
+        }
+      </div>
+    } @else {
+      <div class="scan-result">
+        <div class="scan-result-head">
+          <span class="avatar">{{ initials(scanResult()!.learner.first_name + ' ' + scanResult()!.learner.last_name) }}</span>
+          <span>
+            <b class="rname">{{ scanResult()!.learner.first_name }} {{ scanResult()!.learner.last_name }}</b>
+            <span class="rmeta mono">{{ scanResult()!.learner.learner_id }}</span>
+          </span>
+        </div>
+        <div class="scan-detail">
+          <span><span class="dk">Class &amp; section</span><span class="dv">{{ scanResult()!.class.subject_name }} · {{ scanResult()!.class.section_name }}</span></span>
+          <span><span class="dk">Time in</span><span class="dv">{{ scanResult()!.mark?.time_in ? time12(scanResult()!.mark!.time_in!) : '—' }}</span></span>
+          <span><span class="dk">Sex</span><span class="dv">{{ scanResult()!.learner.sex }}</span></span>
+          <span><span class="dk">Current status</span><span class="dv">{{ scanResult()!.mark ? statusLabel[scanResult()!.mark!.status] + (scanResult()!.mark!.method === 'qr' ? ' · QR' : ' · Manual') : 'Not marked' }}</span></span>
+        </div>
+        @if (scanMessage()) {
+          <p class="scan-note" [class.ok]="scanConfirmed()">{{ scanMessage() }}</p>
+        }
+        @if (scanError()) {
+          <p class="scan-error" role="alert">{{ scanError() }}</p>
+        }
+        <div class="scan-result-actions">
+          @if (!scanConfirmed()) {
+            <button type="button" class="btn scan-confirm" (click)="confirmCheckIn()" [disabled]="checkingIn()">
+              {{ checkingIn() ? 'Checking in…' : 'Confirm check-in' }}
+            </button>
+            <button type="button" class="btn scan-sim" (click)="scanNext()">Cancel</button>
+          } @else {
+            <button type="button" class="btn scan-confirm" (click)="scanNext()">Scan next</button>
+            <button type="button" class="btn scan-sim" (click)="close()">Done</button>
+          }
+        </div>
+      </div>
+    }
+
+    <div class="last-scan">{{ lastScan() ? 'Last check-in: ' + lastScan() : 'No passes read yet today.' }}</div>
+  </div>
+</div>

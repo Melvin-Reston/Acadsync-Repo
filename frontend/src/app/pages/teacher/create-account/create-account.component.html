@@ -1,0 +1,318 @@
+<app-auth-shell heading="Create Account" subheading="Set up your teacher workspace account." brandSub="Teacher Portal" eyebrow="Teacher Portal" foot="Teacher Portal" variant="teacher">
+  <!-- Stepper -->
+  @if (step() === 'profile' || step() === 'credentials' || step() === 'terms') {
+    <ol class="steps">
+      <li [class.done]="stepIndex(step()) > 0" [class.current]="step() === 'profile'">
+        <span class="step-num">1</span> Profile &amp; Assignment
+      </li>
+      <li [class.done]="stepIndex(step()) > 1" [class.current]="step() === 'credentials'">
+        <span class="step-num">2</span> Credentials
+      </li>
+      <li [class.current]="step() === 'terms'">
+        <span class="step-num">3</span> Security &amp; Terms
+      </li>
+    </ol>
+  }
+
+  @if (error()) {
+    <div class="alert" role="alert">
+      <app-icon name="alert" [size]="16" />
+      <span>{{ error() }}</span>
+    </div>
+  }
+
+  <!-- Step 1: Profile & Assignment -->
+  @if (step() === 'profile') {
+    <form (ngSubmit)="submitProfile()" novalidate>
+      <div class="form-grid">
+        <div class="field">
+          <label for="first-name">First Name</label>
+          <input id="first-name" name="firstName" type="text" class="input" autocomplete="given-name" [class.invalid]="errors()['first_name']" [(ngModel)]="firstName" />
+          @if (errors()['first_name']) {
+            <span class="field-error">{{ errors()['first_name'] }}</span>
+          }
+        </div>
+        <div class="field">
+          <label for="last-name">Surname</label>
+          <input id="last-name" name="lastName" type="text" class="input" autocomplete="family-name" [class.invalid]="errors()['last_name']" [(ngModel)]="lastName" />
+          @if (errors()['last_name']) {
+            <span class="field-error">{{ errors()['last_name'] }}</span>
+          }
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="email">Email Address</label>
+        <input id="email" name="email" type="email" class="input" autocomplete="email" [class.invalid]="errors()['email']" [(ngModel)]="email" />
+        @if (errors()['email']) {
+          <span class="field-error">{{ errors()['email'] }}</span>
+        }
+      </div>
+
+      <div class="field">
+        <label for="mobile">Mobile Number</label>
+        <input id="mobile" name="mobile" type="tel" class="input" autocomplete="tel" placeholder="09171234567" [class.invalid]="errors()['mobile']" [(ngModel)]="mobile" />
+        @if (errors()['mobile']) {
+          <span class="field-error">{{ errors()['mobile'] }}</span>
+        }
+      </div>
+
+      <div class="field">
+        <label>School Assignment</label>
+        <app-dropdown
+          name="schoolId"
+          [options]="schoolOptions()"
+          [(ngModel)]="schoolId"
+          [disabled]="schoolsLoading()"
+          [invalid]="!!errors()['school_id']"
+          placeholder="Select your school"
+          searchPlaceholder="Search schools"
+          countSingular="school"
+          countPlural="schools"
+        />
+        @if (errors()['school_id']) {
+          <span class="field-error">{{ errors()['school_id'] }}</span>
+        }
+        @if (schoolsLoading()) {
+          <span class="hint">Loading schools…</span>
+        }
+      </div>
+
+      <button type="button" class="link-btn" (click)="openSchoolModal()">School not in the list? Add a school</button>
+
+      <div class="field">
+        <label for="address">Present Address <span class="muted">(optional)</span></label>
+        <input id="address" name="presentAddress" type="text" class="input" autocomplete="street-address" [(ngModel)]="presentAddress" />
+      </div>
+
+      <div class="form-actions">
+        <button type="submit" class="btn btn-primary">Continue to Credentials</button>
+      </div>
+    </form>
+
+    <div class="auth-links">
+      <span>Already have an account? <a routerLink="/teacher/login">Sign in</a></span>
+    </div>
+  }
+
+  <!-- Step 2: Credentials -->
+  @if (step() === 'credentials') {
+    <form (ngSubmit)="submitCredentials()" novalidate>
+      <div class="field">
+        <label for="username">Username</label>
+        <input id="username" name="username" type="text" class="input" [value]="username()" readonly />
+        <span class="hint">Derived from your email. This is the name you will use to sign in.</span>
+      </div>
+
+      <div class="field">
+        <label for="password">Password</label>
+        <div class="input-row">
+          <input id="password" name="password" class="input" autocomplete="new-password" [type]="showPassword() ? 'text' : 'password'" [class.invalid]="errors()['password']" [(ngModel)]="password" />
+          <button type="button" class="icon-btn" [attr.aria-label]="showPassword() ? 'Hide password' : 'Show password'" (click)="showPassword.set(!showPassword())">
+            <app-icon [name]="showPassword() ? 'lock' : 'eye'" />
+          </button>
+        </div>
+        <div class="strength" aria-hidden="true">
+          @for (bar of [1, 2, 3, 4]; track bar) {
+            <span class="strength-bar" [class.filled]="strength().score >= bar"></span>
+          }
+        </div>
+        <span class="hint">{{ strength().label }} · Use at least 8 characters with a letter and a number.</span>
+        @if (errors()['password']) {
+          <span class="field-error">{{ errors()['password'] }}</span>
+        }
+      </div>
+
+      <div class="field">
+        <label for="confirm-password">Confirm Password</label>
+        <div class="input-row">
+          <input id="confirm-password" name="confirmPassword" class="input" autocomplete="new-password" [type]="showConfirm() ? 'text' : 'password'" [class.invalid]="errors()['confirm']" [(ngModel)]="confirmPassword" />
+          <button type="button" class="icon-btn" [attr.aria-label]="showConfirm() ? 'Hide password' : 'Show password'" (click)="showConfirm.set(!showConfirm())">
+            <app-icon [name]="showConfirm() ? 'lock' : 'eye'" />
+          </button>
+        </div>
+        @if (errors()['confirm']) {
+          <span class="field-error">{{ errors()['confirm'] }}</span>
+        }
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="btn" (click)="goTo('profile')">Back</button>
+        <button type="submit" class="btn btn-primary">Continue to Security &amp; Terms</button>
+      </div>
+    </form>
+  }
+
+  <!-- Step 3: Security & Terms -->
+  @if (step() === 'terms') {
+    <form (ngSubmit)="submitTerms()" novalidate>
+      <label class="check">
+        <input type="checkbox" name="termsAccepted" [(ngModel)]="termsAccepted" />
+        <span>I agree to the AcadSync Terms of Service for faculty accounts.</span>
+      </label>
+      <label class="check">
+        <input type="checkbox" name="privacyAccepted" [(ngModel)]="privacyAccepted" />
+        <span>I understand my profile and school assignment will be stored for portal access, in line with the Data Privacy Act of 2012.</span>
+      </label>
+      @if (errors()['terms']) {
+        <span class="field-error">{{ errors()['terms'] }}</span>
+      }
+
+      <div class="form-actions">
+        <button type="button" class="btn" (click)="goTo('credentials')">Back</button>
+        <button type="submit" class="btn btn-primary" [disabled]="loading()">
+          {{ loading() ? 'Creating account…' : 'Create Account' }}
+        </button>
+      </div>
+    </form>
+  }
+
+  <!-- Account Created -->
+  @if (step() === 'created' && createdTeacher(); as teacher) {
+    <div class="alert info" role="status">
+      <app-icon name="check" [size]="16" />
+      <span>Welcome to AcadSync, {{ teacher.first_name }} {{ teacher.last_name }}. Your teacher account is ready.</span>
+    </div>
+
+    <dl class="details">
+      <div><dt>Email</dt><dd>{{ teacher.email }}</dd></div>
+      <div><dt>Username</dt><dd class="mono">{{ teacher.username }}</dd></div>
+      <div><dt>Mobile</dt><dd>{{ teacher.mobile }}</dd></div>
+      <div><dt>School assignment</dt><dd>{{ teacher.school_name }}</dd></div>
+    </dl>
+
+    <div class="form-actions">
+      <button type="button" class="btn btn-primary" (click)="loadPlans()">Continue to Choose Plan</button>
+    </div>
+  }
+
+  <!-- Choose Plan -->
+  @if (step() === 'plan') {
+    @if (plansLoading()) {
+      <p class="muted">Loading plans…</p>
+    } @else {
+      <div class="plan-list">
+        @for (plan of plans(); track plan.id) {
+          <button type="button" class="plan-card" [class.selected]="selectedPlanId() === plan.id" (click)="selectedPlanId.set(plan.id)">
+            <span class="plan-head">
+              <b>{{ plan.name }}</b>
+              @if (plan.is_popular) {
+                <span class="pill accent">Popular</span>
+              }
+            </span>
+            <span class="plan-price">{{ planPrice(plan) }}</span>
+            @if (plan.trial_days > 0) {
+              <span class="plan-trial">{{ plan.trial_days }}-day trial first</span>
+            }
+            @if (plan.features.length > 0) {
+              <span class="plan-features">{{ plan.features.join(', ') }}</span>
+            } @else {
+              <span class="plan-features">Class records, attendance, and grade encoding for your own sections.</span>
+            }
+          </button>
+        }
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="btn" (click)="goTo('created')">Back</button>
+        <button type="button" class="btn btn-primary" [disabled]="!selectedPlanId() || loading()" (click)="choosePlan()">
+          {{ loading() ? 'Saving…' : 'Continue' }}
+        </button>
+      </div>
+    }
+  }
+
+  <!-- Get Started -->
+  @if (step() === 'started' && createdTeacher(); as teacher) {
+    <div class="alert info" role="status">
+      <app-icon name="check" [size]="16" />
+      <span>
+        Your account and plan are set.
+        @if (chosenPlan(); as plan) {
+          <b>{{ plan.name }}</b>
+          @if (chosenStatus() === 'trial') {
+            <span> · on trial</span>
+          }
+        }
+      </span>
+    </div>
+
+    <ul class="plain-list">
+      <li><b>Sign in to your dashboard</b><span class="muted"> — your classes, attendance and grades live there.</span></li>
+      <li><b>Set your advisory assignment</b><span class="muted"> — on the dashboard, if you are an adviser this year.</span></li>
+      <li><b>Your plan is ready</b><span class="muted"> — {{ chosenPlan()?.name }}. You can change it later with your school administrator.</span></li>
+    </ul>
+
+    <div class="form-actions">
+      <button type="button" class="btn btn-primary" (click)="goToDashboard()">Go to Dashboard</button>
+    </div>
+  }
+</app-auth-shell>
+
+<!-- Add a School modal -->
+@if (schoolModalOpen()) {
+  <app-modal title="Add a School" (closed)="schoolModalOpen.set(false)">
+    <form (ngSubmit)="submitSchool()" novalidate>
+      <div class="field">
+        <label for="school-name">School Name</label>
+        <input id="school-name" name="schoolName" type="text" class="input" [class.invalid]="schoolErrors()['name']" [(ngModel)]="schoolName" />
+        @if (schoolErrors()['name']) {
+          <span class="field-error">{{ schoolErrors()['name'] }}</span>
+        }
+      </div>
+
+      <div class="form-grid">
+        <div class="field">
+          <label>Institution Category</label>
+          <app-dropdown
+            name="schoolCategory"
+            [options]="schoolCategoryOptions"
+            [(ngModel)]="schoolCategory"
+            [invalid]="!!schoolErrors()['category']"
+            placeholder="Select category…"
+            countSingular="category"
+            countPlural="categories"
+          />
+          @if (schoolErrors()['category']) {
+            <span class="field-error">{{ schoolErrors()['category'] }}</span>
+          }
+        </div>
+        <div class="field">
+          <label>School Type</label>
+          <app-dropdown
+            name="schoolType"
+            [options]="schoolTypeOptions"
+            [(ngModel)]="schoolType"
+            [invalid]="!!schoolErrors()['school_type']"
+            placeholder="Select type…"
+            countSingular="type"
+            countPlural="types"
+          />
+          @if (schoolErrors()['school_type']) {
+            <span class="field-error">{{ schoolErrors()['school_type'] }}</span>
+          }
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="school-city">City or Region</label>
+        <input id="school-city" name="schoolCity" type="text" class="input" [class.invalid]="schoolErrors()['city_region']" [(ngModel)]="schoolCity" />
+        @if (schoolErrors()['city_region']) {
+          <span class="field-error">{{ schoolErrors()['city_region'] }}</span>
+        }
+      </div>
+
+      <div class="field">
+        <label for="school-contact">Principal / Contact <span class="muted">(optional)</span></label>
+        <input id="school-contact" name="schoolContact" type="text" class="input" [(ngModel)]="schoolContact" />
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="btn" (click)="schoolModalOpen.set(false)">Cancel</button>
+        <button type="submit" class="btn btn-primary" [disabled]="schoolSaving()">
+          {{ schoolSaving() ? 'Adding…' : 'Add School' }}
+        </button>
+      </div>
+    </form>
+  </app-modal>
+}

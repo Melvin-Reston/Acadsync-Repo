@@ -1,0 +1,189 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Teacher Portal</div>
+    <h1 class="page-title">Attendance</h1>
+    <p class="muted">
+      Take the roll, then save the day sheet
+      @if (academicYear()) {
+        · AY {{ academicYear() }}
+      }
+    </p>
+  </div>
+  <div class="head-controls">
+    <div class="field">
+      <label>Class &amp; section</label>
+      <app-dropdown
+        [options]="classOptions()"
+        [(ngModel)]="selectedClassId"
+        (ngModelChange)="onClassChange()"
+        [disabled]="classes().length === 0"
+        placeholder="Choose a class"
+        countSingular="class"
+        countPlural="classes"
+      />
+    </div>
+    <div class="field">
+      <label for="attendance-date">Date</label>
+      <input id="attendance-date" type="date" class="input" [ngModel]="date()" (ngModelChange)="onDateChange($event)" [max]="today" />
+    </div>
+  </div>
+</div>
+
+@if (error()) {
+  <div class="alert" role="alert">
+    <app-icon name="alert" [size]="16" />
+    <span>{{ error() }}</span>
+  </div>
+}
+
+@if (loading() && !roll()) {
+  <p class="muted">Loading the roll…</p>
+} @else if (classes().length === 0) {
+  <div class="card">
+    <div class="empty">
+      <p><b>No classes yet.</b></p>
+      <p>Add a class first, then take attendance for it.</p>
+      <a class="btn btn-primary" routerLink="/teacher/classes">Go to Classes &amp; Sections</a>
+    </div>
+  </div>
+} @else if (roll()) {
+  <!-- Roll bar -->
+  <section class="card rollbar" aria-label="Roll progress and actions">
+    <div class="roll-progress">
+      <span class="big">{{ counts().marked }} of {{ counts().enrolled }}</span>
+      <span class="roll-text">
+        <span class="lbl">{{ rollLabel() }}</span><br />
+        <span class="saved-note" [class.dirty]="dirty()">
+          <span class="unsaved-dot"></span>{{ savedNote() }}
+        </span>
+      </span>
+      <span class="meter" aria-hidden="true"><i [style.width.%]="counts().enrolled === 0 ? 0 : (counts().marked / counts().enrolled) * 100"></i></span>
+    </div>
+    <div class="roll-actions">
+      <button type="button" class="btn" (click)="openScan()" [disabled]="roll()!.learners.length === 0">
+        <app-icon name="scan" [size]="16" /> Scan QR code
+      </button>
+      <button type="button" class="btn" (click)="exportCsv()" [disabled]="roll()!.learners.length === 0">
+        <app-icon name="download" [size]="16" /> CSV
+      </button>
+      <button type="button" class="btn" (click)="markAllPresent()" [disabled]="roll()!.learners.length === 0 || counts().marked === counts().enrolled">
+        <app-icon name="check" [size]="16" /> Mark all present
+      </button>
+      <button type="button" class="btn btn-secondary" (click)="discardChanges()" [disabled]="!dirty()">Discard changes</button>
+      <button type="button" class="btn btn-primary" (click)="save()" [disabled]="saving() || !dirty()">
+        {{ saving() ? 'Saving…' : 'Save attendance' }}
+      </button>
+    </div>
+  </section>
+
+  <!-- Stats ledger -->
+  <section class="ledger" aria-label="Attendance summary">
+    <div class="cell"><span class="k">Enrolled</span><span class="v">{{ counts().enrolled }}</span><span class="s">{{ counts().none }} not yet marked</span></div>
+    <div class="cell"><span class="k"><span class="sw present"></span>Present</span><span class="v">{{ counts().present }}</span><span class="s">{{ pct(counts().present, counts().enrolled) }}% on time</span></div>
+    <div class="cell"><span class="k"><span class="sw late"></span>Late</span><span class="v">{{ counts().late }}</span><span class="s">{{ pct(counts().late, counts().enrolled) }}% arrived after start</span></div>
+    <div class="cell"><span class="k"><span class="sw absent"></span>Absent</span><span class="v">{{ counts().absent }}</span><span class="s">{{ counts().excused }} excused</span></div>
+    <div class="cell"><span class="k"><span class="sw excused"></span>Excused</span><span class="v">{{ counts().excused }}</span><span class="s">with a note on file</span></div>
+    <div class="cell"><span class="k">QR check-ins</span><span class="v">{{ counts().qr }}</span><span class="s">{{ pct(counts().qr, counts().enrolled) }}% checked in by QR</span></div>
+    <div class="cell"><span class="k">Attendance rate</span><span class="v">{{ rate() }}</span><span class="s">present + late, of enrolled</span></div>
+  </section>
+
+  <!-- Roster -->
+  <section class="card roster" aria-label="Class roster">
+    <div class="card-head">
+      <div>
+        <h2 class="card-title">{{ roll()!.class.subject_name }} · {{ roll()!.class.section_name }}</h2>
+        <p class="muted">Grade {{ roll()!.class.grade_level }} · {{ roll()!.class.subject_name }} · {{ dateLabel() }}</p>
+      </div>
+      <span class="pill plain">Attendance rate <b>{{ rate() }}</b></span>
+    </div>
+    @if (roll()!.learners.length === 0) {
+      <div class="empty">
+        <p><b>No learners enrolled in this class yet.</b></p>
+        <p>Enrol learners first, then take the roll.</p>
+        <a class="btn btn-primary" routerLink="/teacher/classes">Go to Classes &amp; Sections</a>
+      </div>
+    } @else {
+      <div class="toolbar">
+        <label class="search">
+          <app-icon name="search" [size]="16" />
+          <input type="search" class="input" placeholder="Filter by student name or ID…" [ngModel]="search()" (ngModelChange)="search.set($event)" aria-label="Filter roster" />
+        </label>
+        <button type="button" class="btn btn-small" (click)="resetFilter()">Reset</button>
+      </div>
+      <div class="chips" role="group" aria-label="Filter by status">
+        <button type="button" class="chip" [class.active]="filter() === 'all'" (click)="filter.set('all')">All roster <span class="n">{{ counts().enrolled }}</span></button>
+        <button type="button" class="chip" [class.active]="filter() === 'present'" (click)="filter.set('present')">Present <span class="n">{{ counts().present }}</span></button>
+        <button type="button" class="chip" [class.active]="filter() === 'late'" (click)="filter.set('late')">Late <span class="n">{{ counts().late }}</span></button>
+        <button type="button" class="chip" [class.active]="filter() === 'absent'" (click)="filter.set('absent')">Absent <span class="n">{{ counts().absent }}</span></button>
+        <button type="button" class="chip" [class.active]="filter() === 'excused'" (click)="filter.set('excused')">Excused <span class="n">{{ counts().excused }}</span></button>
+        <button type="button" class="chip" [class.active]="filter() === 'none'" (click)="filter.set('none')">Not marked <span class="n">{{ counts().none }}</span></button>
+      </div>
+      @if (filteredLearners().length === 0) {
+        <div class="empty">
+          <p><b>No learners match that filter.</b></p>
+          <p>Try a different search or filter.</p>
+        </div>
+      } @else {
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr><th>Learner info</th><th>Time in</th><th>Method</th><th>Daily status</th><th class="c-mark">Mark</th></tr>
+            </thead>
+            <tbody>
+              @for (learner of filteredLearners(); track learner.id) {
+                <tr>
+                  <td>
+                    <div class="learner">
+                      <span
+                        class="avatar"
+                        [class.p]="marks()[learner.id]?.status === 'present'"
+                        [class.l]="marks()[learner.id]?.status === 'late'"
+                        [class.a]="marks()[learner.id]?.status === 'absent'"
+                        [class.e]="marks()[learner.id]?.status === 'excused'"
+                      >{{ initials(learner.first_name + ' ' + learner.last_name) }}</span>
+                      <span class="learner-text">
+                        <b>{{ learner.last_name }}, {{ learner.first_name }}</b>
+                        <span class="lmeta mono">{{ learner.learner_id }}</span>
+                      </span>
+                    </div>
+                  </td>
+                  <td class="c-time mono">{{ marks()[learner.id]?.time_in ? time12(marks()[learner.id]!.time_in!) : '—' }}</td>
+                  <td class="c-method mono">{{ marks()[learner.id] ? (marks()[learner.id].method === 'qr' ? 'QR' : 'Manual') : '—' }}</td>
+                  <td class="c-pill">
+                    <span [class]="'status-pill ' + (marks()[learner.id] ? marks()[learner.id].status : 'none')">
+                      {{ marks()[learner.id] ? statusLabel[marks()[learner.id].status] : 'Not marked' }}
+                    </span>
+                  </td>
+                  <td class="c-mark">
+                    <app-menu
+                      [items]="markMenuItems"
+                      [selected]="marks()[learner.id]?.status ?? null"
+                      [label]="'Mark ' + learner.first_name + ' ' + learner.last_name"
+                      (picked)="onMarkPicked(learner, $event)"
+                    />
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+      <div class="roster-foot">
+        <span>Choose a status from the menu · choose it again to clear</span>
+        <span class="mono">{{ footDate() }}</span>
+      </div>
+    }
+  </section>
+}
+
+<!-- Scan QR modal (modal-only: no in-page scanner panel) -->
+@if (scanOpen() && selectedClassId() !== '' && selectedClass()) {
+  <app-scan-modal
+    [classId]="selectedClassIdNum()"
+    [date]="date()"
+    [classLabel]="selectedClass()!.subject_name + ' · ' + selectedClass()!.section_name"
+    [learners]="roll()?.learners ?? []"
+    (checkedIn)="onCheckedIn($event)"
+    (closed)="closeScan()"
+  />
+}

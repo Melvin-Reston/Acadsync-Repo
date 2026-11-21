@@ -1,0 +1,118 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Admin Console</div>
+    <h1 class="page-title">Overview</h1>
+  </div>
+  <div class="head-actions">
+    <a routerLink="/teachers" [queryParams]="{ add: 1 }" class="btn btn-primary">
+      <app-icon name="plus" [size]="16" /> Add teacher
+    </a>
+  </div>
+</div>
+
+@if (error()) {
+  <div class="alert" role="alert">
+    <app-icon name="alert" [size]="16" />
+    <span>{{ error() }}</span>
+  </div>
+}
+
+@if (data(); as overview) {
+  <section class="kpi-grid">
+    <a routerLink="/teachers" class="card kpi">
+      <div class="label">Total teachers</div>
+      <div class="kpi-value">{{ overview.counts.total_teachers }}</div>
+    </a>
+    <a routerLink="/teachers" [queryParams]="{ status: 'restricted' }" class="card kpi">
+      <div class="label">Restricted</div>
+      <div class="kpi-value" [class.warn]="overview.counts.restricted_teachers > 0">
+        {{ overview.counts.restricted_teachers }}
+      </div>
+    </a>
+    <a routerLink="/schools" class="card kpi">
+      <div class="label">Schools</div>
+      <div class="kpi-value">{{ overview.counts.total_schools }}</div>
+    </a>
+    <div class="card kpi">
+      <div class="label">New this month</div>
+      <div class="kpi-value">{{ overview.counts.new_signups_this_month }}</div>
+    </div>
+  </section>
+
+  <section class="kpi-grid three">
+    <a routerLink="/subscriptions" [queryParams]="{ status: 'current' }" class="card kpi">
+      <div class="label">Active subscriptions</div>
+      <div class="kpi-value">{{ overview.counts.active_subscriptions }}</div>
+      <div class="kpi-sub">{{ overview.counts.trial_subscriptions }} on trial</div>
+    </a>
+    <a routerLink="/reports" class="card kpi">
+      <div class="label">Income this month</div>
+      <div class="kpi-value">{{ peso(overview.counts.income_this_month) }}</div>
+    </a>
+    <a
+      routerLink="/payments"
+      [queryParams]="{ view: 'payments', status: 'pending' }"
+      class="card kpi"
+    >
+      <div class="label">Payments waiting for confirmation</div>
+      <div class="kpi-value" [class.warn]="overview.counts.pending_payments > 0">
+        {{ overview.counts.pending_payments }}
+      </div>
+    </a>
+  </section>
+
+  <section class="panels">
+    <div class="card">
+      <div class="card-head">
+        <h2 class="card-title">Newest teachers</h2>
+        <a routerLink="/teachers">View all</a>
+      </div>
+      @if (overview.recent_teachers.length === 0) {
+        <div class="empty">No teachers yet.</div>
+      } @else {
+        <ul class="rows">
+          @for (teacher of overview.recent_teachers; track teacher.id) {
+            <li>
+              <a [routerLink]="['/teachers', teacher.id]" class="row-link">
+                <span class="row-text">
+                  <span class="cell-main">{{ teacher.first_name }} {{ teacher.last_name }}</span>
+                  <span class="cell-sub">{{ teacher.school_name }}</span>
+                </span>
+                @if (teacher.is_restricted) {
+                  <span class="pill red">Restricted</span>
+                }
+                <span class="row-date mono">{{ teacher.created_at | date: 'MMM d' }}</span>
+              </a>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2 class="card-title">Recent activity</h2>
+        <a routerLink="/activity">View all</a>
+      </div>
+      @if (overview.recent_activity.length === 0) {
+        <div class="empty">No activity yet.</div>
+      } @else {
+        <ul class="rows">
+          @for (entry of overview.recent_activity; track entry.id) {
+            <li class="row">
+              <span class="row-text">
+                <span class="cell-main">{{ entry.description }}</span>
+                <span class="cell-sub">
+                  {{ entry.admin_name }} · {{ entry.created_at | date: 'MMM d, h:mm a' }}
+                </span>
+              </span>
+              <span class="pill plain" [class]="actionTone(entry.action)">
+                {{ actionLabel(entry.action) }}
+              </span>
+            </li>
+          }
+        </ul>
+      }
+    </div>
+  </section>
+}

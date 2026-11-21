@@ -1,0 +1,280 @@
+import { DatePipe } from '@angular/common';
+import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { AuthService } from '../../core/auth.service';
+import { errorMessage, fieldErrors, roleLabel } from '../../core/helpers';
+import { AdminAccount, FieldErrors, GradingProfileOption, PaymentSettings } from '../../core/models';
+import { SystemService } from '../../core/system.service';
+import { ToastService } from '../../core/toast.service';
+import { DropdownComponent, DropdownOption } from '../../shared/dropdown.component';
+import { IconComponent } from '../../shared/icon.component';
+import { ModalComponent } from '../../shared/modal.component';
+import { TemporaryPasswordComponent } from '../../shared/temporary-password.component';
+
+// Each card on this page has its own "saving" flag, message and field errors.
+type Section = 'profile' | 'password' | 'year' | 'grading' | 'account' | 'payment';
+
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
+@Component({
+  selector: 'app-settings',
+  imports: [FormsModule, DatePipe, DropdownComponent, IconComponent, ModalComponent, TemporaryPasswordComponent],
+  templateUrl: './settings.component.html',
+  styleUrl: './settings.component.css',
+})
+export class SettingsComponent implements OnDestroy {
+  protected readonly auth = inject(AuthService);
+  private readonly system = inject(SystemService);
+  private readonly toast = inject(ToastService);
+
+  protected readonly roleLabel = roleLabel;
+
+  protected profile = { full_name: '', email: '' };
+  protected password = { current: '', next: '', confirm: '' };
+  protected account = { full_name: '', email: '', is_active: true };
+  protected payment = { account_name: '', instructions: '' };
+
+  protected readonly academicYear = signal('');
+  protected readonly gradingProfile = signal('');
+  protected readonly gradingProfiles = signal<GradingProfileOption[]>([]);
+  protected readonly gradingProfileOptions = computed<DropdownOption[]>(() =>
+    this.gradingProfiles().map((profile) => ({ value: profile.code, label: profile.label })),
+  );
+  // The system the server actually has, so a refused change puts the
+  // selector back instead of leaving the refused choice showing.
+  private savedGradingProfile = '';
+  protected readonly adminAccount = signal<AdminAccount | null>(null);
+  protected readonly saving = signal<Section | null>(null);
+  protected readonly errorIn = signal<Section | null>(null);
+  protected readonly error = signal('');
+  protected readonly errors = signal<FieldErrors>({});
+  protected readonly confirmReset = signal(false);
+  protected readonly temporaryPassword = signal('');
+
+  // Payment QR code
+  protected readonly hasQr = signal(false);
+  protected readonly qrUrl = signal('');
+  protected readonly qrFile = signal<File | null>(null);
+  protected readonly confirmRemoveQr = signal(false);
+
+  constructor() {
+    const admin = this.auth.admin();
+    if (admin) {
+      this.profile = { full_name: admin.full_name, email: admin.email };
+    }
+
+    this.system.settings().subscribe({
+      next: (settings) => {
+        this.academicYear.set(settings.academic_year);
+        this.gradingProfile.set(settings.grading_profile);
+        this.savedGradingProfile = settings.grading_profile;
+        this.gradingProfiles.set(settings.grading_profiles);
+        this.showPayment(settings.payment);
+      },
+      error: (error) => this.fail('year', error),
+    });
+
+    if (this.auth.isSuperUser()) {
+      this.system.adminAccount().subscribe({
+        next: (response) => this.showAdminAccount(response.admin),
+        error: (error) => this.fail('account', error),
+      });
+    }
+  }
+
+  // ---------- My profile ----------
+  protected saveProfile(): void {
+    this.start('profile');
+    this.auth.updateProfile(this.profile.full_name, this.profile.email).subscribe({
+      next: () => this.finish('Profile saved.'),
+      error: (error) => this.fail('profile', error),
+    });
+  }
+
+  // ---------- Change password ----------
+  protected changePassword(): void {
+    this.start('password');
+
+    if (this.password.next !== this.password.confirm) {
+      this.saving.set(null);
+      this.errorIn.set('password');
+      this.errors.set({ confirm: 'The two passwords do not match.' });
+      return;
+    }
+
+    this.auth.changePassword(this.password.current, this.password.next).subscribe({
+      next: () => {
+        this.password = { current: '', next: '', confirm: '' };
+        this.finish('Password changed.');
+      },
+      error: (error) => this.fail('password', error),
+    });
+  }
+
+  // ---------- Academic year ----------
+  protected saveAcademicYear(): void {
+    this.start('year');
+    this.system.updateAcademicYear(this.academicYear()).subscribe({
+      next: () => this.finish('Academic year saved.'),
+      error: (error) => this.fail('year', error),
+    });
+  }
+
+  // ---------- Grading system ----------
+  // The grading system for the academic year above: DO 8 (4 quarters),
+  // DO 015 adjusted (3 terms, SY 2026-2027), or DO 015 zero-based (3 terms,
+  // from SY 2027-2028). Refused while grades have already been filed for
+  // that year — filed grades keep the system they were filed under.
+  protected saveGradingSystem(): void {
+    this.start('grading');
+    this.system.updateGradingSystem(this.academicYear(), this.gradingProfile()).subscribe({
+      next: (response) => {
+        this.gradingProfile.set(response.grading_profile);
+        this.savedGradingProfile = response.grading_profile;
+        this.finish('Grading system saved.');
+      },
+      error: (error) => {
+        // The change was refused (for example, grades are already filed
+        // for the year): show the system that is actually in force.
+        this.gradingProfile.set(this.savedGradingProfile);
+        this.fail('grading', error);
+      },
+    });
+  }
+
+  protected gradingDescription(code: string): string {
+    const profile = this.gradingProfiles().find((item) => item.code === code);
+    if (!profile) return '';
+    const periods = profile.periods.map((period) => `${profile.period_label} ${period}`).join(', ');
+    return `${profile.label} · ${periods} · ${profile.third_label}`;
+  }
+
+  // ---------- Payment QR code ----------
+  // Checks the chosen image before it is sent. The server checks it again.
+  protected onQrChosen(event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.[0] ?? null;
+    this.qrFile.set(null);
+    this.errorIn.set(null);
+    this.errors.set({});
+    if (!file) {
+      return;
+    }
+
+    let problem = '';
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      problem = 'Upload a PNG, JPG or WEBP image.';
+    } else if (file.size > MAX_IMAGE_BYTES) {
+      problem = 'The image is too large. The limit is 2 MB.';
+    }
+    if (problem) {
+      this.errorIn.set('payment');
+      this.error.set('');
+      this.errors.set({ qr_image: problem });
+      return;
+    }
+
+    this.qrFile.set(file);
+    this.setQrUrl(URL.createObjectURL(file));
+  }
+
+  protected savePayment(removeQr = false): void {
+    this.confirmRemoveQr.set(false);
+    this.start('payment');
+    this.system
+      .updatePaymentSettings({ ...this.payment, qr_image: removeQr ? null : this.qrFile(), remove_qr: removeQr })
+      .subscribe({
+        next: (response) => {
+          this.showPayment(response.payment);
+          this.finish(removeQr ? 'Payment QR code removed.' : 'Payment details saved.');
+        },
+        error: (error) => this.fail('payment', error),
+      });
+  }
+
+  private showPayment(payment: PaymentSettings): void {
+    this.payment = { account_name: payment.account_name, instructions: payment.instructions };
+    this.hasQr.set(payment.has_qr);
+    this.qrFile.set(null);
+    this.setQrUrl('');
+
+    // The image is only sent to signed-in admins, so it is fetched with the token.
+    if (payment.has_qr) {
+      this.system.paymentQrImage().subscribe({
+        next: (blob) => this.setQrUrl(URL.createObjectURL(blob)),
+        error: () => undefined,
+      });
+    }
+  }
+
+  private setQrUrl(url: string): void {
+    if (this.qrUrl()) {
+      URL.revokeObjectURL(this.qrUrl());
+    }
+    this.qrUrl.set(url);
+  }
+
+  ngOnDestroy(): void {
+    this.setQrUrl('');
+  }
+
+  // ---------- Admin account (Super User only) ----------
+  protected saveAdminAccount(): void {
+    this.start('account');
+    this.system.updateAdminAccount(this.account).subscribe({
+      next: (response) => {
+        this.showAdminAccount(response.admin);
+        this.finish('Admin account saved.');
+      },
+      error: (error) => this.fail('account', error),
+    });
+  }
+
+  protected resetAdminPassword(): void {
+    this.confirmReset.set(false);
+    this.start('account');
+    this.system.resetAdminPassword().subscribe({
+      next: (response) => {
+        this.showAdminAccount(response.admin);
+        this.saving.set(null);
+        this.temporaryPassword.set(response.temporary_password);
+      },
+      error: (error) => this.fail('account', error),
+    });
+  }
+
+  protected unlockAdminAccount(): void {
+    this.start('account');
+    this.system.unlockAdminAccount().subscribe({
+      next: (response) => {
+        this.showAdminAccount(response.admin);
+        this.finish('Admin account unlocked.');
+      },
+      error: (error) => this.fail('account', error),
+    });
+  }
+
+  // ---------- Small shared steps ----------
+  private showAdminAccount(admin: AdminAccount): void {
+    this.account = { full_name: admin.full_name, email: admin.email, is_active: admin.is_active };
+    this.adminAccount.set(admin);
+  }
+
+  private start(section: Section): void {
+    this.saving.set(section);
+    this.errorIn.set(null);
+    this.error.set('');
+    this.errors.set({});
+  }
+
+  private finish(message: string): void {
+    this.saving.set(null);
+    this.toast.success(message);
+  }
+
+  private fail(section: Section, error: unknown): void {
+    this.saving.set(null);
+    this.errorIn.set(section);
+    this.errors.set(fieldErrors(error));
+    this.error.set(errorMessage(error));
+  }
+}

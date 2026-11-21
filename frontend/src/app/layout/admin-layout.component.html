@@ -1,0 +1,93 @@
+<div class="app">
+  @if (drawerOpen()) {
+    <div class="scrim" (click)="closeDrawer()"></div>
+  }
+
+  <aside class="sidebar" [class.open]="drawerOpen()">
+    <div class="side-top">
+      <a routerLink="/overview" class="brand" (click)="closeDrawer()">
+        <div class="brand-mark">A</div>
+        <div>
+          <div class="brand-name">AcadSync</div>
+          <div class="brand-sub">Admin Console</div>
+        </div>
+      </a>
+      <button type="button" class="drawer-close" aria-label="Close menu" (click)="closeDrawer()">
+        <app-icon name="x" />
+      </button>
+    </div>
+
+    <nav class="side-scroll" aria-label="Main">
+      @for (group of navGroups; track group.label) {
+        <div class="nav-label">{{ group.label }}</div>
+        @for (item of group.items; track item.path) {
+          <a
+            class="nav-item"
+            routerLinkActive="active"
+            [routerLink]="item.path"
+            (click)="closeDrawer()"
+          >
+            <app-icon [name]="item.icon" />
+            {{ item.label }}
+          </a>
+        }
+      }
+    </nav>
+
+    @if (auth.admin(); as admin) {
+      <div class="side-foot">
+        <a routerLink="/settings" class="admin-card" (click)="closeDrawer()">
+          <span class="avatar">{{ initials(admin.full_name) }}</span>
+          <span class="admin-text">
+            <b>{{ admin.full_name }}</b>
+            <span>{{ roleLabel(admin.role) }}</span>
+          </span>
+        </a>
+        <button type="button" class="signout" (click)="auth.logout()">
+          <app-icon name="logout" [size]="16" /> Sign out
+        </button>
+      </div>
+    }
+  </aside>
+
+  <div class="main-wrap">
+    <header class="topbar">
+      <button
+        type="button"
+        class="icon-btn hamburger"
+        aria-label="Open menu"
+        (click)="drawerOpen.set(true)"
+      >
+        <app-icon name="menu" />
+      </button>
+
+      @if (system.academicYear()) {
+        <span class="year-chip mono">AY {{ system.academicYear() }}</span>
+      }
+
+      <span class="top-date">{{ today | date: 'EEEE, MMMM d, y' }}</span>
+
+      <button
+        type="button"
+        class="icon-btn"
+        [attr.aria-label]="theme.theme() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'"
+        (click)="theme.toggle()"
+      >
+        <app-icon [name]="theme.theme() === 'dark' ? 'sun' : 'moon'" />
+      </button>
+    </header>
+
+    <main class="content">
+      @if (auth.admin()?.must_change_password) {
+        <div class="alert warn" role="status">
+          <app-icon name="key" [size]="16" />
+          <span>
+            You are using a temporary password.
+            <a routerLink="/settings">Change it now</a>
+          </span>
+        </div>
+      }
+      <router-outlet />
+    </main>
+  </div>
+</div>

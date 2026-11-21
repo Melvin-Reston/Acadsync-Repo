@@ -1,0 +1,598 @@
+// Grades: the teacher's own class records, encoded by hand and computed live.
+// A blank cell is not a zero — it is left out of the component average until the
+// teacher encodes it. The DepEd formula lives in core/deped.ts and mirrors the
+// backend helper, so the numbers the teacher sees while typing are the numbers
+// the server files. Saving persists the whole sheet for the class and term;
+// filing it happens from the Submit modal — to the adviser, or straight into
+// Consolidation when the teacher is both subject teacher and adviser.
+import {
+  Component,
+  computed,
+  inject,
+  signal,
+} from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
+import { GradesService, ScoreCell } from '../../../core/grades.service';
+import { ClassesService } from '../../../core/classes.service';
+import { TeacherPortalService } from '../../../core/teacher-portal.service';
+import { ToastService } from '../../../core/toast.service';
+import { errorMessage } from '../../../core/helpers';
+import {
+  ClassItem,
+  GradeColumn,
+  GradeLearnerRow,
+  GradeSheet,
+  SubmissionCheck,
+} from '../../../core/models';
+import { computeLearnerGrade, DEFAULT_WEIGHTS } from '../../../core/deped';
+import { DropdownComponent, DropdownOption } from '../../../shared/dropdown.component';
+import { IconComponent } from '../../../shared/icon.component';
+import { ModalComponent } from '../../../shared/modal.component';
+
+type SexFilter = 'all' | 'Male' | 'Female';
+
+@Component({
+  selector: 'app-teacher-grades',
+  imports: [FormsModule, RouterLink, DropdownComponent, IconComponent, ModalComponent],
+  templateUrl: './grades.component.html',
+  styleUrl: './grades.component.css',
+})
+export class TeacherGradesComponent {
+  private readonly grades = inject(GradesService);
+  private readonly classesService = inject(ClassesService);
+  private readonly portal = inject(TeacherPortalService);
+  private readonly toast = inject(ToastService);
+
+  protected readonly classes = signal<ClassItem[]>([]);
+  protected readonly academicYear = signal<string | null>(null);
+  protected readonly sheet = signal<GradeSheet | null>(null);
+  protected readonly loading = signal(true);
+  protected readonly error = signal('');
+  protected readonly saving = signal(false);
+
+  protected readonly selectedClassId = signal<number | ''>('');
+  protected readonly quarter = signal(1);
+
+  // The working scores: learner id -> column id -> score (null = blank).
+  // Seeded from the saved sheet on load; typing updates these, and the
+  // computed grades below follow at once.
+  protected readonly draft = signal<Record<number, Record<number, number | null>>>({});
+  protected readonly savedDraft = signal<Record<number, Record<number, number | null>>>({});
+
+  protected readonly search = signal('');
+  protected readonly sexFilter = signal<SexFilter>('all');
+  protected readonly highlightBelow = signal(false);
+  protected readonly sortByRank = signal(false);
+
+  // Weights editing (three numbers that must add up to 100).
+  protected readonly weightsEditing = signal(false);
+  protected readonly weightsDraft = signal({ ww: 20, pt: 50, ex: 30 });
+  protected readonly weightsSaving = signal(false);
+
+  // Examinations sub-weights (the shares of the EX component: ST1 30,
+  // ST2 30, Term Exam 40). Saved together with the weights; they must add
+  // up to 100. Only under a DO 015 profile.
+  protected readonly subWeightsDraft = signal<Record<number, number>>({});
+  protected readonly subWeightsSaving = signal(false);
+
+  // Submit-to-adviser modal.
+  protected readonly submitOpen = signal(false);
+  protected readonly submitCheck = signal<SubmissionCheck | null>(null);
+  protected readonly submitLoading = signal(false);
+  protected readonly confirmBlanks = signal(false);
+  protected readonly submitting = signal(false);
+
+  // Remove-column confirmation modal.
+  protected readonly removeColumn = signal<GradeColumn | null>(null);
+  protected readonly removingColumn = signal(false);
+
+  // The periods the active grading system offers: Terms 1–3 under DO 015,
+  // Quarters 1–4 under DO 8.
+  protected readonly periods = computed(() => this.sheet()?.grading.periods ?? [1, 2, 3]);
+
+  protected readonly periodLabel = computed(() => {
+    const sheet = this.sheet();
+    return sheet ? `${sheet.grading.period_label} ${this.quarter()}` : '';
+  });
+
+  protected readonly components: ('WW' | 'PT' | 'EX')[] = ['WW', 'PT', 'EX'];
+  protected readonly defaultWeights = DEFAULT_WEIGHTS;
+
+  protected readonly selectedClass = computed(
+    () => this.classes().find((klass) => klass.id === this.selectedClassId()) ?? null,
+  );
+
+  protected readonly columnsByComponent = computed(() => {
+    const sheet = this.sheet();
+    if (!sheet) return { WW: [] as GradeColumn[], PT: [] as GradeColumn[], EX: [] as GradeColumn[] };
+    return {
+      WW: sheet.columns.filter((column) => column.component === 'WW'),
+      PT: sheet.columns.filter((column) => column.component === 'PT'),
+      EX: sheet.columns.filter((column) => column.component === 'EX'),
+    };
+  });
+
+  // The Examinations columns of the open period, for the sub-weights editor.
+  protected readonly exColumns = computed(() => this.columnsByComponent().EX);
+
+  protected readonly subWeightsSum = computed(() =>
+    this.exColumns().reduce((sum, column) => sum + (this.subWeightsDraft()[column.id] ?? 0), 0),
+  );
+
+  protected readonly subWeightsDirty = computed(() => {
+    const sheet = this.sheet();
+    if (!sheet) return false;
+    return this.exColumns().some(
+      (column) => (this.subWeightsDraft()[column.id] ?? 0) !== (column.sub_weight ?? 0),
+    );
+  });
+
+  // The live computed grade for each learner, from the draft scores,
+  // under the grading system in force for the class's academic year.
+  protected readonly rows = computed(() => {
+    const sheet = this.sheet();
+    if (!sheet) return [];
+    const draft = this.draft();
+    return sheet.learners.map((learner) => {
+      const scores = new Map<number, number | null>();
+      for (const column of sheet.columns) {
+        scores.set(column.id, draft[learner.id]?.[column.id] ?? null);
+      }
+      return {
+        learner,
+        computed: computeLearnerGrade(sheet.columns, scores, sheet.weights, sheet.grading.code),
+      };
+    });
+  });
+
+  protected readonly filteredRows = computed(() => {
+    const query = this.search().trim().toLowerCase();
+    const sex = this.sexFilter();
+    let rows = this.rows().filter(({ learner }) => {
+      if (sex !== 'all' && learner.sex !== sex) return false;
+      if (!query) return true;
+      return `${learner.first_name} ${learner.last_name} ${learner.learner_id}`
+        .toLowerCase()
+        .includes(query);
+    });
+    if (this.sortByRank()) {
+      rows = [...rows].sort((a, b) => {
+        const qa = a.computed.qg ?? -1;
+        const qb = b.computed.qg ?? -1;
+        if (qb !== qa) return qb - qa;
+        return b.computed.entered - a.computed.entered;
+      });
+    }
+    return rows;
+  });
+
+  // The five summary stats, recomputed live from the draft scores.
+  protected readonly stats = computed(() => {
+    const rows = this.rows();
+    const complete = rows.filter((row) => row.computed.complete);
+    const qgs = complete.map((row) => row.computed.qg as number);
+    const initials = complete.map((row) => row.computed.initial as number);
+    const entered = rows.reduce((sum, row) => sum + row.computed.entered, 0);
+    const cells = rows.reduce((sum, row) => sum + row.computed.cells, 0);
+    return {
+      mps: initials.length > 0 ? Math.round((initials.reduce((a, b) => a + b, 0) / initials.length) * 100) / 100 : null,
+      passingRate:
+        qgs.length > 0
+          ? Math.round((qgs.filter((qg) => qg >= 75).length / qgs.length) * 100)
+          : null,
+      highest: qgs.length > 0 ? Math.max(...qgs) : null,
+      intervention: rows
+        .filter((row) => row.computed.complete && (row.computed.qg as number) < 75)
+        .map((row) => `${row.learner.last_name}, ${row.learner.first_name}`),
+      encodingPct: cells === 0 ? 0 : Math.round((entered / cells) * 100),
+      completeCount: complete.length,
+      total: rows.length,
+    };
+  });
+
+  protected readonly dirty = computed(
+    () => JSON.stringify(this.draft()) !== JSON.stringify(this.savedDraft()),
+  );
+
+  protected readonly weightsSum = computed(
+    () => this.weightsDraft().ww + this.weightsDraft().pt + this.weightsDraft().ex,
+  );
+
+  protected readonly submittedNote = computed(() => {
+    const submission = this.sheet()?.submission;
+    if (!submission) return '';
+    return new Date(submission.submitted_at).toLocaleString('en-PH', {
+      timeZone: 'Asia/Manila',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  });
+
+  // The class picker in the page head.
+  protected readonly classOptions = computed<DropdownOption[]>(() =>
+    this.classes().map((klass) => ({
+      value: klass.id,
+      label: `${klass.subject_name} · ${klass.section_name}`,
+      sub: `Grade ${klass.grade_level} · AY ${klass.academic_year}`,
+    })),
+  );
+
+  // The formula strip: Initial = (WW × 0.20) + (PT × 0.50) + (EX × 0.30),
+  // from the weights in force for this class.
+  protected readonly formulaText = computed(() => {
+    const sheet = this.sheet();
+    if (!sheet) return '';
+    const weight = (value: number) => (value / 100).toFixed(2);
+    return `Initial = (WW × ${weight(sheet.weights.ww)}) + (PT × ${weight(sheet.weights.pt)}) + (${sheet.grading.third_short} × ${weight(sheet.weights.ex)})`;
+  });
+
+  // Learner counts per sex, for the filter chips.
+  protected readonly sexCounts = computed(() => {
+    const learners = this.sheet()?.learners ?? [];
+    return {
+      all: learners.length,
+      Male: learners.filter((learner) => learner.sex === 'Male').length,
+      Female: learners.filter((learner) => learner.sex === 'Female').length,
+    };
+  });
+
+  // The filing button: "Move to Consolidation" when the teacher is both the
+  // subject teacher and the adviser of this class, "Submit to adviser"
+  // (or "Re-submit to adviser") otherwise.
+  protected readonly submitLabel = computed(() => {
+    const sheet = this.sheet();
+    if (!sheet) return 'Submit to adviser';
+    if (sheet.direct_add) return 'Move to Consolidation';
+    return sheet.submission ? 'Re-submit to adviser' : 'Submit to adviser';
+  });
+
+  constructor() {
+    this.portal.me().subscribe({
+      next: (response) => this.academicYear.set(response.academic_year),
+      error: () => undefined,
+    });
+    this.loadClasses();
+  }
+
+  // ---------- Loading ----------
+
+  private loadClasses(): void {
+    this.classesService.classes({}).subscribe({
+      next: (response) => {
+        this.classes.set(response.items);
+        if (response.items.length === 0) {
+          this.loading.set(false);
+          return;
+        }
+        this.selectedClassId.set(response.items[0].id);
+        this.loadSheet();
+      },
+      error: (error) => {
+        this.loading.set(false);
+        this.error.set(errorMessage(error));
+      },
+    });
+  }
+
+  protected loadSheet(quarter?: number): void {
+    const classId = this.selectedClassId();
+    if (classId === '') return;
+    this.loading.set(true);
+    this.grades.sheet(classId, quarter).subscribe({
+      next: (sheet) => {
+        this.sheet.set(sheet);
+        this.quarter.set(sheet.quarter);
+        this.weightsDraft.set({ ...sheet.weights });
+        this.weightsEditing.set(false);
+        const subWeights: Record<number, number> = {};
+        for (const column of sheet.columns) {
+          if (column.component === 'EX') subWeights[column.id] = column.sub_weight ?? 0;
+        }
+        this.subWeightsDraft.set(subWeights);
+        const draft: Record<number, Record<number, number | null>> = {};
+        for (const learner of sheet.learners) {
+          draft[learner.id] = { ...learner.scores };
+        }
+        this.draft.set(draft);
+        this.savedDraft.set(JSON.parse(JSON.stringify(draft)));
+        this.loading.set(false);
+      },
+      error: (error) => {
+        this.loading.set(false);
+        this.error.set(errorMessage(error));
+      },
+    });
+  }
+
+  protected onClassChange(): void {
+    this.error.set('');
+    this.loadSheet();
+  }
+
+  protected onQuarterChange(value: number): void {
+    this.quarter.set(value);
+    this.error.set('');
+    this.loadSheet(value);
+  }
+
+  protected recalculate(): void {
+    // The numbers are computed live as the teacher types; this re-reads the
+    // saved sheet from the server and recomputes everything from it.
+    this.loadSheet(this.quarter());
+    this.toast.success('Grades recalculated from the saved scores.');
+  }
+
+  // ---------- Encoding ----------
+
+  protected scoreValue(learnerId: number, columnId: number): number | null {
+    return this.draft()[learnerId]?.[columnId] ?? null;
+  }
+
+  protected setScore(learner: GradeLearnerRow, column: GradeColumn, raw: string): void {
+    const value = raw.trim() === '' ? null : Number(raw);
+    if (value !== null && (!Number.isFinite(value) || value < 0 || value > column.highest_possible)) {
+      // Out of range: leave the draft alone; the input shows the last good value.
+      this.draft.set({ ...this.draft() });
+      return;
+    }
+    const next = { ...this.draft() };
+    next[learner.id] = { ...(next[learner.id] ?? {}), [column.id]: value };
+    this.draft.set(next);
+  }
+
+  protected save(): void {
+    const sheet = this.sheet();
+    const classId = this.selectedClassId();
+    if (!sheet || classId === '') return;
+    const saved = this.savedDraft();
+    const draft = this.draft();
+    const cells: ScoreCell[] = [];
+    for (const learner of sheet.learners) {
+      for (const column of sheet.columns) {
+        const value = draft[learner.id]?.[column.id] ?? null;
+        const before = saved[learner.id]?.[column.id] ?? null;
+        if (value !== before) {
+          cells.push({ column_id: column.id, learner_id: learner.id, score: value });
+        }
+      }
+    }
+    if (cells.length === 0) {
+      this.toast.success('Nothing new to save.');
+      return;
+    }
+    this.saving.set(true);
+    this.grades.saveScores(classId, this.quarter(), cells).subscribe({
+      next: (response) => {
+        this.saving.set(false);
+        if (response.submission_cleared) {
+          this.toast.success(`Scores saved. The earlier submission was cleared — file the ${this.periodLabel().toLowerCase()} again when ready.`);
+        } else {
+          this.toast.success('Scores saved.');
+        }
+        this.loadSheet(this.quarter());
+      },
+      error: (error) => {
+        this.saving.set(false);
+        this.error.set(errorMessage(error));
+      },
+    });
+  }
+
+  protected discardChanges(): void {
+    this.draft.set(JSON.parse(JSON.stringify(this.savedDraft())));
+    this.toast.success('Changes discarded — back to the last saved scores.');
+  }
+
+  protected exportCsv(): void {
+    const klass = this.selectedClass();
+    const classId = this.selectedClassId();
+    if (!klass || classId === '') return;
+    const safe = (value: string) => value.replace(/[^A-Za-z0-9]+/g, '-').toLowerCase();
+    const periodShort = this.sheet()?.grading.period_short.toLowerCase() ?? 'q';
+    this.grades.exportCsv(
+      classId,
+      this.quarter(),
+      `grades-${safe(klass.subject_name)}-${safe(klass.section_name)}-${periodShort}${this.quarter()}.csv`,
+    );
+  }
+
+  // ---------- Columns ----------
+
+  protected addColumn(component: 'WW' | 'PT' | 'EX'): void {
+    const classId = this.selectedClassId();
+    if (classId === '') return;
+    this.grades.addColumn(classId, this.quarter(), component).subscribe({
+      next: (response) => {
+        this.toast.success(`Added ${response.column.name}.`);
+        this.loadSheet(this.quarter());
+      },
+      error: (error) => this.error.set(errorMessage(error)),
+    });
+  }
+
+  protected updateColumnMax(column: GradeColumn, raw: string): void {
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value <= 0) return;
+    if (value === column.highest_possible) return;
+    const classId = this.selectedClassId();
+    if (classId === '') return;
+    this.grades.updateColumn(classId, column.id, value).subscribe({
+      next: () => {
+        this.toast.success(`${column.name} highest possible score is now ${value}.`);
+        this.loadSheet(this.quarter());
+      },
+      error: (error) => {
+        this.error.set(errorMessage(error));
+        this.loadSheet(this.quarter());
+      },
+    });
+  }
+
+  protected askRemoveColumn(column: GradeColumn): void {
+    this.removeColumn.set(column);
+  }
+
+  protected confirmRemoveColumn(): void {
+    const column = this.removeColumn();
+    const classId = this.selectedClassId();
+    if (!column || classId === '') return;
+    this.removingColumn.set(true);
+    this.grades.deleteColumn(classId, column.id).subscribe({
+      next: () => {
+        this.removingColumn.set(false);
+        this.removeColumn.set(null);
+        this.toast.success(`Removed ${column.name} and its scores.`);
+        this.loadSheet(this.quarter());
+      },
+      error: (error) => {
+        this.removingColumn.set(false);
+        this.error.set(errorMessage(error));
+      },
+    });
+  }
+
+  // ---------- Weights ----------
+
+  protected saveWeights(): void {
+    const classId = this.selectedClassId();
+    if (classId === '') return;
+    if (this.weightsSum() !== 100) return;
+    if (this.subWeightsDirty() && this.subWeightsSum() !== 100) return;
+    this.weightsSaving.set(true);
+    this.grades.updateWeights(classId, this.weightsDraft()).subscribe({
+      next: () => {
+        // The Examinations shares save with the weights, when they changed.
+        if (this.subWeightsDirty() && this.subWeightsSum() === 100) {
+          this.saveSubWeights(true);
+          return;
+        }
+        this.weightsSaving.set(false);
+        this.weightsEditing.set(false);
+        this.toast.success('Weights saved.');
+        this.loadSheet(this.quarter());
+      },
+      error: (error) => {
+        this.weightsSaving.set(false);
+        this.error.set(errorMessage(error));
+      },
+    });
+  }
+
+  protected setSubWeight(column: GradeColumn, raw: string): void {
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 100) return;
+    this.subWeightsDraft.set({ ...this.subWeightsDraft(), [column.id]: value });
+  }
+
+  // Saves the Examinations shares for the open period. Called from
+  // saveWeights when they changed, or on their own from the weights form.
+  protected saveSubWeights(fromWeightsSave = false): void {
+    const classId = this.selectedClassId();
+    if (classId === '') return;
+    if (this.subWeightsSum() !== 100) return;
+    this.subWeightsSaving.set(true);
+    const subWeights = this.exColumns().map((column) => ({
+      column_id: column.id,
+      sub_weight: this.subWeightsDraft()[column.id] ?? 0,
+    }));
+    this.grades.updateSubWeights(classId, this.quarter(), subWeights).subscribe({
+      next: () => {
+        this.subWeightsSaving.set(false);
+        if (fromWeightsSave) {
+          this.weightsSaving.set(false);
+          this.weightsEditing.set(false);
+          this.toast.success('Weights saved.');
+        } else {
+          this.toast.success('Examinations sub-weights saved.');
+        }
+        this.loadSheet(this.quarter());
+      },
+      error: (error) => {
+        this.subWeightsSaving.set(false);
+        if (fromWeightsSave) this.weightsSaving.set(false);
+        this.error.set(errorMessage(error));
+      },
+    });
+  }
+
+  protected cancelWeights(): void {
+    const sheet = this.sheet();
+    if (sheet) {
+      this.weightsDraft.set({ ...sheet.weights });
+      const subWeights: Record<number, number> = {};
+      for (const column of sheet.columns) {
+        if (column.component === 'EX') subWeights[column.id] = column.sub_weight ?? 0;
+      }
+      this.subWeightsDraft.set(subWeights);
+    }
+    this.weightsEditing.set(false);
+  }
+
+  // ---------- Submit to the adviser ----------
+
+  protected openSubmit(): void {
+    const classId = this.selectedClassId();
+    if (classId === '') return;
+    this.submitLoading.set(true);
+    this.grades.submissionCheck(classId, this.quarter()).subscribe({
+      next: (check) => {
+        this.submitCheck.set(check);
+        this.confirmBlanks.set(false);
+        this.submitLoading.set(false);
+        this.submitOpen.set(true);
+      },
+      error: (error) => {
+        this.submitLoading.set(false);
+        this.error.set(errorMessage(error));
+      },
+    });
+  }
+
+  protected submit(): void {
+    const classId = this.selectedClassId();
+    const check = this.submitCheck();
+    if (classId === '' || !check) return;
+    if (check.complete_learners < check.total_learners && !this.confirmBlanks()) return;
+    this.submitting.set(true);
+    this.grades.submit(classId, this.quarter(), this.confirmBlanks()).subscribe({
+      next: (response) => {
+        this.submitting.set(false);
+        this.submitOpen.set(false);
+        this.toast.success(response.message);
+        this.loadSheet(this.quarter());
+      },
+      error: (error) => {
+        this.submitting.set(false);
+        this.error.set(errorMessage(error));
+      },
+    });
+  }
+
+  // ---------- Formatting ----------
+
+  protected componentLabel(component: 'WW' | 'PT' | 'EX'): string {
+    if (component === 'WW') return 'Written Works';
+    if (component === 'PT') return 'Performance Tasks';
+    return this.sheet()?.grading.third_label ?? 'Examinations';
+  }
+
+  protected fmt(value: number | null): string {
+    if (value === null || value === undefined) return '—';
+    return String(Math.round(value * 100) / 100);
+  }
+
+  protected learnerName(learner: GradeLearnerRow): string {
+    return `${learner.last_name}, ${learner.first_name}`;
+  }
+
+  protected resetFilters(): void {
+    this.search.set('');
+    this.sexFilter.set('all');
+    this.highlightBelow.set(false);
+    this.sortByRank.set(false);
+  }
+}

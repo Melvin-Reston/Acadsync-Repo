@@ -1,0 +1,162 @@
+/* Academic Consolidation: readiness, KPI cards, subject cards, learner table. */
+
+/* ---------- Readiness ---------- */
+.readiness {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 20px;
+  margin-bottom: 16px;
+}
+
+.readiness-info .big {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  font-weight: 600;
+  margin-right: 10px;
+}
+
+.meter {
+  display: block;
+  height: 8px;
+  border-radius: 99px;
+  background: var(--border);
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+.meter i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 99px;
+}
+
+.readiness-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* ---------- Subject cards ---------- */
+.subjects {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.subject-card {
+  padding: 16px 18px;
+}
+
+.subject-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.subject-head .card-title {
+  font-size: 18px;
+}
+
+.subject-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* ---------- Filters ---------- */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.toolbar .search {
+  flex: 1;
+  min-width: 180px;
+  max-width: 320px;
+}
+
+
+/* ---------- Learner table ---------- */
+.table-wrap {
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+
+.consolidation-table {
+  min-width: 640px;
+}
+
+.consolidation-table .center {
+  text-align: center;
+}
+
+.consolidation-table .num {
+  font-family: var(--font-mono);
+}
+
+.consolidation-table .below {
+  color: var(--red);
+  font-weight: 700;
+}
+
+.consolidation-table tr.at-risk td {
+  background: color-mix(in srgb, var(--red-tint) 45%, transparent);
+}
+
+.gwa-cell {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.gwa-reason {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  white-space: normal;
+  max-width: 180px;
+}
+
+.empty-row {
+  text-align: center;
+  color: var(--muted);
+  padding: 24px !important;
+}
+
+.legend {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  font-size: 12.5px;
+  color: var(--muted);
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .ledger {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .ledger .cell {
+    border-top: 1px dashed var(--border);
+  }
+
+  .ledger .cell:nth-child(-n + 2) {
+    border-top: none;
+  }
+
+  .ledger .cell:nth-child(odd) {
+    border-left: none;
+  }
+}

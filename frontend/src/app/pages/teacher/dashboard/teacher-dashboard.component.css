@@ -1,0 +1,20 @@
+/* Teacher Dashboard: two columns on wide screens, stacked on phones. */
+
+/* Filed assignment slip: a perforated card, like a filed paper slip. */
+.slip {
+  margin-top: 18px;
+  padding: 16px 18px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.slip-head {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+}

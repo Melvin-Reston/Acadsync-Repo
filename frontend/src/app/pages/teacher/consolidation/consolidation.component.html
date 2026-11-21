@@ -1,0 +1,249 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Teacher Portal</div>
+    <h1 class="page-title">Academic Consolidation</h1>
+    <p class="muted">
+      Every subject grade for your advisory section, in one sheet
+      @if (view()?.academic_year) {
+        · AY {{ view()!.academic_year }}
+      }
+      @if (view()?.grading) {
+        · {{ view()!.grading.label }}
+      }
+    </p>
+  </div>
+  <div class="head-controls">
+    <div class="field">
+      <label>{{ view()?.grading.period_label ?? 'Quarter' }}</label>
+      <app-dropdown
+        [options]="periodOptions()"
+        [ngModel]="quarter()"
+        (ngModelChange)="onQuarterChange($event)"
+        placeholder="Choose a period"
+        [searchPlaceholder]="(view()?.grading.period_label ?? 'Quarter') + ' number'"
+        countSingular="period"
+        countPlural="periods"
+      />
+    </div>
+  </div>
+</div>
+
+@if (error()) {
+  <div class="alert" role="alert">
+    <app-icon name="alert" [size]="16" />
+    <span>{{ error() }}</span>
+  </div>
+}
+
+@if (loading() && !view()) {
+  <p class="muted">Loading the consolidation…</p>
+} @else if (view() && !view()!.has_advisory) {
+  <div class="card">
+    <div class="empty">
+      <p><b>No advisory assignment yet.</b></p>
+      <p>Set your advisory section on the Dashboard first, then the grades for that section will gather here.</p>
+      <a class="btn btn-primary" routerLink="/teacher/dashboard">Go to Dashboard</a>
+    </div>
+  </div>
+} @else if (view()) {
+  <section class="card readiness" aria-label="Submission readiness">
+    <div class="readiness-info">
+      <span class="big">{{ view()!.readiness.submitted }} of {{ view()!.readiness.total }}</span>
+      <span class="muted mono">subjects submitted · Grade {{ view()!.grade }} {{ view()!.section }} · {{ periodLabel() }}</span>
+      <span class="meter" aria-hidden="true"><i [style.width.%]="view()!.readiness.pct"></i></span>
+    </div>
+    <div class="readiness-actions">
+      <button type="button" class="btn" (click)="refresh()" [disabled]="refreshing()">
+        <app-icon name="refresh" [size]="16" /> {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
+      </button>
+      <button type="button" class="btn" (click)="exportCsv()" [disabled]="view()!.learners.length === 0">
+        <app-icon name="download" [size]="16" /> Export / Rankings CSV
+      </button>
+    </div>
+  </section>
+
+  <!-- KPI cards -->
+  <section class="ledger" aria-label="Consolidation summary">
+    <div class="cell"><span class="k">Class GWA</span><span class="v">{{ view()!.kpis.class_gwa === null ? '—' : view()!.kpis.class_gwa }}</span><span class="s">{{ view()!.readiness.submitted < view()!.readiness.total ? 'waiting on subjects' : 'all subjects in' }}</span></div>
+    <div class="cell"><span class="k">Subject average</span><span class="v">{{ view()!.kpis.subject_average === null ? '—' : view()!.kpis.subject_average }}</span><span class="s">mean of filed grades</span></div>
+    <div class="cell"><span class="k">{{ view()!.grading.code === 'do8_2015' ? 'With honors' : 'Academic Excellence' }}</span><span class="v">{{ view()!.kpis.honor_count }}</span><span class="s">{{ view()!.kpis.honor_pct }}% of the section</span></div>
+    <div class="cell"><span class="k">At risk</span><span class="v">{{ view()!.kpis.at_risk_count }}</span><span class="s">below 75 in a subject or GWA</span></div>
+  </section>
+
+  <!-- Subject cards -->
+  @if (view()!.subjects.length === 0) {
+    <div class="card">
+      <div class="empty">
+        <p><b>No subjects for this section yet.</b></p>
+        <p>When classes are created for Grade {{ view()!.grade }} {{ view()!.section }}, their subjects will appear here.</p>
+      </div>
+    </div>
+  } @else {
+    <section class="subjects" aria-label="Subjects">
+      @for (subject of view()!.subjects; track subject.class_id) {
+        <article class="card subject-card">
+          <div class="subject-head">
+            <span class="card-title">{{ subject.subject_name }}</span>
+            @if (subject.submitted) {
+              <span class="pill accent">Submitted</span>
+            } @else {
+              <span class="pill amber">Waiting</span>
+            }
+          </div>
+          <p class="muted">{{ subject.teacher_name }}</p>
+          <div class="subject-foot">
+            <span class="muted">Average {{ subject.average === null ? '—' : subject.average }}</span>
+            @if (!subject.submitted && !subject.own_class) {
+              <button type="button" class="btn btn-small" (click)="remind(subject.class_id)" [disabled]="reminding() === subject.class_id">
+                {{ reminding() === subject.class_id ? 'Sending…' : subject.reminded ? 'Remind again' : 'Remind teacher' }}
+              </button>
+            } @else if (!subject.submitted && subject.own_class) {
+              <!-- The adviser teaches this subject themself: there is no one
+                   to remind — the grades are filed from the Grades page. -->
+              <span class="muted">Yours to file</span>
+            } @else if (subject.reminded) {
+              <span class="pill plain">Reminder sent</span>
+            }
+          </div>
+        </article>
+      }
+    </section>
+  }
+
+  <!-- Learner table -->
+  @if (view()!.learners.length > 0) {
+    <section class="toolbar" aria-label="Learner filters">
+      <input type="search" class="input search" placeholder="Search a learner…" [ngModel]="search()" (ngModelChange)="search.set($event)" aria-label="Search learners" />
+      <div class="chips" role="group" aria-label="Learner tabs">
+        <button type="button" class="chip" [class.active]="tab() === 'all'" (click)="tab.set('all')">All · {{ view()!.learners.length }}</button>
+        <button type="button" class="chip" [class.active]="tab() === 'honors'" (click)="tab.set('honors')">Honors · {{ honorCount() }}</button>
+        <button type="button" class="chip" [class.active]="tab() === 'at_risk'" (click)="tab.set('at_risk')">At risk · {{ atRiskCount() }}</button>
+      </div>
+    </section>
+
+    <div class="card table-wrap">
+      <table class="table consolidation-table">
+        <thead>
+          <tr>
+            <th>Learner</th>
+            @for (subject of view()!.subjects; track subject.class_id) {
+              <th class="center">{{ subject.subject_name }}</th>
+            }
+            <th class="center">GWA</th>
+            <th>Standing</th>
+            <th class="center">Rank</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (learner of filteredLearners(); track learner.learner_id) {
+            <tr [class.at-risk]="learner.at_risk">
+              <td>
+                <span class="cell-main">{{ learnerName(learner) }}</span>
+                <span class="cell-sub">{{ learner.learner_id }} · {{ learner.sex }}</span>
+              </td>
+              @for (subject of view()!.subjects; track subject.class_id) {
+                <td class="center num" [class.below]="learner.grades[subject.subject_name] !== null && (learner.grades[subject.subject_name] ?? 100) < 75">
+                  {{ fmt(learner.grades[subject.subject_name]) }}
+                </td>
+              }
+              <td class="center num gwa-cell">
+                {{ gwa(learner.gwa) }}
+                @if (learner.gwa === null && learner.gwa_reason) {
+                  <span class="gwa-reason">{{ learner.gwa_reason }}</span>
+                }
+              </td>
+              <td>
+                @if (learner.honors) {
+                  <span class="pill accent">{{ learner.honors }}</span>
+                } @else if (learner.at_risk) {
+                  <span class="pill red">At risk</span>
+                } @else {
+                  <span class="muted">{{ learner.standing }}</span>
+                }
+              </td>
+              <td class="center num">{{ learner.rank ?? '—' }}</td>
+            </tr>
+          }
+          @if (filteredLearners().length === 0) {
+            <tr><td [attr.colspan]="view()!.subjects.length + 4" class="empty-row">No learners in this tab.</td></tr>
+          }
+        </tbody>
+      </table>
+      <p class="legend">— means the grade is not filed yet. GWA is the mean of grades across submitted subjects only.</p>
+    </div>
+  }
+
+  <!-- Final grades across the year's periods -->
+  @if (finals() && finals()!.has_data) {
+    <section class="card readiness" aria-label="Final grades">
+      <div class="readiness-info">
+        <span class="big">Final grades</span>
+        <span class="muted mono">{{ finals()!.readiness.complete }} of {{ finals()!.readiness.total }} subjects filed for every {{ finals()!.period_label.toLowerCase() }} · {{ finals()!.grading.label }} · AY {{ finals()!.academic_year }}</span>
+      </div>
+      <div class="readiness-actions">
+        <button type="button" class="btn" (click)="exportFinalsCsv()" [disabled]="finals()!.learners.length === 0">
+          <app-icon name="download" [size]="16" /> Export final grades CSV
+        </button>
+      </div>
+    </section>
+
+    <section class="ledger" aria-label="Final grades summary">
+      <div class="cell"><span class="k">Final class GWA</span><span class="v">{{ finals()!.kpis.class_gwa === null ? '—' : finals()!.kpis.class_gwa }}</span><span class="s">{{ finals()!.readiness.complete < finals()!.readiness.total ? 'waiting on subjects' : 'all subjects in' }}</span></div>
+      <div class="cell"><span class="k">Academic Excellence</span><span class="v">{{ finalHonorCount() }}</span><span class="s">GA 90 or higher, no grade below 80</span></div>
+      <div class="cell"><span class="k">At risk</span><span class="v">{{ finalAtRiskCount() }}</span><span class="s">below 75 in a subject or final GWA</span></div>
+    </section>
+
+    @if (finals()!.learners.length > 0) {
+      <div class="card table-wrap">
+        <table class="table consolidation-table">
+          <thead>
+            <tr>
+              <th>Learner</th>
+              @for (subject of finals()!.subjects; track subject.subject_name) {
+                <th class="center">{{ subject.subject_name }}</th>
+              }
+              <th class="center">Final GWA</th>
+              <th>Standing</th>
+              <th class="center">Rank</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (learner of filteredFinalLearners(); track learner.learner_id) {
+              <tr [class.at-risk]="learner.at_risk">
+                <td>
+                  <span class="cell-main">{{ learnerName(learner) }}</span>
+                  <span class="cell-sub">{{ learner.learner_id }} · {{ learner.sex }}</span>
+                </td>
+                @for (subject of finals()!.subjects; track subject.subject_name) {
+                  <td class="center num" [class.below]="learner.grades[subject.subject_name] !== null && (learner.grades[subject.subject_name] ?? 100) < 75">
+                    {{ fmt(learner.grades[subject.subject_name]) }}
+                  </td>
+                }
+                <td class="center num gwa-cell">
+                  {{ gwa(learner.gwa) }}
+                  @if (learner.gwa === null && learner.gwa_reason) {
+                    <span class="gwa-reason">{{ learner.gwa_reason }}</span>
+                  }
+                </td>
+                <td>
+                  @if (learner.honors) {
+                    <span class="pill accent">{{ learner.honors }}</span>
+                  } @else if (learner.at_risk) {
+                    <span class="pill red">At risk</span>
+                  } @else {
+                    <span class="muted">{{ learner.standing }}</span>
+                  }
+                </td>
+                <td class="center num">{{ learner.rank ?? '—' }}</td>
+              </tr>
+            }
+            @if (filteredFinalLearners().length === 0) {
+              <tr><td [attr.colspan]="finals()!.subjects.length + 4" class="empty-row">No learners in this tab.</td></tr>
+            }
+          </tbody>
+        </table>
+        <p class="legend">A final grade is the mean of the subject's {{ finals()!.period_label.toLowerCase() }} grades, and only appears once every {{ finals()!.period_label.toLowerCase() }} is filed for that subject.</p>
+      </div>
+    }
+  }
+}

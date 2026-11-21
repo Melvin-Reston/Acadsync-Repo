@@ -1,0 +1,131 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Directory</div>
+    <h1 class="page-title">Teachers</h1>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn btn-primary" (click)="showForm.set(true)">
+      <app-icon name="plus" [size]="16" /> Add teacher
+    </button>
+  </div>
+</div>
+
+@if (error()) {
+  <div class="alert" role="alert">
+    <app-icon name="alert" [size]="16" />
+    <span>{{ error() }}</span>
+  </div>
+}
+
+<section class="card">
+  <div class="toolbar">
+    <div class="search">
+      <app-icon name="search" [size]="16" />
+      <input
+        type="search"
+        class="input"
+        placeholder="Search name, email, username or mobile"
+        aria-label="Search teachers"
+        [(ngModel)]="filters.search"
+        (ngModelChange)="onSearch()"
+      />
+    </div>
+    <app-dropdown
+      [options]="schoolOptions()"
+      [ngModel]="filters.school_id"
+      (ngModelChange)="filters.school_id = $event === '' ? null : $event; applyFilters()"
+      placeholder="All schools"
+      countSingular="school"
+      countPlural="schools"
+    />
+    <app-dropdown
+      [options]="statusOptions"
+      [(ngModel)]="filters.status"
+      (ngModelChange)="applyFilters()"
+      placeholder="All statuses"
+      countSingular="status"
+      countPlural="statuses"
+    />
+  </div>
+
+  @if (teachers().length > 0) {
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Teacher</th>
+          <th>Email</th>
+          <th>Mobile</th>
+          <th>School</th>
+          <th>Plan</th>
+          <th>Status</th>
+          <th>Added</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (teacher of teachers(); track teacher.id) {
+          <tr>
+            <td data-label="Teacher">
+              <span>
+                <span class="cell-main">{{ teacher.last_name }}, {{ teacher.first_name }}</span>
+                <span class="cell-sub">{{ teacher.username }}</span>
+              </span>
+            </td>
+            <td data-label="Email">{{ teacher.email }}</td>
+            <td data-label="Mobile" class="mono nowrap">{{ teacher.mobile }}</td>
+            <td data-label="School">{{ teacher.school_name }}</td>
+            <td data-label="Plan">
+              @if (teacher.subscription_id && teacher.subscription_status) {
+                <span>
+                  <a class="cell-main" [routerLink]="['/subscriptions', teacher.subscription_id]">
+                    {{ teacher.plan_name }}
+                  </a>
+                  <span class="cell-sub">{{ statusLabel(teacher.subscription_status) }}</span>
+                </span>
+              } @else {
+                <span class="muted">None</span>
+              }
+            </td>
+            <td data-label="Status">
+              @if (teacher.is_restricted) {
+                <span class="pill red">Restricted</span>
+              } @else {
+                <span class="pill">Active</span>
+              }
+            </td>
+            <td data-label="Added" class="nowrap">{{ teacher.created_at | date: 'MMM d, y' }}</td>
+            <td class="right">
+              <a class="btn btn-small" [routerLink]="['/teachers', teacher.id]">View</a>
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  } @else if (!loading()) {
+    <div class="empty">
+      @if (hasFilters) {
+        No teachers match your search.
+      } @else {
+        No teachers yet.
+        <div>
+          <button type="button" class="btn btn-primary" (click)="showForm.set(true)">
+            <app-icon name="plus" [size]="16" /> Add teacher
+          </button>
+        </div>
+      }
+    </div>
+  } @else {
+    <div class="empty">Loading…</div>
+  }
+
+  <app-pagination
+    [page]="filters.page"
+    [pageSize]="filters.page_size"
+    [total]="total()"
+    (pageChange)="goToPage($event)"
+  />
+</section>
+
+@if (showForm()) {
+  <app-teacher-form (saved)="onSaved($event)" (closed)="showForm.set(false)" />
+}
