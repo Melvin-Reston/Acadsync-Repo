@@ -32,11 +32,12 @@ export class TeacherProfileComponent {
   protected mobile = '';
   protected presentAddress = '';
 
-  // School details for the DepEd print forms (Region, Division, School ID).
-  // The teacher's own entries; blank until filled in.
+  // School details for the DepEd print forms (Region, Division, School ID,
+  // School Head). The teacher's own entries; blank until filled in.
   protected region = '';
   protected division = '';
   protected depedSchoolId = '';
+  protected schoolHeadName = '';
 
   // Password change
   protected currentPassword = '';
@@ -58,6 +59,7 @@ export class TeacherProfileComponent {
         this.region = response.teacher.region ?? '';
         this.division = response.teacher.division ?? '';
         this.depedSchoolId = response.teacher.deped_school_id ?? '';
+        this.schoolHeadName = response.teacher.school_head_name ?? '';
       },
       error: (error) => {
         this.loading.set(false);
@@ -81,6 +83,7 @@ export class TeacherProfileComponent {
         region: this.region,
         division: this.division,
         deped_school_id: this.depedSchoolId,
+        school_head_name: this.schoolHeadName,
       })
       .subscribe({
         next: (response) => {

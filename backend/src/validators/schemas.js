@@ -313,8 +313,9 @@ const teacherRegisterSchema = z.object({
 
 // Only these fields may be changed by the teacher. The teaching assignment is read-only here;
 // it is changed on its own form (teacherAdviserSchema), and the API refuses it here.
-// The school details (region, division, DepEd school ID) are the teacher's own entries for
-// the DepEd print forms; they print blank until the teacher fills them in.
+// The school details (region, division, DepEd school ID, school head name)
+// are the teacher's own entries for the DepEd print forms; they print blank
+// until the teacher fills them in.
 const teacherProfileSchema = z.object({
   // A profile update is partial: only the fields sent change. The profile
   // page sends the whole form; an API caller may send just the school
@@ -327,6 +328,7 @@ const teacherProfileSchema = z.object({
   region: optionalText('Region', 60),
   division: optionalText('Division', 60),
   deped_school_id: optionalText('School ID', 20),
+  school_head_name: optionalText('School head', 100),
 });
 
 const teacherAdviserSchema = z

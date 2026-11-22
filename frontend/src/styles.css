@@ -1743,7 +1743,9 @@ form > .form-grid + .alert {
 
   @page deped-form {
     size: landscape;
-    margin: 10mm;
+    /* No margin: the browser then adds no date, title, URL or page
+       number, and each DepEd print section carries its own padding. */
+    margin: 0;
   }
 
   body {

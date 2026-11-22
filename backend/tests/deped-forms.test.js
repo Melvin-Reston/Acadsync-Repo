@@ -1,7 +1,9 @@
 // Teacher Batch 8 tests: the DepEd print forms — migration 010 and the
 // teacher-entered school details on the profile, the filed-only final
 // grades data (period_grades) behind the Final Grades tab, and the SF2
-// daily attendance report.
+// daily attendance report. Batch 8 fix 2 adds: migration 011 (school head
+// name), Male-then-Female ordering, the Combined TOTAL Per Day row, and the
+// footer summary computations.
 // Run with: npm test
 const { test, describe, before, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -221,6 +223,51 @@ describe('School details for DepEd forms', () => {
   });
 });
 
+// ---------- Migration 011: school head name for the SF2 footer ----------
+
+describe('School head name for the SF2 footer', () => {
+  test('the profile returns the school head name, null when unset', async () => {
+    const { token } = await signup();
+    const me = await api().get('/api/teacher/me').set(bearer(token));
+    assert.equal(me.status, 200, JSON.stringify(me.body));
+    assert.equal(me.body.teacher.school_head_name, null);
+  });
+
+  test('the teacher can save the school head name, clear it, and it prints on the SF2 report with the adviser name', async () => {
+    const { token } = await signup();
+    const updated = await api()
+      .patch('/api/teacher/me')
+      .set(bearer(token))
+      .send({ school_head_name: 'Jonathan D. Bacallo' });
+    assert.equal(updated.status, 200, JSON.stringify(updated.body));
+    assert.equal(updated.body.teacher.school_head_name, 'Jonathan D. Bacallo');
+
+    const me = await api().get('/api/teacher/me').set(bearer(token));
+    assert.equal(me.body.teacher.school_head_name, 'Jonathan D. Bacallo');
+
+    const klass = await makeClass(token, { section_name: 'Luke' });
+    const alex = await makeLearner(token, { first_name: 'Alex', last_name: 'Rivera', sex: 'Male' });
+    await enrol(token, klass.id, alex.id);
+    const report = await getSf2(token, klass.id, '2026-07');
+    assert.equal(report.status, 200, JSON.stringify(report.body));
+    assert.equal(report.body.school.school_head_name, 'Jonathan D. Bacallo');
+    assert.equal(report.body.adviser_name, `${me.body.teacher.first_name} ${me.body.teacher.last_name}`);
+
+    const cleared = await api().patch('/api/teacher/me').set(bearer(token)).send({ school_head_name: '' });
+    assert.equal(cleared.status, 200, JSON.stringify(cleared.body));
+    assert.equal(cleared.body.teacher.school_head_name, null);
+  });
+
+  test('an overlong school head name is refused', async () => {
+    const { token } = await signup();
+    const refused = await api()
+      .patch('/api/teacher/me')
+      .set(bearer(token))
+      .send({ school_head_name: 'N'.repeat(101) });
+    assert.equal(refused.status, 400, JSON.stringify(refused.body));
+  });
+});
+
 // ---------- Final grades data (filed-only) ----------
 
 describe('Final grades data', () => {
@@ -395,22 +442,106 @@ describe('SF2 daily attendance report', () => {
     assert.equal(Object.keys(report.learners[0].marks).length, 0);
   });
 
-  test('learners are alphabetical by last name with no sex grouping', async () => {
+  test('learners are Male first, then Female, each group alphabetical by last name', async () => {
     const { token } = await signup();
     const klass = await makeClass(token, { section_name: 'Luke' });
     const zed = await makeLearner(token, { first_name: 'Zed', last_name: 'Zulu', sex: 'Male' });
     const amy = await makeLearner(token, { first_name: 'Amy', last_name: 'Abad', sex: 'Female' });
     const bob = await makeLearner(token, { first_name: 'Bob', last_name: 'Mora', sex: 'Male' });
+    const eve = await makeLearner(token, { first_name: 'Eve', last_name: 'Aquino', sex: 'Female' });
     await enrol(token, klass.id, zed.id);
     await enrol(token, klass.id, amy.id);
     await enrol(token, klass.id, bob.id);
+    await enrol(token, klass.id, eve.id);
 
     const response = await getSf2(token, klass.id, '2026-07');
     assert.equal(response.status, 200, JSON.stringify(response.body));
     assert.deepEqual(
-      response.body.learners.map((learner) => learner.last_name),
-      ['Abad', 'Mora', 'Zulu'],
+      response.body.learners.map((learner) => `${learner.last_name} (${learner.sex})`),
+      ['Mora (Male)', 'Zulu (Male)', 'Abad (Female)', 'Aquino (Female)'],
     );
+  });
+
+  test('the Combined TOTAL Per Day row counts present and late per day, and its totals sum the month', async () => {
+    const { token } = await signup();
+    const klass = await makeClass(token, { section_name: 'Luke' });
+    const alex = await makeLearner(token, { first_name: 'Alex', last_name: 'Rivera', sex: 'Male' });
+    const isabella = await makeLearner(token, { first_name: 'Isabella', last_name: 'Flores', sex: 'Female' });
+    await enrol(token, klass.id, alex.id);
+    await enrol(token, klass.id, isabella.id);
+
+    await saveRoll(token, klass.id, '2026-07-06', [
+      { learner_id: alex.id, status: 'present', method: 'manual', time_in: '07:30' },
+      { learner_id: isabella.id, status: 'late', method: 'manual', time_in: '07:45' },
+    ]);
+    await saveRoll(token, klass.id, '2026-07-07', [
+      { learner_id: alex.id, status: 'absent', method: 'manual' },
+      { learner_id: isabella.id, status: 'excused', method: 'manual' },
+    ]);
+    // 2026-07-08: no roll saved at all.
+
+    const response = await getSf2(token, klass.id, '2026-07');
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    const { combined } = response.body;
+    assert.equal(combined.present_by_day['2026-07-06'], 2);
+    assert.equal(combined.present_by_day['2026-07-07'], 0);
+    assert.equal(combined.present_by_day['2026-07-08'], 0);
+    assert.deepEqual(combined.totals, { present: 2, absent: 1 });
+  });
+
+  test('the footer summary follows the form formulas: registered, average daily attendance, percentage, five consecutive days', async () => {
+    const { token } = await signup();
+    const klass = await makeClass(token, { section_name: 'Luke' });
+    const alex = await makeLearner(token, { first_name: 'Alex', last_name: 'Rivera', sex: 'Male' });
+    const bob = await makeLearner(token, { first_name: 'Bob', last_name: 'Mora', sex: 'Male' });
+    const isabella = await makeLearner(token, { first_name: 'Isabella', last_name: 'Flores', sex: 'Female' });
+    await enrol(token, klass.id, alex.id);
+    await enrol(token, klass.id, bob.id);
+    await enrol(token, klass.id, isabella.id);
+
+    const present = (learner_id) => ({ learner_id, status: 'present', method: 'manual', time_in: '07:30' });
+    const absent = (learner_id) => ({ learner_id, status: 'absent', method: 'manual' });
+    const late = (learner_id) => ({ learner_id, status: 'late', method: 'manual', time_in: '07:45' });
+    const excused = (learner_id) => ({ learner_id, status: 'excused', method: 'manual' });
+    // July 2026 has 23 Monday–Friday days. Alex: 5 present, then 5 absent
+    // in a row (13–17 July), then 1 present. Bob: 3 present, 3 absent over
+    // a weekend (9, 10, 13 July — consecutive school days, but only 3), 1
+    // excused. Isabella: 6 days, one of them late.
+    await saveRoll(token, klass.id, '2026-07-06', [present(alex.id), present(bob.id), late(isabella.id)]);
+    await saveRoll(token, klass.id, '2026-07-07', [present(alex.id), present(bob.id), present(isabella.id)]);
+    await saveRoll(token, klass.id, '2026-07-08', [present(alex.id), present(bob.id), present(isabella.id)]);
+    await saveRoll(token, klass.id, '2026-07-09', [present(alex.id), absent(bob.id), present(isabella.id)]);
+    await saveRoll(token, klass.id, '2026-07-10', [present(alex.id), absent(bob.id), present(isabella.id)]);
+    await saveRoll(token, klass.id, '2026-07-13', [absent(alex.id), absent(bob.id), present(isabella.id)]);
+    await saveRoll(token, klass.id, '2026-07-14', [absent(alex.id), excused(bob.id)]);
+    await saveRoll(token, klass.id, '2026-07-15', [absent(alex.id)]);
+    await saveRoll(token, klass.id, '2026-07-16', [absent(alex.id)]);
+    await saveRoll(token, klass.id, '2026-07-17', [absent(alex.id)]);
+    await saveRoll(token, klass.id, '2026-07-20', [present(alex.id)]);
+
+    const response = await getSf2(token, klass.id, '2026-07');
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    const { summary } = response.body;
+    assert.equal(summary.days_of_classes, 23);
+    // Registered: 2 male, 1 female. Present-days: male 9, female 6.
+    assert.deepEqual(summary.male, {
+      registered: 2,
+      average_daily_attendance: 0.4,
+      percentage_of_attendance: 19.6,
+      absent_five_days: 1,
+    });
+    assert.deepEqual(summary.female, {
+      registered: 1,
+      average_daily_attendance: 0.3,
+      percentage_of_attendance: 26.1,
+      absent_five_days: 0,
+    });
+    assert.deepEqual(summary.total, {
+      registered: 3,
+      average_daily_attendance: 0.7,
+      percentage_of_attendance: 21.7,
+      absent_five_days: 1,
+    });
   });
 
   test('SF2 refuses a bad month, another teacher’s class, and anonymous requests', async () => {

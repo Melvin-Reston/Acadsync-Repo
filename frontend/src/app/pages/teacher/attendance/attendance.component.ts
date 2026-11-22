@@ -34,6 +34,7 @@ import { IconComponent } from '../../../shared/icon.component';
 import { DropdownComponent, DropdownOption } from '../../../shared/dropdown.component';
 import { MenuComponent, MenuItem } from '../../../shared/menu.component';
 import { ScanModalComponent } from './scan-modal.component';
+import { Sf2FooterComponent } from './sf2-footer.component';
 
 const STATUSES: AttendanceStatus[] = ['present', 'late', 'absent', 'excused'];
 const STATUS_LABEL: Record<AttendanceStatus, string> = {
@@ -69,7 +70,7 @@ const SF2_MONTHS: { value: number; label: string }[] = [
 
 @Component({
   selector: 'app-teacher-attendance',
-  imports: [FormsModule, RouterLink, IconComponent, DropdownComponent, MenuComponent, ScanModalComponent],
+  imports: [FormsModule, RouterLink, IconComponent, DropdownComponent, MenuComponent, ScanModalComponent, Sf2FooterComponent],
   templateUrl: './attendance.component.html',
   styleUrl: './attendance.component.css',
 })

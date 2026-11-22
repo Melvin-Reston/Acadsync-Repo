@@ -443,6 +443,66 @@ No new `.env` settings are required.
 2. **Class Record print** — on the **Grades** page, **Print class record** prints the current sheet in the DepEd Class Record format: the seal and DepEd logo, Region / Division / School ID / School Name / School Year, Grade Level / Section / Teacher / Subject, the Highest Possible Score row, then Written Works, Performance Tasks and Examinations (with the ST1 / ST2 / Term Exam sub-columns and their weighted scores under DO 015, or the single Quarterly Assessment block under DO 8), then Initial Grade, Term/Quarter Grade and Descriptor. Learners are grouped Male then Female, numbered separately. The printout shows the sheet as it is right now, including blanks — it is the working record. It prints landscape, in black and white.
 3. **Final Grades tab** — next to the term tabs on the **Grades** page. It shows every filed term side by side with the Final Grade, Descriptor and Remark (Passed at 75 or above, Failed below it, blank when there is no final grade yet). The data follows the same rule as the Final column: filed submissions only, and the final grade appears only once every term is filed. **Print final grades** prints it in the DepEd Class Record – Final Grades format, with the same header and Male/Female grouping.
 4. **SF2 tab** — on the **Attendance** page, next to Daily roll. Pick a month (June to April of the school year) to preview the **School Form 2 Daily Attendance Report of Learners**: Monday–Friday days only, names in alphabetical order, X for Absent, L for Late, E for Excused, blank for Present or no record, with Absent and Present totals that cover recorded school days only. **Print SF2** prints the form, landscape, in black and white, with no logos. The Remarks column stays blank for handwriting.
+5. **SF2 header (Batch 8 fix 1)** — the SF2 table header now follows the DepEd form exactly, in the preview and the printout: No., NAME (Last Name, First Name, Middle Name), the "(1st row for date)" row, the dates row, the day-letter row, Total for the Month split into Absent and Present, and the full Remarks wording. The names, marks and totals are unchanged.
+6. **SF2 footer, ordering and data-only printing (Batch 8 fix 2)** — learners are listed Male first, then Female, each group alphabetical, numbered continuously, with a **Combined TOTAL Per Day** row as the last row of the table. Below the table, in the preview and the printout, the form's last part: the Guidelines with the three formulas, the codes for checking attendance, the reasons/causes list, the month summary table (registered learners, average daily attendance and percentage of attendance computed from the saved rolls; enrolment as of the 1st Friday, late enrolment, dropped out and transferred stay blank for handwriting), and the certification with the adviser name and the school head name. The **School Head** field sits with the other school details on the Profile page and prints on the "Attested by" line when filled in. The header fields (School ID, Name of School, Section, Month, Grade Level) are aligned on one grid. Every printout — SF2, Class Record, Final Grades and Report Card — is data only: no browser-added date, page title, link or page number.
+
+## Upgrading from Teacher Batch 8 fix 1
+
+Your `.env` file and everything in your database are kept. You do not run the seed again.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip the Teacher Batch 8 fix 2 zip **over your existing `acadsync` folder** and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run migrate
+npm run dev
+```
+
+`npm run migrate` should print `Applied 011_teacher_school_head.sql`. That migration adds one optional field (the school head name) to the teacher record; everything else is untouched.
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. Nothing is lost. Fill in the **School Head** field on the Profile page if you want the name on the SF2 "Attested by" line; the SF2 footer, the Male-then-Female order and the Combined TOTAL Per Day row are described under [Teacher Batch 8: DepEd print forms](#teacher-batch-8-deped-print-forms).
+
+No new `.env` settings are required.
+
+## Upgrading from Teacher Batch 8
+
+Your `.env` file and everything in your database are kept. You do not run the seed again.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip the Teacher Batch 8 fix 1 zip **over your existing `acadsync` folder** and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run migrate
+npm run dev
+```
+
+`npm run migrate` should print `Database is already up to date`. Fix 1 needs no database change: only the SF2 table header changes, so nothing is added and nothing is touched.
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. Nothing is lost; the SF2 header now follows the DepEd form (see [Teacher Batch 8: DepEd print forms](#teacher-batch-8-deped-print-forms)).
+
+No new `.env` settings are required.
 
 ## Upgrading from Teacher Batch 6
 

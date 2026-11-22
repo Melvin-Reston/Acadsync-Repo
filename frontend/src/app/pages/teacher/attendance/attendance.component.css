@@ -371,13 +371,28 @@
   color: var(--muted);
 }
 
+.sf2-table .sf2-no {
+  width: 36px;
+}
+
 .sf2-table .sf2-name {
   text-align: left;
   min-width: 200px;
 }
 
+.sf2-table .name-sub {
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+}
+
 .sf2-table .sf2-remarks {
   min-width: 120px;
+}
+
+.sf2-table .sf2-combined td {
+  font-weight: 700;
+  border-top: 2px solid var(--line);
 }
 
 .sf2-note {
@@ -400,6 +415,9 @@
     background: #fff;
     font-size: 10px;
     line-height: 1.35;
+    /* The deped-form page has no margin (so the browser adds no
+       date/title/URL/page number); the form carries its own inset. */
+    padding: 10mm;
   }
 
   .dp-title-center {
@@ -418,22 +436,31 @@
   }
 
   .dp-fields {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 2px 20px;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    column-gap: 16px;
+    row-gap: 2px;
     margin-bottom: 8px;
   }
 
   .dp-field {
     display: flex;
-    align-items: baseline;
+    align-items: flex-end;
     gap: 6px;
-    flex: 1 1 26%;
-    min-width: 160px;
+    grid-column: span 4;
+    min-width: 0;
   }
 
-  .dp-field.wide {
-    flex: 2 1 52%;
+  .dp-field.col-3 {
+    grid-column: span 3;
+  }
+
+  .dp-field.col-5 {
+    grid-column: span 5;
+  }
+
+  .dp-field.col-6 {
+    grid-column: span 6;
   }
 
   .dp-field .fl {
@@ -446,6 +473,8 @@
     border-bottom: 1px solid #000;
     min-height: 14px;
     padding: 0 4px;
+    overflow: hidden;
+    white-space: nowrap;
   }
 
   .dp-table {
@@ -471,17 +500,25 @@
     background: #fff;
   }
 
+  .dp-table .dp-no {
+    width: 26px;
+  }
+
   .dp-table .dp-name {
     text-align: left;
     width: 170px;
   }
 
   .dp-table .dp-total {
-    width: 46px;
+    width: 92px;
   }
 
   .dp-table .dp-remarks {
     width: 80px;
+  }
+
+  .dp-table .dp-combined td {
+    font-weight: 700;
   }
 
   .dp-legend,

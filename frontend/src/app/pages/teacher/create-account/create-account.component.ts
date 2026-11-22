@@ -196,6 +196,7 @@ export class TeacherCreateAccountComponent {
             region: null,
             division: null,
             deped_school_id: null,
+            school_head_name: null,
           });
           this.goTo('created');
         },

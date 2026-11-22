@@ -20,7 +20,7 @@ async function findSelf(teacherId, client = db) {
   const result = await client.query(
     `SELECT t.id, t.first_name, t.last_name, t.email, t.mobile, t.present_address, t.username,
             t.school_id, s.name AS school_name, s.city_region AS school_city_region,
-            t.region, t.division, t.deped_school_id,
+            t.region, t.division, t.deped_school_id, t.school_head_name,
             t.must_change_password, t.is_restricted, t.restriction_reason,
             t.is_adviser, t.advisory_grade, t.advisory_section, t.created_at,
             sub.id AS subscription_id, sub.plan_id, sub.plan_name, sub.price AS plan_price,
@@ -112,6 +112,7 @@ async function updateMe(req, res) {
   if (sent.includes('region')) set('region', body.region, true);
   if (sent.includes('division')) set('division', body.division, true);
   if (sent.includes('deped_school_id')) set('deped_school_id', body.deped_school_id, true);
+  if (sent.includes('school_head_name')) set('school_head_name', body.school_head_name, true);
   if (sets.length > 0) {
     values.push(req.teacher.id);
     await db.query(

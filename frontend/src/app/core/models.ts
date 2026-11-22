@@ -415,6 +415,7 @@ export interface TeacherSelf {
   region: string | null;
   division: string | null;
   deped_school_id: string | null;
+  school_head_name: string | null;
   must_change_password: boolean;
   is_restricted: boolean;
   is_adviser: boolean;
@@ -677,8 +678,26 @@ export interface Sf2Learner {
   first_name: string;
   last_name: string;
   learner_id: string;
+  sex: 'Male' | 'Female';
   marks: Record<string, AttendanceStatus>; // date -> status (only recorded days)
   totals: { present: number; absent: number };
+}
+
+// One group of the SF2 footer summary table: the form's own formulas, to
+// one decimal. percentage_of_attendance is null when there is nothing to
+// divide by, and the form leaves it blank.
+export interface Sf2SummaryGroup {
+  registered: number;
+  average_daily_attendance: number;
+  percentage_of_attendance: number | null;
+  absent_five_days: number;
+}
+
+export interface Sf2Summary {
+  days_of_classes: number;
+  male: Sf2SummaryGroup;
+  female: Sf2SummaryGroup;
+  total: Sf2SummaryGroup;
 }
 
 export interface Sf2Report {
@@ -686,14 +705,22 @@ export interface Sf2Report {
   month: string; // YYYY-MM
   month_label: string; // JULY
   school_year: string; // 2026 - 2027
+  adviser_name: string | null;
   school: {
     name: string | null;
     region: string | null;
     division: string | null;
     deped_school_id: string | null;
+    school_head_name: string | null;
   };
   days: Sf2Day[];
   learners: Sf2Learner[];
+  // The last table row: learners present per day, and the month's totals.
+  combined: {
+    present_by_day: Record<string, number>;
+    totals: { present: number; absent: number };
+  };
+  summary: Sf2Summary;
 }
 
 // ---------- Grades and Consolidation (Batch 4) ----------

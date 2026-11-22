@@ -59,6 +59,7 @@ function publicTeacher(teacher) {
     region: teacher.region || null,
     division: teacher.division || null,
     deped_school_id: teacher.deped_school_id || null,
+    school_head_name: teacher.school_head_name || null,
     must_change_password: teacher.must_change_password,
     is_restricted: teacher.is_restricted,
     is_adviser: teacher.is_adviser,

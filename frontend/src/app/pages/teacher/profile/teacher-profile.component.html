@@ -93,6 +93,14 @@
             }
           </div>
 
+          <div class="field">
+            <label for="school-head">School Head</label>
+            <input id="school-head" name="schoolHeadName" type="text" class="input" [class.invalid]="errors()['school_head_name']" [(ngModel)]="schoolHeadName" />
+            @if (errors()['school_head_name']) {
+              <span class="field-error">{{ errors()['school_head_name'] }}</span>
+            }
+          </div>
+
           <div class="form-actions">
             <button type="submit" class="btn btn-primary" [disabled]="saving()">
               {{ saving() ? 'Saving…' : 'Save profile' }}

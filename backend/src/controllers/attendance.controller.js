@@ -120,11 +120,16 @@ const SF2_MONTHS = [
 // GET /api/teacher/attendance/sf2?class_id=&month=YYYY-MM
 // The month's daily attendance for one class, in School Form 2 shape: one
 // column per Monday–Friday day, X = Absent, L = Late, E = Excused, blank =
-// Present or no record. Totals follow the Report Card day rule — a day
-// counts Present on a Present/Late record, Excused on an Excused record,
-// Absent on an Absent record — and only days with a saved record count, so
-// a day with no saved roll stays blank and out of the totals. Excused days
-// are separate: they count in neither the PRESENT nor the ABSENT total.
+// Present or no record. Learners are Male first, then Female, each group
+// alphabetical by last name, numbered continuously. Totals follow the
+// Report Card day rule — a day counts Present on a Present/Late record,
+// Excused on an Excused record, Absent on an Absent record — and only days
+// with a saved record count, so a day with no saved roll stays blank and
+// out of the totals. Excused days are separate: they count in neither the
+// PRESENT nor the ABSENT total. The footer summary follows the form's own
+// formulas; figures the system cannot know (enrolment as of the 1st Friday,
+// late enrolment, dropped out, transferred) are left to handwriting and are
+// not invented here.
 async function getSf2(req, res) {
   const { class_id, month } = req.valid.query;
   const klass = await findClass(class_id, req.teacher.id);
@@ -132,7 +137,8 @@ async function getSf2(req, res) {
 
   // The school details the teacher entered for the DepEd forms.
   const teacher = await db.query(
-    `SELECT t.region, t.division, t.deped_school_id, s.name AS school_name
+    `SELECT t.first_name, t.last_name, t.region, t.division, t.deped_school_id,
+            t.school_head_name, s.name AS school_name
        FROM teachers t JOIN schools s ON s.id = t.school_id WHERE t.id = $1`,
     [req.teacher.id]
   );
@@ -152,10 +158,13 @@ async function getSf2(req, res) {
     }
   }
 
+  // Male first, then Female, each group alphabetical by last name — the
+  // DepEd form's order, with one continuous numbering across both groups.
   const learners = await db.query(
-    `SELECT l.id, l.first_name, l.last_name, l.learner_id
+    `SELECT l.id, l.first_name, l.last_name, l.learner_id, l.sex
        FROM class_learners cl JOIN learners l ON l.id = cl.learner_id
-      WHERE cl.class_id = $1 ORDER BY l.last_name, l.first_name, l.id`,
+      WHERE cl.class_id = $1
+      ORDER BY CASE WHEN l.sex = 'Male' THEN 0 ELSE 1 END, l.last_name, l.first_name, l.id`,
     [class_id]
   );
 
@@ -191,10 +200,73 @@ async function getSf2(req, res) {
       first_name: learner.first_name,
       last_name: learner.last_name,
       learner_id: learner.learner_id,
+      sex: learner.sex,
       marks: marksByDate,
       totals: { present, absent },
     };
   });
+
+  // The last table row: Combined TOTAL Per Day. A day cell counts the
+  // learners present that day (a Present or Late record); X and E do not
+  // count. The ABSENT total is the sum of X marks; PRESENT is the sum of
+  // the daily present counts.
+  const presentByDay = {};
+  for (const day of days) {
+    presentByDay[day.date] = rows.filter((row) => {
+      const status = row.marks[day.date];
+      return status === 'present' || status === 'late';
+    }).length;
+  }
+  const combined = {
+    present_by_day: presentByDay,
+    totals: {
+      present: Object.values(presentByDay).reduce((sum, count) => sum + count, 0),
+      absent: rows.reduce((sum, row) => sum + row.totals.absent, 0),
+    },
+  };
+
+  // The footer summary table, per the form's Guidelines formulas.
+  // Average Daily Attendance = total present-days / number of school days
+  // in the month; Percentage of Attendance = Average Daily Attendance /
+  // Registered Learners x 100. Both to one decimal. A learner counts toward
+  // the 5-consecutive-days figure once when 5 or more school-day columns in
+  // a row are X in a row (weekends are not columns, so Friday-to-Monday
+  // runs are consecutive). A null percentage means there is nothing to
+  // divide by, and the form leaves it blank.
+  const round1 = (value) => Math.round(value * 10) / 10;
+  const summarize = (list) => {
+    const registered = list.length;
+    const totalPresent = list.reduce((sum, row) => sum + row.totals.present, 0);
+    const average = days.length === 0 ? 0 : totalPresent / days.length;
+    let absentFiveDays = 0;
+    for (const row of list) {
+      let run = 0;
+      let hit = false;
+      for (const day of days) {
+        if (row.marks[day.date] === 'absent') {
+          run += 1;
+          if (run >= 5) hit = true;
+        } else {
+          run = 0;
+        }
+      }
+      if (hit) absentFiveDays += 1;
+    }
+    return {
+      registered,
+      average_daily_attendance: round1(average),
+      percentage_of_attendance: registered === 0 ? null : round1((average / registered) * 100),
+      absent_five_days: absentFiveDays,
+    };
+  };
+  const males = rows.filter((row) => row.sex === 'Male');
+  const females = rows.filter((row) => row.sex === 'Female');
+  const summary = {
+    days_of_classes: days.length,
+    male: summarize(males),
+    female: summarize(females),
+    total: summarize(rows),
+  };
 
   const school = teacher.rows[0] || {};
   res.json({
@@ -202,14 +274,18 @@ async function getSf2(req, res) {
     month,
     month_label: SF2_MONTHS[monthNumber - 1],
     school_year: String(klass.academic_year || '').replace('-', ' - '),
+    adviser_name: school.first_name ? `${school.first_name} ${school.last_name}` : null,
     school: {
       name: school.school_name || null,
       region: school.region || null,
       division: school.division || null,
       deped_school_id: school.deped_school_id || null,
+      school_head_name: school.school_head_name || null,
     },
     days,
     learners: rows,
+    combined,
+    summary,
   });
 }
 
