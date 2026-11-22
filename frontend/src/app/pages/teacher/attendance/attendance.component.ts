@@ -356,12 +356,40 @@ export class TeacherAttendanceComponent {
   }
 
   // The mark letter on the SF2 form: X = Absent, L = Late, E = Excused,
-  // blank = Present or no record.
+  // blank = Present (a day with no saved roll counts as present too).
   protected markLetter(status: string | null | undefined): string {
     if (status === 'absent') return 'X';
     if (status === 'late') return 'L';
     if (status === 'excused') return 'E';
     return '';
+  }
+
+  // The gender TOTAL Per Day row after a gender's last learner: the label
+  // is verbatim from the DepEd form, and the row carries that gender's
+  // per-day present counts and month totals.
+  private readonly genderTotalLabels = {
+    Male: '<=== MALE | TOTAL Per Day ===>',
+    Female: '<=== FEMALE | TOTAL Per Day ===>',
+  } as const;
+
+  protected genderTotalLabel(sex: 'Male' | 'Female'): string {
+    return this.genderTotalLabels[sex];
+  }
+
+  protected genderTotal(sex: 'Male' | 'Female'): {
+    present_by_day: Record<string, number>;
+    totals: { present: number; absent: number };
+  } | null {
+    const report = this.sf2();
+    if (!report) return null;
+    return sex === 'Male' ? report.totals_by_gender.male : report.totals_by_gender.female;
+  }
+
+  protected isLastOfGender(index: number): boolean {
+    const learners = this.sf2()?.learners ?? [];
+    const learner = learners[index];
+    if (!learner) return false;
+    return index + 1 === learners.length || learners[index + 1].sex !== learner.sex;
   }
 
   protected sf2Name(learner: { first_name: string; last_name: string }): string {

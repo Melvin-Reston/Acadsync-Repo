@@ -680,6 +680,8 @@ export interface Sf2Learner {
   learner_id: string;
   sex: 'Male' | 'Female';
   marks: Record<string, AttendanceStatus>; // date -> status (only recorded days)
+  // Blank = Present: present is the month's school days minus absent and
+  // excused days; absent counts X marks only.
   totals: { present: number; absent: number };
 }
 
@@ -719,6 +721,18 @@ export interface Sf2Report {
   combined: {
     present_by_day: Record<string, number>;
     totals: { present: number; absent: number };
+  };
+  // One TOTAL Per Day row per gender, after that gender's learners. A
+  // gender with no learners is null and gets no row.
+  totals_by_gender: {
+    male: {
+      present_by_day: Record<string, number>;
+      totals: { present: number; absent: number };
+    } | null;
+    female: {
+      present_by_day: Record<string, number>;
+      totals: { present: number; absent: number };
+    } | null;
   };
   summary: Sf2Summary;
 }

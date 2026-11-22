@@ -260,6 +260,18 @@
                     <td>{{ learner.totals.present }}</td>
                     <td class="sf2-remarks"></td>
                   </tr>
+                  @if (isLastOfGender(i)) {
+                    <tr class="sf2-gender">
+                      <td class="sf2-no"></td>
+                      <td class="sf2-name">{{ genderTotalLabel(learner.sex) }}</td>
+                      @for (day of sf2()!.days; track day.date) {
+                        <td>{{ genderTotal(learner.sex)?.present_by_day[day.date] ?? 0 }}</td>
+                      }
+                      <td>{{ genderTotal(learner.sex)?.totals.absent ?? 0 }}</td>
+                      <td>{{ genderTotal(learner.sex)?.totals.present ?? 0 }}</td>
+                      <td class="sf2-remarks"></td>
+                    </tr>
+                  }
                 }
                 <tr class="sf2-combined">
                   <td class="sf2-no">{{ sf2()!.learners.length + 1 }}.</td>
@@ -274,7 +286,7 @@
               </tbody>
             </table>
           </div>
-          <!-- <p class="sf2-note">X = Absent · L = Late · E = Excused · blank = Present or no record. Totals cover recorded school days only.</p> -->
+          <p class="sf2-note">X = Absent · L = Late · E = Excused · blank = Present.</p>
           <app-sf2-footer [report]="sf2()!" />
         }
       }
@@ -291,12 +303,12 @@
       <p>(This replaces Form 1, Form 2 &amp; SF5 Form 4 – Absenteeism and Dropout Profile)</p>
     </div>
     <div class="dp-fields">
-      <div class="dp-field col-3"><span class="fl">School ID</span><span class="fv">{{ sf2()!.school.deped_school_id ?? '' }}</span></div>
-      <div class="dp-field col-4"><span class="fl">School Year</span><span class="fv">{{ sf2()!.school_year }}</span></div>
-      <div class="dp-field col-5"><span class="fl">Report for the Month of</span><span class="fv">{{ sf2()!.month_label }}</span></div>
-      <div class="dp-field col-6"><span class="fl">Name of School</span><span class="fv">{{ sf2()!.school.name }}</span></div>
-      <div class="dp-field col-3"><span class="fl">Grade Level</span><span class="fv">{{ gradeLevelLabel(sf2()!.class.grade_level) }}</span></div>
-      <div class="dp-field col-3"><span class="fl">Section</span><span class="fv">{{ sf2()!.class.section_name }}</span></div>
+      <div class="dp-field col-4"><span class="fl">School ID :</span><span class="fv">{{ sf2()!.school.deped_school_id ?? '' }}</span></div>
+      <div class="dp-field col-4"><span class="fl">School Year :</span><span class="fv">{{ sf2()!.school_year }}</span></div>
+      <div class="dp-field col-4"><span class="fl">Report for the Month of :</span><span class="fv">{{ sf2()!.month_label }}</span></div>
+      <div class="dp-field col-6"><span class="fl">Name of School :</span><span class="fv">{{ sf2()!.school.name }}</span></div>
+      <div class="dp-field col-3"><span class="fl">Grade Level :</span><span class="fv">{{ gradeLevelLabel(sf2()!.class.grade_level) }}</span></div>
+      <div class="dp-field col-3"><span class="fl">Section:</span><span class="fv">{{ sf2()!.class.section_name }}</span></div>
     </div>
     <table class="dp-table">
       <thead>
@@ -332,6 +344,18 @@
             <td>{{ learner.totals.present }}</td>
             <td class="dp-remarks"></td>
           </tr>
+          @if (isLastOfGender(i)) {
+            <tr class="dp-gender">
+              <td class="dp-no"></td>
+              <td class="dp-name">{{ genderTotalLabel(learner.sex) }}</td>
+              @for (day of sf2()!.days; track day.date) {
+                <td>{{ genderTotal(learner.sex)?.present_by_day[day.date] ?? 0 }}</td>
+              }
+              <td>{{ genderTotal(learner.sex)?.totals.absent ?? 0 }}</td>
+              <td>{{ genderTotal(learner.sex)?.totals.present ?? 0 }}</td>
+              <td class="dp-remarks"></td>
+            </tr>
+          }
         }
         <tr class="dp-combined">
           <td class="dp-no">{{ sf2()!.learners.length + 1 }}.</td>
@@ -345,8 +369,7 @@
         </tr>
       </tbody>
     </table>
-    <p class="dp-legend">Legend: X = Absent, L = Late, E = Excused, blank = Present or no record.</p>
-    <p class="dp-footnote">Totals cover recorded school days only.</p>
+    <p class="dp-legend">Legend: X = Absent, L = Late, E = Excused, blank = Present.</p>
     <app-sf2-footer [report]="sf2()!" />
   </section>
 }

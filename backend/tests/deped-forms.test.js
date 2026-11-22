@@ -373,11 +373,12 @@ describe('SF2 daily attendance report', () => {
     assert.equal(row.marks['2026-07-06'], 'absent');
     assert.equal(row.marks['2026-07-04'], undefined);
     assert.equal(row.marks['2026-07-05'], undefined);
-    // The weekend absences are out of the totals too.
-    assert.deepEqual(row.totals, { present: 1, absent: 1 });
+    // The weekend absences are out of the totals too; every other July
+    // school day is blank, and blank counts as present.
+    assert.deepEqual(row.totals, { present: 22, absent: 1 });
   });
 
-  test('marks and totals follow the day rule: excused is separate, and days with no saved roll stay blank and out of the totals', async () => {
+  test('marks and totals follow the blank-means-present rule: excused is separate, blank days count as present', async () => {
     const { token } = await signup();
     const subject = await makeSubject(token, { grade_level: 7 });
     const klass = await makeClass(token, { subject, section_name: 'Luke', grade_level: 7 });
@@ -408,13 +409,15 @@ describe('SF2 daily attendance report', () => {
     assert.equal(alexRow.marks['2026-07-07'], 'excused');
     assert.equal(alexRow.marks['2026-07-08'], 'absent');
     assert.equal(alexRow.marks['2026-07-09'], undefined);
-    assert.deepEqual(alexRow.totals, { present: 1, absent: 1 });
+    assert.deepEqual(alexRow.totals, { present: 21, absent: 1 });
 
-    // Late counts as present; the excused day is in neither total.
+    // Blank days count as present: the total is the month's 23 school days
+    // minus absent and excused days. Late counts as present; the excused
+    // day is in neither total.
     assert.equal(isabellaRow.marks['2026-07-06'], 'excused');
     assert.equal(isabellaRow.marks['2026-07-07'], 'late');
     assert.equal(isabellaRow.marks['2026-07-08'], undefined);
-    assert.deepEqual(isabellaRow.totals, { present: 1, absent: 0 });
+    assert.deepEqual(isabellaRow.totals, { present: 22, absent: 0 });
   });
 
   test('the report carries the class, school and month header fields, including the teacher-entered school details', async () => {
@@ -437,8 +440,9 @@ describe('SF2 daily attendance report', () => {
     assert.equal(report.school.deped_school_id, '502717');
     assert.equal(report.class.grade_level, 7);
     assert.equal(report.class.section_name, 'Tatus');
-    // No rolls saved: every mark blank, totals zero.
-    assert.deepEqual(report.learners[0].totals, { present: 0, absent: 0 });
+    // No rolls saved: every mark blank, and blank counts as present, so
+    // all 23 July school days are present.
+    assert.deepEqual(report.learners[0].totals, { present: 23, absent: 0 });
     assert.equal(Object.keys(report.learners[0].marks).length, 0);
   });
 
@@ -485,8 +489,10 @@ describe('SF2 daily attendance report', () => {
     const { combined } = response.body;
     assert.equal(combined.present_by_day['2026-07-06'], 2);
     assert.equal(combined.present_by_day['2026-07-07'], 0);
-    assert.equal(combined.present_by_day['2026-07-08'], 0);
-    assert.deepEqual(combined.totals, { present: 2, absent: 1 });
+    // No roll on 2026-07-08: both learners are blank, and blank counts as
+    // present. The month total is 2 + 0 + 21 days x 2 learners.
+    assert.equal(combined.present_by_day['2026-07-08'], 2);
+    assert.deepEqual(combined.totals, { present: 44, absent: 1 });
   });
 
   test('the footer summary follows the form formulas: registered, average daily attendance, percentage, five consecutive days', async () => {
@@ -523,25 +529,103 @@ describe('SF2 daily attendance report', () => {
     assert.equal(response.status, 200, JSON.stringify(response.body));
     const { summary } = response.body;
     assert.equal(summary.days_of_classes, 23);
-    // Registered: 2 male, 1 female. Present-days: male 9, female 6.
+    // Registered: 2 male, 1 female. Present-days under blank-means-
+    // present: male 37 (Alex 18 + Bob 19), female 23.
     assert.deepEqual(summary.male, {
       registered: 2,
-      average_daily_attendance: 0.4,
-      percentage_of_attendance: 19.6,
+      average_daily_attendance: 1.6,
+      percentage_of_attendance: 80.4,
       absent_five_days: 1,
     });
     assert.deepEqual(summary.female, {
       registered: 1,
-      average_daily_attendance: 0.3,
-      percentage_of_attendance: 26.1,
+      average_daily_attendance: 1,
+      percentage_of_attendance: 100,
       absent_five_days: 0,
     });
     assert.deepEqual(summary.total, {
       registered: 3,
-      average_daily_attendance: 0.7,
-      percentage_of_attendance: 21.7,
+      average_daily_attendance: 2.6,
+      percentage_of_attendance: 87,
       absent_five_days: 1,
     });
+  });
+
+  test('the gender TOTAL rows count their own group per day, and the combined row is their sum', async () => {
+    const { token } = await signup();
+    const klass = await makeClass(token, { section_name: 'Luke' });
+    const alex = await makeLearner(token, { first_name: 'Alex', last_name: 'Rivera', sex: 'Male' });
+    const bob = await makeLearner(token, { first_name: 'Bob', last_name: 'Mora', sex: 'Male' });
+    const isabella = await makeLearner(token, { first_name: 'Isabella', last_name: 'Flores', sex: 'Female' });
+    await enrol(token, klass.id, alex.id);
+    await enrol(token, klass.id, bob.id);
+    await enrol(token, klass.id, isabella.id);
+
+    await saveRoll(token, klass.id, '2026-07-06', [
+      { learner_id: alex.id, status: 'present', method: 'manual', time_in: '07:30' },
+      { learner_id: bob.id, status: 'absent', method: 'manual' },
+      { learner_id: isabella.id, status: 'excused', method: 'manual' },
+    ]);
+    await saveRoll(token, klass.id, '2026-07-07', [
+      { learner_id: alex.id, status: 'absent', method: 'manual' },
+      { learner_id: bob.id, status: 'present', method: 'manual', time_in: '07:30' },
+      { learner_id: isabella.id, status: 'late', method: 'manual', time_in: '07:45' },
+    ]);
+    // No other rolls: every other July school day is blank, and blank
+    // counts as present.
+
+    const response = await getSf2(token, klass.id, '2026-07');
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    const { totals_by_gender: gender, combined } = response.body;
+
+    // Male: 1 present on each marked day, 2 on each of the other 21 days.
+    assert.equal(gender.male.present_by_day['2026-07-06'], 1);
+    assert.equal(gender.male.present_by_day['2026-07-07'], 1);
+    assert.equal(gender.male.present_by_day['2026-07-08'], 2);
+    assert.deepEqual(gender.male.totals, { present: 44, absent: 2 });
+    // Female: excused on the 6th, late on the 7th, blank (present) after.
+    assert.equal(gender.female.present_by_day['2026-07-06'], 0);
+    assert.equal(gender.female.present_by_day['2026-07-07'], 1);
+    assert.equal(gender.female.present_by_day['2026-07-08'], 1);
+    assert.deepEqual(gender.female.totals, { present: 22, absent: 0 });
+    // The combined row is the sum of the two gender rows, day by day.
+    for (const date of Object.keys(combined.present_by_day)) {
+      assert.equal(
+        combined.present_by_day[date],
+        gender.male.present_by_day[date] + gender.female.present_by_day[date],
+      );
+    }
+    assert.deepEqual(combined.totals, {
+      present: gender.male.totals.present + gender.female.totals.present,
+      absent: gender.male.totals.absent + gender.female.totals.absent,
+    });
+    // Learner totals follow the same rule.
+    const rows = Object.fromEntries(response.body.learners.map((learner) => [learner.id, learner]));
+    assert.deepEqual(rows[alex.id].totals, { present: 22, absent: 1 });
+    assert.deepEqual(rows[bob.id].totals, { present: 22, absent: 1 });
+    assert.deepEqual(rows[isabella.id].totals, { present: 22, absent: 0 });
+  });
+
+  test('a gender with no learners has no total row', async () => {
+    const { token } = await signup();
+    const boys = await makeClass(token, { section_name: 'Luke' });
+    const alex = await makeLearner(token, { first_name: 'Alex', last_name: 'Rivera', sex: 'Male' });
+    await enrol(token, boys.id, alex.id);
+    const girls = await makeClass(token, { section_name: 'Mark' });
+    const isabella = await makeLearner(token, { first_name: 'Isabella', last_name: 'Flores', sex: 'Female' });
+    await enrol(token, girls.id, isabella.id);
+
+    const boysReport = await getSf2(token, boys.id, '2026-07');
+    assert.equal(boysReport.status, 200, JSON.stringify(boysReport.body));
+    assert.notEqual(boysReport.body.totals_by_gender.male, null);
+    assert.equal(boysReport.body.totals_by_gender.female, null);
+    assert.deepEqual(boysReport.body.totals_by_gender.male.totals, { present: 23, absent: 0 });
+
+    const girlsReport = await getSf2(token, girls.id, '2026-07');
+    assert.equal(girlsReport.status, 200, JSON.stringify(girlsReport.body));
+    assert.equal(girlsReport.body.totals_by_gender.male, null);
+    assert.notEqual(girlsReport.body.totals_by_gender.female, null);
+    assert.deepEqual(girlsReport.body.totals_by_gender.female.totals, { present: 23, absent: 0 });
   });
 
   test('SF2 refuses a bad month, another teacher’s class, and anonymous requests', async () => {

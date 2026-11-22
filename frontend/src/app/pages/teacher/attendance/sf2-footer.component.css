@@ -175,9 +175,18 @@
 }
 
 @media print {
-  /* The footer is the form's last part: it starts on its own page so the
-     grid's border never fragments into an empty box after the table. */
-  .sf2-footer {
-    break-before: page;
+  /* The footer follows the table directly: no forced break, and the three
+     columns may split across pages, so the footer starts on the same page
+     right after the table instead of jumping whole to the next one. The
+     signature blocks stay intact. */
+  .sf2-guidelines,
+  .sf2-codes,
+  .sf2-summary {
+    break-inside: auto;
+  }
+
+  .sf2-cert,
+  .sig-block {
+    break-inside: avoid;
   }
 }

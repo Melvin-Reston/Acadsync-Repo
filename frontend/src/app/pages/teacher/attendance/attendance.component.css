@@ -395,6 +395,11 @@
   border-top: 2px solid var(--line);
 }
 
+.sf2-table .sf2-gender td {
+  font-weight: 700;
+  border-top: 2px solid var(--line);
+}
+
 .sf2-note {
   padding: 12px 16px 16px;
   font-size: 13px;
@@ -455,6 +460,10 @@
     grid-column: span 3;
   }
 
+  .dp-field.col-4 {
+    grid-column: span 4;
+  }
+
   .dp-field.col-5 {
     grid-column: span 5;
   }
@@ -470,7 +479,7 @@
 
   .dp-field .fv {
     flex: 1;
-    border-bottom: 1px solid #000;
+    border-bottom: 1px dotted #000;
     min-height: 14px;
     padding: 0 4px;
     overflow: hidden;
@@ -506,7 +515,7 @@
 
   .dp-table .dp-name {
     text-align: left;
-    width: 170px;
+    width: 184px;
   }
 
   .dp-table .dp-total {
@@ -521,8 +530,11 @@
     font-weight: 700;
   }
 
-  .dp-legend,
-  .dp-footnote {
+  .dp-table .dp-gender td {
+    font-weight: 700;
+  }
+
+  .dp-legend {
     font-size: 9px;
     margin: 6px 0 0;
   }

@@ -120,16 +120,15 @@ const SF2_MONTHS = [
 // GET /api/teacher/attendance/sf2?class_id=&month=YYYY-MM
 // The month's daily attendance for one class, in School Form 2 shape: one
 // column per Monday–Friday day, X = Absent, L = Late, E = Excused, blank =
-// Present or no record. Learners are Male first, then Female, each group
-// alphabetical by last name, numbered continuously. Totals follow the
-// Report Card day rule — a day counts Present on a Present/Late record,
-// Excused on an Excused record, Absent on an Absent record — and only days
-// with a saved record count, so a day with no saved roll stays blank and
-// out of the totals. Excused days are separate: they count in neither the
-// PRESENT nor the ABSENT total. The footer summary follows the form's own
-// formulas; figures the system cannot know (enrolment as of the 1st Friday,
-// late enrolment, dropped out, transferred) are left to handwriting and are
-// not invented here.
+// Present. A blank day counts as present — the form's own code — so a
+// learner's PRESENT total is the month's school days minus Absent (X) marks
+// minus Excused (E) marks, and a day cell in a TOTAL row counts the learners
+// with no X and no E that day. Excused days are separate: they count in
+// neither the PRESENT nor the ABSENT total. Learners are Male first, then
+// Female, each group alphabetical by last name, numbered continuously. The
+// footer summary follows the form's own formulas; figures the system cannot
+// know (enrolment as of the 1st Friday, late enrolment, dropped out,
+// transferred) are left to handwriting and are not invented here.
 async function getSf2(req, res) {
   const { class_id, month } = req.valid.query;
   const klass = await findClass(class_id, req.teacher.id);
@@ -188,12 +187,13 @@ async function getSf2(req, res) {
 
   const rows = learners.rows.map((learner) => {
     const marksByDate = byLearner.get(learner.id) || {};
-    let present = 0;
+    // Blank = Present: every shown school day counts as present except
+    // Absent (X) and Excused (E) days. Late (L) counts as present.
     let absent = 0;
-    for (const date of Object.keys(marksByDate)) {
-      const status = marksByDate[date];
-      if (status === 'present' || status === 'late') present += 1;
-      else if (status === 'absent') absent += 1;
+    let excused = 0;
+    for (const status of Object.values(marksByDate)) {
+      if (status === 'absent') absent += 1;
+      else if (status === 'excused') excused += 1;
     }
     return {
       id: learner.id,
@@ -202,28 +202,38 @@ async function getSf2(req, res) {
       learner_id: learner.learner_id,
       sex: learner.sex,
       marks: marksByDate,
-      totals: { present, absent },
+      totals: { present: days.length - absent - excused, absent },
     };
   });
 
-  // The last table row: Combined TOTAL Per Day. A day cell counts the
-  // learners present that day (a Present or Late record); X and E do not
-  // count. The ABSENT total is the sum of X marks; PRESENT is the sum of
-  // the daily present counts.
-  const presentByDay = {};
-  for (const day of days) {
-    presentByDay[day.date] = rows.filter((row) => {
-      const status = row.marks[day.date];
-      return status === 'present' || status === 'late';
-    }).length;
-  }
-  const combined = {
-    present_by_day: presentByDay,
-    totals: {
-      present: Object.values(presentByDay).reduce((sum, count) => sum + count, 0),
-      absent: rows.reduce((sum, row) => sum + row.totals.absent, 0),
-    },
+  // A TOTAL row for a list of learners: a day cell counts the learners
+  // present that day (no X and no E — blank and L count), and the month
+  // totals sum the day cells and the X marks. The Combined TOTAL Per Day
+  // row covers all learners; each gender row covers only its own group.
+  const totalsFor = (list) => {
+    const presentByDay = {};
+    for (const day of days) {
+      presentByDay[day.date] = list.filter((row) => {
+        const status = row.marks[day.date];
+        return status !== 'absent' && status !== 'excused';
+      }).length;
+    }
+    return {
+      present_by_day: presentByDay,
+      totals: {
+        present: Object.values(presentByDay).reduce((sum, count) => sum + count, 0),
+        absent: list.reduce((sum, row) => sum + row.totals.absent, 0),
+      },
+    };
   };
+  const males = rows.filter((row) => row.sex === 'Male');
+  const females = rows.filter((row) => row.sex === 'Female');
+  // A gender with no learners has no total row: null, never an empty one.
+  const totalsByGender = {
+    male: males.length === 0 ? null : totalsFor(males),
+    female: females.length === 0 ? null : totalsFor(females),
+  };
+  const combined = totalsFor(rows);
 
   // The footer summary table, per the form's Guidelines formulas.
   // Average Daily Attendance = total present-days / number of school days
@@ -259,8 +269,6 @@ async function getSf2(req, res) {
       absent_five_days: absentFiveDays,
     };
   };
-  const males = rows.filter((row) => row.sex === 'Male');
-  const females = rows.filter((row) => row.sex === 'Female');
   const summary = {
     days_of_classes: days.length,
     male: summarize(males),
@@ -285,6 +293,7 @@ async function getSf2(req, res) {
     days,
     learners: rows,
     combined,
+    totals_by_gender: totalsByGender,
     summary,
   });
 }
