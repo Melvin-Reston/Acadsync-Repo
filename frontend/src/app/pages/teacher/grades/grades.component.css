@@ -1020,32 +1020,31 @@
   }
 
   .dp-fields {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    gap: 2px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 20px;
     margin-bottom: 8px;
   }
 
   .dp-field {
-    display: grid;
-    grid-template-columns: 20% minmax(0, 1fr);
+    display: flex;
     align-items: baseline;
     gap: 6px;
-    min-width: 0;
+    flex: 1 1 26%;
+    min-width: 160px;
   }
 
   .dp-field.wide {
-    grid-column: auto;
+    flex: 2 1 52%;
   }
 
   .dp-field .fl {
     font-weight: 700;
     white-space: nowrap;
-    text-align: right;
   }
 
   .dp-field .fv {
-    min-width: 0;
+    flex: 1;
     border-bottom: 1px solid #000;
     min-height: 14px;
     padding: 0 4px;
