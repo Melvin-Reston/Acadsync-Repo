@@ -679,9 +679,12 @@ export interface Sf2Learner {
   last_name: string;
   learner_id: string;
   sex: 'Male' | 'Female';
-  marks: Record<string, AttendanceStatus>; // date -> status (only recorded days)
-  // Blank = Present: present is the month's school days minus absent and
-  // excused days; absent counts X marks only.
+  marks: Record<string, AttendanceStatus>; // date -> status. Only days
+  // today or earlier carry a mark: a day after today has none, and a past
+  // day with no saved roll marks 'absent'.
+  // Present and Absent count saved-roll marks only: present/late marks
+  // count present, absent marks and unmarked past days count absent,
+  // excused days count in neither total, future days in neither.
   totals: { present: number; absent: number };
 }
 

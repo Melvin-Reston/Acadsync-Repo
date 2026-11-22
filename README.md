@@ -442,11 +442,71 @@ No new `.env` settings are required.
 1. **School details for DepEd forms** — on the **Profile** page, under Personal details, three optional fields: **Region**, **Division** and **School ID**. They print on the DepEd forms below, and stay blank on the forms when unset. Nothing else on the profile changes, and the teaching assignment stays read-only.
 2. **Class Record print** — on the **Grades** page, **Print class record** prints the current sheet in the DepEd Class Record format: the seal and DepEd logo, Region / Division / School ID / School Name / School Year, Grade Level / Section / Teacher / Subject, the Highest Possible Score row, then Written Works, Performance Tasks and Examinations (with the ST1 / ST2 / Term Exam sub-columns and their weighted scores under DO 015, or the single Quarterly Assessment block under DO 8), then Initial Grade, Term/Quarter Grade and Descriptor. Learners are grouped Male then Female, numbered separately. The printout shows the sheet as it is right now, including blanks — it is the working record. It prints landscape, in black and white.
 3. **Final Grades tab** — next to the term tabs on the **Grades** page. It shows every filed term side by side with the Final Grade, Descriptor and Remark (Passed at 75 or above, Failed below it, blank when there is no final grade yet). The data follows the same rule as the Final column: filed submissions only, and the final grade appears only once every term is filed. **Print final grades** prints it in the DepEd Class Record – Final Grades format, with the same header and Male/Female grouping.
-4. **SF2 tab** — on the **Attendance** page, next to Daily roll. Pick a month (June to April of the school year) to preview the **School Form 2 Daily Attendance Report of Learners**: Monday–Friday days only, names in alphabetical order, X for Absent, L for Late, E for Excused, blank for Present or no record, with Absent and Present totals that cover recorded school days only. **Print SF2** prints the form, landscape, in black and white, with no logos. The Remarks column stays blank for handwriting.
+4. **SF2 tab** — on the **Attendance** page, next to Daily roll. Pick a month (June to April of the school year) to preview the **School Form 2 Daily Attendance Report of Learners**: Monday–Friday days only, names in alphabetical order, X for Absent, L for Late, E for Excused, blank for Present, with Absent and Present totals from the saved daily rolls only. A day today or earlier with no attendance record for the learner marks X and counts absent; a day after today stays blank and counts in neither total. **Print SF2** prints the form, landscape, in black and white, with no logos. The Remarks column stays blank for handwriting.
 5. **SF2 header (Batch 8 fix 1)** — the SF2 table header now follows the DepEd form exactly, in the preview and the printout: No., NAME (Last Name, First Name, Middle Name), the "(1st row for date)" row, the dates row, the day-letter row, Total for the Month split into Absent and Present, and the full Remarks wording. The names, marks and totals are unchanged.
 6. **SF2 footer, ordering and data-only printing (Batch 8 fix 2)** — learners are listed Male first, then Female, each group alphabetical, numbered continuously, with a **Combined TOTAL Per Day** row as the last row of the table. Below the table, in the preview and the printout, the form's last part: the Guidelines with the three formulas, the codes for checking attendance, the reasons/causes list, the month summary table (registered learners, average daily attendance and percentage of attendance computed from the saved rolls; enrolment as of the 1st Friday, late enrolment, dropped out and transferred stay blank for handwriting), and the certification with the adviser name and the school head name. The **School Head** field sits with the other school details on the Profile page and prints on the "Attested by" line when filled in. The header fields (School ID, Name of School, Section, Month, Grade Level) are aligned on one grid. Every printout — SF2, Class Record, Final Grades and Report Card — is data only: no browser-added date, page title, link or page number.
-7. **Blank-means-present totals, gender TOTAL rows, footer right after the table (Batch 8 fix 3)** — in SF2 a blank day counts as present, so a learner's PRESENT total is the month's school days minus Absent (X) and Excused (E) marks, and the per-day totals count every learner with no X and no E that day. After the last male learner and after the last female learner the table has a **TOTAL Per Day** row for that gender (`<=== MALE | TOTAL Per Day ===>`, `<=== FEMALE | TOTAL Per Day ===>`); the **Combined TOTAL Per Day** row stays last. The footer (Guidelines, codes, reasons, summary table, certification) now flows directly after the table instead of starting on a new page. This change is SF2 only — the Report Card and the daily roll are unchanged.
+7. **Gender TOTAL rows and footer flow (Batch 8 fix 3)** — after the last male learner and after the last female learner the table has a **TOTAL Per Day** row for that gender (`<=== MALE | TOTAL Per Day ===>`, `<=== FEMALE | TOTAL Per Day ===>`); the **Combined TOTAL Per Day** row stays last. The footer (Guidelines, codes, reasons, summary table, certification) now flows directly after the table instead of starting on a new page. The blank-means-present totals rule that came with this fix was replaced by fix 5 (item 9 below). This change is SF2 only — the Report Card and the daily roll are unchanged.
 8. **SF2 header fields (Batch 8 fix 4)** — the header field block on the SF2 printout now follows the DepEd form exactly: School ID, School Year and Report for the Month of on the first row, Name of School, Grade Level and Section on the second, the labels with colons, the values on dotted underlines, every label sharing a baseline with its value, the fields spread across the full width. The values are unchanged — the School ID is the teacher's entered DepEd school ID and stays blank (but dotted) when unset. No Region/Division fields on this block, as on the form.
+9. **SF2 marks from the saved roll only (Batch 8 fix 5)** — in SF2, "today" is the current date in Asia/Manila, computed on the server. For each learner and each shown day: a day after today stays blank and counts in nothing; a day today or earlier with a saved attendance row shows the mark from the roll (present/late blank and counted present, absent X, excused E); a day today or earlier with no attendance row for the learner shows X and counts absent — this covers days when no roll was saved at all and learners missing from a saved roll. The learner totals, the gender TOTAL Per Day rows, the Combined TOTAL Per Day row and the month summary table all follow the same rule, including the count of learners absent for 5 consecutive days. The legend wording is unchanged. This change is SF2 only — the Report Card and the daily roll are unchanged.
+10. **SF2 footer formulas and summary columns (Batch 8 fix 6)** — the three Guidelines formulas now print as true stacked fractions, in the preview and the printout: the numerator centred above a horizontal fraction bar, the denominator centred below it, the whole fraction level with the "=" sign, and "× 100" to the right of the fraction, with no wrapping inside a numerator or denominator. The month summary table's M, F and TOTAL columns are wider and equal to each other, so the figures sit centred with room to spare and the columns align; the Month column keeps room for the full month name. The footer content, the table header, the gender rows, the roll-only totals and the data-only printing are unchanged.
+
+## Upgrading from Teacher Batch 8 fix 5
+
+Your `.env` file and everything in your database are kept. You do not run the seed again.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip the Teacher Batch 8 fix 6 zip **over your existing `acadsync` folder** and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run migrate
+npm run dev
+```
+
+`npm run migrate` should print `Database is already up to date`. There is no new migration in this fix.
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. Nothing is lost. The SF2 Guidelines formulas now print as stacked fractions level with the "=" sign, and the month summary table's M, F and TOTAL columns are wider — described under [Teacher Batch 8: DepEd print forms](#teacher-batch-8-deped-print-forms).
+
+No new `.env` settings are required.
+
+## Upgrading from Teacher Batch 8 fix 4
+
+Your `.env` file and everything in your database are kept. You do not run the seed again.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip the Teacher Batch 8 fix 5 zip **over your existing `acadsync` folder** and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run migrate
+npm run dev
+```
+
+`npm run migrate` should print `Database is already up to date`. There is no new migration in this fix.
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. Nothing is lost. The SF2 marks now come from the saved daily roll only — days after today stay blank and out of the totals, and days with no record mark X — described under [Teacher Batch 8: DepEd print forms](#teacher-batch-8-deped-print-forms).
+
+No new `.env` settings are required.
 
 ## Upgrading from Teacher Batch 8 fix 3
 
@@ -502,7 +562,7 @@ npm install
 npm start
 ```
 
-5. Open http://localhost:4200 and sign in as before. Nothing is lost. The SF2 changes — blank days counting as present, the TOTAL Per Day row after each gender group, and the footer flowing directly after the table — are described under [Teacher Batch 8: DepEd print forms](#teacher-batch-8-deped-print-forms).
+5. Open http://localhost:4200 and sign in as before. Nothing is lost. The SF2 changes — the TOTAL Per Day row after each gender group and the footer flowing directly after the table (the blank-days-count-as-present totals rule from that fix was replaced by fix 5) — are described under [Teacher Batch 8: DepEd print forms](#teacher-batch-8-deped-print-forms).
 
 No new `.env` settings are required.
 

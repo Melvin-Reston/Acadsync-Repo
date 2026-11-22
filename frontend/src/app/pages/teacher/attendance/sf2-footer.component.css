@@ -11,7 +11,10 @@
 
 .sf2-foot-grid {
   display: grid;
-  grid-template-columns: 1.25fr 0.95fr 1fr;
+  /* The guidelines column is the widest: its formula rows (label +
+     stacked fraction + "× 100") need the room so the fraction is never
+     squeezed narrower than its own text. */
+  grid-template-columns: 1.5fr 0.88fr 0.92fr;
   gap: 0;
   border: 1px solid #000;
 }
@@ -48,24 +51,33 @@
   font-size: 9px;
 }
 
+/* Each formula is one row: label, stacked fraction, "× 100". The grid
+   never wraps, so the fraction bar stays level with the "=" sign and the
+   "× 100" stays on the same row. The formula text is set a point smaller
+   than the surrounding text — as on the form itself — so the longest
+   numerator still fits the guidelines column without squeezing the
+   fraction narrower than its own text (which would shorten the bar). */
 .formula {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
   align-items: center;
-  gap: 6px;
+  column-gap: 5px;
   margin: 3px 0;
 }
 
 .formula-label {
   white-space: nowrap;
+  font-size: 9px;
 }
 
 .frac {
-  display: inline-flex;
+  display: flex;
   flex-direction: column;
+  min-width: 0;
   text-align: center;
   line-height: 1.2;
   white-space: nowrap;
+  font-size: 8px;
 }
 
 .frac .num {
@@ -79,6 +91,7 @@
 
 .times {
   white-space: nowrap;
+  font-size: 9px;
 }
 
 .sf2-codes p {
@@ -102,6 +115,25 @@
   table-layout: fixed;
 }
 
+/* The M / F / TOTAL value columns are wider than the Days column and
+   equal to each other, so the summary figures sit centred with room to
+   spare and the three columns align. The Month column keeps room for
+   the full month name at the smaller value size (NOVEMBER must not
+   clip), and the Days column keeps room for its wrapped label. */
+.sf2-summary-table .col-month {
+  width: 22%;
+}
+
+.sf2-summary-table .col-days {
+  width: 18%;
+}
+
+.sf2-summary-table .col-m,
+.sf2-summary-table .col-f,
+.sf2-summary-table .col-total {
+  width: 20%;
+}
+
 .sf2-summary-table th,
 .sf2-summary-table td {
   border: 1px solid #000;
@@ -118,6 +150,13 @@
 .sf2-summary-table .sum-days {
   font-size: 9px;
   line-height: 1.3;
+}
+
+/* The month name is one point smaller so the full name (NOVEMBER) fits
+   its column without clipping. */
+.sf2-summary-table .sum-month-value {
+  font-size: 8px;
+  white-space: nowrap;
 }
 
 .sf2-summary-table .sum-label {
@@ -171,6 +210,18 @@
     border-right: none;
     border-top: 1px solid #000;
     border-bottom: 1px solid #000;
+  }
+
+  /* The stacked footer is narrow: the formula label takes its own line
+     and the fraction + "× 100" share the next one, so the row never
+     overflows. The fraction itself never wraps. */
+  .formula {
+    grid-template-columns: minmax(0, 1fr) max-content;
+  }
+
+  .formula-label {
+    grid-column: 1 / -1;
+    white-space: normal;
   }
 }
 

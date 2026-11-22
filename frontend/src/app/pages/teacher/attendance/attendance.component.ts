@@ -356,7 +356,9 @@ export class TeacherAttendanceComponent {
   }
 
   // The mark letter on the SF2 form: X = Absent, L = Late, E = Excused,
-  // blank = Present (a day with no saved roll counts as present too).
+  // blank = Present. The API sends marks only for days today or earlier:
+  // a past day with no saved roll arrives as 'absent', and a future day
+  // arrives with no mark at all and stays blank.
   protected markLetter(status: string | null | undefined): string {
     if (status === 'absent') return 'X';
     if (status === 'late') return 'L';

@@ -120,14 +120,18 @@ const SF2_MONTHS = [
 // GET /api/teacher/attendance/sf2?class_id=&month=YYYY-MM
 // The month's daily attendance for one class, in School Form 2 shape: one
 // column per Monday–Friday day, X = Absent, L = Late, E = Excused, blank =
-// Present. A blank day counts as present — the form's own code — so a
-// learner's PRESENT total is the month's school days minus Absent (X) marks
-// minus Excused (E) marks, and a day cell in a TOTAL row counts the learners
-// with no X and no E that day. Excused days are separate: they count in
-// neither the PRESENT nor the ABSENT total. Learners are Male first, then
-// Female, each group alphabetical by last name, numbered continuously. The
-// footer summary follows the form's own formulas; figures the system cannot
-// know (enrolment as of the 1st Friday, late enrolment, dropped out,
+// Present. Marks come only from the saved daily roll — never invented.
+// "Today" is the current date in the school timezone (APP_TIMEZONE,
+// Asia/Manila by default), worked out here on the server. A day after today
+// has no value and counts in neither total. A day today or earlier with no
+// saved row for the learner marks X and counts absent — that covers days
+// when no roll was saved at all and learners missing from a saved roll. A
+// saved row marks as saved: Present and Late count as present (Late keeps
+// its L letter), Absent marks X, Excused stays separate and counts in
+// neither total. Learners are Male first, then Female, each group
+// alphabetical by last name, numbered continuously. The footer summary
+// follows the form's own formulas; figures the system cannot know
+// (enrolment as of the 1st Friday, late enrolment, dropped out,
 // transferred) are left to handwriting and are not invented here.
 async function getSf2(req, res) {
   const { class_id, month } = req.valid.query;
@@ -185,15 +189,29 @@ async function getSf2(req, res) {
     byLearner.get(row.learner_id)[row.date] = row.status;
   }
 
+  // Marks come only from the saved daily roll. Days after today (in the
+  // school timezone) stay out of the marks entirely: no value, and they
+  // count in neither total. A day today or earlier with no saved row for
+  // the learner marks X — no roll saved, or the learner missing from a
+  // saved roll, both mean absent on the form.
+  const today = manilaParts().date;
   const rows = learners.rows.map((learner) => {
-    const marksByDate = byLearner.get(learner.id) || {};
-    // Blank = Present: every shown school day counts as present except
-    // Absent (X) and Excused (E) days. Late (L) counts as present.
+    const saved = byLearner.get(learner.id) || {};
+    const marks = {};
+    let present = 0;
     let absent = 0;
-    let excused = 0;
-    for (const status of Object.values(marksByDate)) {
-      if (status === 'absent') absent += 1;
-      else if (status === 'excused') excused += 1;
+    for (const day of days) {
+      if (day.date > today) continue;
+      const status = saved[day.date];
+      if (status === 'present' || status === 'late') {
+        marks[day.date] = status;
+        present += 1;
+      } else if (status === 'excused') {
+        marks[day.date] = 'excused';
+      } else {
+        marks[day.date] = 'absent';
+        absent += 1;
+      }
     }
     return {
       id: learner.id,
@@ -201,22 +219,20 @@ async function getSf2(req, res) {
       last_name: learner.last_name,
       learner_id: learner.learner_id,
       sex: learner.sex,
-      marks: marksByDate,
-      totals: { present: days.length - absent - excused, absent },
+      marks,
+      totals: { present, absent },
     };
   });
 
   // A TOTAL row for a list of learners: a day cell counts the learners
-  // present that day (no X and no E — blank and L count), and the month
-  // totals sum the day cells and the X marks. The Combined TOTAL Per Day
-  // row covers all learners; each gender row covers only its own group.
+  // with a saved Present or Late mark that day (a day after today has no
+  // mark and counts nobody; an unmarked past day is X and counts nobody).
+  // The month totals sum the learners' own totals. The Combined TOTAL Per
+  // Day row covers all learners; each gender row covers only its own group.
   const totalsFor = (list) => {
     const presentByDay = {};
     for (const day of days) {
-      presentByDay[day.date] = list.filter((row) => {
-        const status = row.marks[day.date];
-        return status !== 'absent' && status !== 'excused';
-      }).length;
+      presentByDay[day.date] = list.filter((row) => row.marks[day.date] === 'present' || row.marks[day.date] === 'late').length;
     }
     return {
       present_by_day: presentByDay,
