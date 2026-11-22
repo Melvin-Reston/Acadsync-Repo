@@ -411,6 +411,10 @@ export interface TeacherSelf {
   present_address: string;
   school_id: number;
   school_name: string | null;
+  // The teacher's own entries for the DepEd print forms; null until filled in.
+  region: string | null;
+  division: string | null;
+  deped_school_id: string | null;
   must_change_password: boolean;
   is_restricted: boolean;
   is_adviser: boolean;
@@ -662,6 +666,36 @@ export interface AttendanceLookup {
   mark: AttendanceMark | null;
 }
 
+export interface Sf2Day {
+  date: string; // YYYY-MM-DD
+  day: number;
+  weekday: string; // M, T, W, TH, F
+}
+
+export interface Sf2Learner {
+  id: number;
+  first_name: string;
+  last_name: string;
+  learner_id: string;
+  marks: Record<string, AttendanceStatus>; // date -> status (only recorded days)
+  totals: { present: number; absent: number };
+}
+
+export interface Sf2Report {
+  class: ClassItem;
+  month: string; // YYYY-MM
+  month_label: string; // JULY
+  school_year: string; // 2026 - 2027
+  school: {
+    name: string | null;
+    region: string | null;
+    division: string | null;
+    deped_school_id: string | null;
+  };
+  days: Sf2Day[];
+  learners: Sf2Learner[];
+}
+
 // ---------- Grades and Consolidation (Batch 4) ----------
 
 export interface GradeColumn {
@@ -757,6 +791,17 @@ export interface GradeSheet {
   // Every period already filed for this class and year (the period tabs
   // mark the filed ones).
   submitted_periods: number[];
+  // Final grades for this class, from filed submissions only: the mean of
+  // the filed period grades, keyed by learner id, once every period is
+  // filed. Null means no final grade yet. period_grades carries the filed
+  // grade of each period per learner (null when that period is not filed),
+  // so the Final Grades tab can show every period side by side.
+  finals: {
+    filed_periods: number;
+    total_periods: number;
+    grades: Record<number, number | null>;
+    period_grades: Record<number, Record<number, number | null>>;
+  };
   reminder: GradeReminder;
   // True when the teacher is both the subject teacher and the adviser of
   // this class: the button reads "Move to Consolidation" instead of

@@ -313,12 +313,20 @@ const teacherRegisterSchema = z.object({
 
 // Only these fields may be changed by the teacher. The teaching assignment is read-only here;
 // it is changed on its own form (teacherAdviserSchema), and the API refuses it here.
+// The school details (region, division, DepEd school ID) are the teacher's own entries for
+// the DepEd print forms; they print blank until the teacher fills them in.
 const teacherProfileSchema = z.object({
-  first_name: text('First name', 60),
-  last_name: text('Last name', 60),
-  email,
-  mobile,
+  // A profile update is partial: only the fields sent change. The profile
+  // page sends the whole form; an API caller may send just the school
+  // details. Absent fields stay as they are.
+  first_name: text('First name', 60).optional(),
+  last_name: text('Last name', 60).optional(),
+  email: email.optional(),
+  mobile: mobile.optional(),
   present_address: optionalText('Present address'),
+  region: optionalText('Region', 60),
+  division: optionalText('Division', 60),
+  deped_school_id: optionalText('School ID', 20),
 });
 
 const teacherAdviserSchema = z
@@ -492,6 +500,12 @@ const attendanceQuerySchema = z.object({
   class_id: id,
   date: optionalDate,
   format: z.enum(['', 'json', 'csv']).optional().default(''),
+});
+
+// School Form 2 (Batch 8): one month, YYYY-MM, of the academic year.
+const sf2QuerySchema = z.object({
+  class_id: id,
+  month: z.string({ error: 'Choose a month.' }).regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Choose a month.'),
 });
 
 const attendanceSaveSchema = z.object({
@@ -676,6 +690,7 @@ module.exports = {
   scheduleQuerySchema,
   attendanceQuerySchema,
   attendanceSaveSchema,
+  sf2QuerySchema,
   attendanceLookupSchema,
   attendanceCheckInSchema,
   gradeSheetQuerySchema,

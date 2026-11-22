@@ -20,6 +20,7 @@ async function findSelf(teacherId, client = db) {
   const result = await client.query(
     `SELECT t.id, t.first_name, t.last_name, t.email, t.mobile, t.present_address, t.username,
             t.school_id, s.name AS school_name, s.city_region AS school_city_region,
+            t.region, t.division, t.deped_school_id,
             t.must_change_password, t.is_restricted, t.restriction_reason,
             t.is_adviser, t.advisory_grade, t.advisory_section, t.created_at,
             sub.id AS subscription_id, sub.plan_id, sub.plan_name, sub.price AS plan_price,
@@ -70,7 +71,7 @@ async function getMe(req, res) {
   });
 }
 
-// PATCH /api/teacher/me  (only name, email, mobile and address)
+// PATCH /api/teacher/me  (only name, email, mobile, address and the school details for DepEd forms)
 // The teaching assignment is read-only here: it has its own form (/me/adviser).
 async function updateMe(req, res) {
   const forbiddenKeys = [
@@ -87,19 +88,37 @@ async function updateMe(req, res) {
   ];
   const refused = Object.keys(req.body || {}).filter((key) => forbiddenKeys.includes(key));
   if (refused.length > 0) {
-    throw badRequest('Only your name, email, mobile and address can be changed here. Your teaching assignment is read-only.', {
+    throw badRequest('Only your name, email, mobile, address and school details can be changed here. Your teaching assignment is read-only.', {
       code: 'VALIDATION_ERROR',
       errors: { [refused[0]]: 'This cannot be changed here.' },
     });
   }
 
-  const { first_name, last_name, email, mobile, present_address } = req.valid.body;
-  await db.query(
-    `UPDATE teachers
-        SET first_name = $1, last_name = $2, email = $3, mobile = $4, present_address = $5, updated_at = NOW()
-      WHERE id = $6`,
-    [first_name, last_name, email, mobile, present_address, req.teacher.id]
-  );
+  const body = req.valid.body;
+  // Only the fields actually sent change. (The optional text fields
+  // default to '' when absent, so presence is read from the raw body.)
+  const sent = Object.keys(req.body || {});
+  const sets = [];
+  const values = [];
+  const set = (column, value, nullifyEmpty = false) => {
+    values.push(value);
+    sets.push(nullifyEmpty ? `${column} = NULLIF($${values.length}, '')` : `${column} = $${values.length}`);
+  };
+  if (sent.includes('first_name')) set('first_name', body.first_name);
+  if (sent.includes('last_name')) set('last_name', body.last_name);
+  if (sent.includes('email')) set('email', body.email);
+  if (sent.includes('mobile')) set('mobile', body.mobile);
+  if (sent.includes('present_address')) set('present_address', body.present_address);
+  if (sent.includes('region')) set('region', body.region, true);
+  if (sent.includes('division')) set('division', body.division, true);
+  if (sent.includes('deped_school_id')) set('deped_school_id', body.deped_school_id, true);
+  if (sets.length > 0) {
+    values.push(req.teacher.id);
+    await db.query(
+      `UPDATE teachers SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $${values.length}`,
+      values,
+    );
+  }
   const self = await findSelf(req.teacher.id);
   res.json({ teacher: publicTeacher(self) });
 }

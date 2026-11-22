@@ -1,4 +1,4 @@
-<div class="pagehead">
+<div class="pagehead no-print">
   <div>
     <h1>Grades / Class Record</h1>
     <div class="sub">
@@ -26,16 +26,16 @@
 </div>
 
 @if (error()) {
-  <div class="alert" role="alert">
+  <div class="alert no-print" role="alert">
     <app-icon name="alert" [size]="16" />
     <span>{{ error() }}</span>
   </div>
 }
 
 @if (loading() && !sheet()) {
-  <p class="muted">Loading the grade sheet…</p>
+  <p class="muted no-print">Loading the grade sheet…</p>
 } @else if (classes().length === 0) {
-  <div class="card">
+  <div class="card no-print">
     <div class="empty">
       <p><b>No classes yet.</b></p>
       <p>Add a class first, then encode its grades.</p>
@@ -43,6 +43,9 @@
     </div>
   </div>
 } @else if (sheet()) {
+  <!-- Everything screen-only lives in this wrapper so that only the
+       DepEd print section below ever prints. -->
+  <div class="no-print">
   <div class="trail">
     Academic Year {{ academicYear() }} &nbsp;›&nbsp; Class Records &amp; Grading &nbsp;›&nbsp;
     <b>{{ sheet()!.class.subject_name }} · {{ sheet()!.class.section_name }}</b>
@@ -72,19 +75,28 @@
         </div>
       </div>
       <div class="record-actions">
-        <button type="button" class="btn" (click)="recalculate()">
-          <app-icon name="refresh" [size]="16" /> Recalculate all
-        </button>
-        <button type="button" class="btn" (click)="exportCsv()" [disabled]="sheet()!.learners.length === 0">
-          <app-icon name="download" [size]="16" /> CSV
-        </button>
-        <button type="button" class="btn btn-secondary" (click)="discardChanges()" [disabled]="!dirty()">Discard changes</button>
-        <button type="button" class="btn btn-primary" (click)="save()" [disabled]="saving() || !dirty()">
-          {{ saving() ? 'Saving…' : 'Save scores' }}
-        </button>
-        <button type="button" class="btn btn-primary" (click)="openSubmit()" [disabled]="submitLoading() || sheet()!.learners.length === 0">
-          {{ submitLoading() ? 'Checking…' : submitLabel() }}
-        </button>
+        @if (view() === 'period') {
+          <button type="button" class="btn" (click)="recalculate()">
+            <app-icon name="refresh" [size]="16" /> Recalculate all
+          </button>
+          <button type="button" class="btn" (click)="exportCsv()" [disabled]="sheet()!.learners.length === 0">
+            <app-icon name="download" [size]="16" /> CSV
+          </button>
+          <button type="button" class="btn" (click)="printForm('class-record')" [disabled]="sheet()!.learners.length === 0">
+            <app-icon name="printer" [size]="16" /> Print class record
+          </button>
+          <button type="button" class="btn btn-secondary" (click)="discardChanges()" [disabled]="!dirty()">Discard changes</button>
+          <button type="button" class="btn btn-primary" (click)="save()" [disabled]="saving() || !dirty()">
+            {{ saving() ? 'Saving…' : 'Save scores' }}
+          </button>
+          <button type="button" class="btn btn-primary" (click)="openSubmit()" [disabled]="submitLoading() || sheet()!.learners.length === 0">
+            {{ submitLoading() ? 'Checking…' : submitLabel() }}
+          </button>
+        } @else {
+          <button type="button" class="btn" (click)="printForm('final-grades')" [disabled]="sheet()!.learners.length === 0">
+            <app-icon name="printer" [size]="16" /> Print final grades
+          </button>
+        }
       </div>
     </div>
     <div class="saved-note" [class.dirty]="dirty()">
@@ -95,10 +107,10 @@
     </div>
     <div class="quarters" role="tablist" [attr.aria-label]="sheet()!.grading.period_label">
       @for (q of periods(); track q) {
-        <button type="button" class="qtab" role="tab" [class.active]="quarter() === q" [attr.aria-selected]="quarter() === q" (click)="onQuarterChange(q)">
+        <button type="button" class="qtab" role="tab" [class.active]="view() === 'period' && quarter() === q" [attr.aria-selected]="view() === 'period' && quarter() === q" (click)="onQuarterChange(q)">
           <span>
             <span class="qn">{{ sheet()!.grading.period_label }} {{ q }}</span>
-            <span class="qs">{{ quarter() === q ? 'Active encoding' : 'Class record' }}</span>
+            <span class="qs">{{ view() === 'period' && quarter() === q ? 'Active encoding' : 'Class record' }}</span>
           </span>
           <span class="qdot" aria-hidden="true"></span>
           @if (sheet()!.submitted_periods.includes(q)) {
@@ -106,11 +118,19 @@
           }
         </button>
       }
+      <button type="button" class="qtab" role="tab" [class.active]="view() === 'finals'" [attr.aria-selected]="view() === 'finals'" (click)="onFinalsTab()">
+        <span>
+          <span class="qn">Final Grades</span>
+          <span class="qs">{{ sheet()!.finals.filed_periods }} of {{ sheet()!.finals.total_periods }} filed</span>
+        </span>
+        <span class="qdot" aria-hidden="true"></span>
+      </button>
       <div class="curr-note">Grading system<b>{{ sheet()!.grading.label }}</b></div>
     </div>
   </section>
 
-  <div class="formula" aria-label="Computation formula">
+  @if (view() === 'period') {
+    <div class="formula" aria-label="Computation formula">
     <span><span class="fx">fx</span><span>{{ formulaText() }}</span></span>
     <span class="live"><i aria-hidden="true"></i>Live calculation</span>
   </div>
@@ -190,6 +210,7 @@
       </div>
     }
   </section>
+  }
 
   @if (sheet()!.learners.length === 0) {
     <div class="card">
@@ -199,7 +220,7 @@
         <a class="btn btn-primary" routerLink="/teacher/classes">Go to Classes &amp; Sections</a>
       </div>
     </div>
-  } @else {
+  } @else if (view() === 'period') {
     <!-- Encoding grid -->
     <section class="card gridcard" aria-label="Grade encoding grid">
       <div class="grid-tools">
@@ -238,7 +259,7 @@
               @if (columnsByComponent().EX.length > 0) {
                 <th class="group qa" [attr.colspan]="columnsByComponent().EX.length">{{ sheet()!.grading.third_label }} · {{ sheet()!.weights.ex }}%</th>
               }
-              <th class="group calc" colspan="8">Computed</th>
+              <th class="group calc" colspan="9">Computed</th>
             </tr>
             <tr>
               @for (column of sheet()!.columns; track column.id) {
@@ -258,6 +279,7 @@
               <th class="calc">{{ sheet()!.grading.third_short }} WS</th>
               <th class="calc">Initial</th>
               <th class="calc qg">{{ sheet()!.grading.period_short }}G</th>
+              <th class="calc qg">Final</th>
             </tr>
           </thead>
           <tbody>
@@ -283,10 +305,11 @@
                 <td class="num">{{ fmt(row.computed.components.EX.ws) }}</td>
                 <td class="num">{{ fmt(row.computed.initial) }}</td>
                 <td class="num qg" [class.below]="row.computed.complete && (row.computed.qg ?? 100) < 75" [title]="row.computed.descriptor ?? ''">{{ fmt(row.computed.qg) }}</td>
+                <td class="num qg" [class.below]="row.final !== null && row.final < 75">{{ fmt(row.final) }}</td>
               </tr>
             }
             @if (filteredRows().length === 0) {
-              <tr><td [attr.colspan]="sheet()!.columns.length + 9" class="empty-row">No learners match the filters.</td></tr>
+              <tr><td [attr.colspan]="sheet()!.columns.length + 10" class="empty-row">No learners match the filters.</td></tr>
             }
           </tbody>
         </table>
@@ -305,6 +328,11 @@
                 <span class="lbl">{{ sheet()!.grading.period_short }}G</span>
                 <span class="qg-big" [class.below]="row.computed.complete && (row.computed.qg ?? 100) < 75">{{ fmt(row.computed.qg) }}</span>
                 <span class="lbl">{{ row.computed.status }}</span>
+              </div>
+              <div class="card-qg">
+                <span class="lbl">Final</span>
+                <span class="qg-big" [class.below]="row.final !== null && row.final < 75">{{ fmt(row.final) }}</span>
+                <span class="lbl">{{ sheet()!.finals.filed_periods }} of {{ sheet()!.finals.total_periods }} filed</span>
               </div>
             </header>
             @for (component of components; track component) {
@@ -339,6 +367,240 @@
         <button type="button" class="btn btn-ghost" (click)="addColumn('PT')">+ PT{{ columnsByComponent().PT.length + 1 }}</button>
         <button type="button" class="btn btn-ghost" (click)="addColumn('EX')">+ {{ sheet()!.grading.third_short }}{{ columnsByComponent().EX.length + 1 }}</button>
       </div>
+    </section>
+  } @else {
+    <!-- Final grades sheet: every filed period side by side. -->
+    <section class="card finalscard" aria-label="Final grades">
+      <div class="finals-head">
+        <span class="card-title">Final Grades</span>
+        <span class="muted">Filed {{ sheet()!.grading.period_label.toLowerCase() }}s only · a final grade appears once every {{ sheet()!.grading.period_label.toLowerCase() }} is filed</span>
+      </div>
+      <div class="table-wrap">
+        <table class="finals-table">
+          <thead>
+            <tr>
+              <th class="sticky">Learner</th>
+              @for (q of periods(); track q) {
+                <th>{{ sheet()!.grading.period_label }} {{ q }}</th>
+              }
+              <th>Final Grade</th>
+              <th>Descriptor</th>
+              <th>Remark</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (group of finalGroups(); track group.label) {
+              <tr class="sex-group"><td [attr.colspan]="periods().length + 4">{{ group.label }}</td></tr>
+              @for (row of group.rows; track row.learner.id) {
+                <tr>
+                  <td class="sticky learner-cell">
+                    <span class="learner-name">{{ learnerName(row.learner) }}</span>
+                    <span class="learner-id">{{ row.learner.learner_id }} · {{ row.learner.sex }}</span>
+                  </td>
+                  @for (q of periods(); track q) {
+                    <td class="num">{{ fmt(row.periodGrades[q] ?? null) }}</td>
+                  }
+                  <td class="num qg">{{ fmt(row.final) }}</td>
+                  <td>{{ row.descriptor ?? '—' }}</td>
+                  <td>{{ row.remark || '—' }}</td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  }
+
+  </div>
+
+  <!-- DepEd print forms: hidden on screen, printed only. -->
+  @if (printTarget() === 'class-record') {
+    <section class="deped-print" aria-label="Class record printout">
+      <div class="dp-head">
+        <img class="dp-seal" src="/deped-seal.png" alt="" />
+        <div class="dp-title">
+          <h2>CLASS RECORD - {{ sheet()!.grading.period_label.toUpperCase() }} {{ quarter() }}</h2>
+        </div>
+        <img class="dp-logo" src="/deped-logo.webp" alt="" />
+      </div>
+      <div class="dp-fields">
+        <div class="dp-field"><span class="fl">Region</span><span class="fv">{{ teacher()?.region ?? '' }}</span></div>
+        <div class="dp-field"><span class="fl">Division</span><span class="fv">{{ teacher()?.division ?? '' }}</span></div>
+        <div class="dp-field"><span class="fl">School ID</span><span class="fv">{{ teacher()?.deped_school_id ?? '' }}</span></div>
+        <div class="dp-field wide"><span class="fl">School Name</span><span class="fv">{{ teacher()?.school_name ?? '' }}</span></div>
+        <div class="dp-field"><span class="fl">School Year</span><span class="fv">{{ sheet()!.academic_year }}</span></div>
+        <div class="dp-field"><span class="fl">Grade Level</span><span class="fv">{{ sheet()!.class.grade_level }}</span></div>
+        <div class="dp-field"><span class="fl">Section</span><span class="fv">{{ sheet()!.class.section_name }}</span></div>
+        <div class="dp-field"><span class="fl">Teacher</span><span class="fv">{{ teacherName() }}</span></div>
+        <div class="dp-field"><span class="fl">Subject</span><span class="fv">{{ sheet()!.class.subject_name }}</span></div>
+      </div>
+      <table class="dp-table">
+        <thead>
+          <tr>
+            <th rowspan="2" class="dp-name">Learners' Names</th>
+            @if (columnsByComponent().WW.length > 0) {
+              <th [attr.colspan]="columnsByComponent().WW.length + 3">Written / Oral Works (WWs)</th>
+            }
+            @if (columnsByComponent().PT.length > 0) {
+              <th [attr.colspan]="columnsByComponent().PT.length + 3">Product / Performance Tasks (PTs)</th>
+            }
+            @if (columnsByComponent().EX.length > 0) {
+              <th [attr.colspan]="columnsByComponent().EX.length + 2 + (exBreakdown() ? columnsByComponent().EX.length : 0)">{{ sheet()!.grading.third_label }} ({{ sheet()!.grading.third_short }}s)</th>
+            }
+            <th rowspan="2" class="dp-num-col">Initial Grade</th>
+            <th rowspan="2" class="dp-num-col">{{ sheet()!.grading.period_label }} Grade</th>
+            <th rowspan="2" class="dp-desc-col">Descriptor</th>
+          </tr>
+          <tr>
+            @for (column of columnsByComponent().WW; track column.id) {
+              <th>{{ column.position }}</th>
+            }
+            @if (columnsByComponent().WW.length > 0) {
+              <th>Total</th><th>PS</th><th>WS</th>
+            }
+            @for (column of columnsByComponent().PT; track column.id) {
+              <th>{{ column.position }}</th>
+            }
+            @if (columnsByComponent().PT.length > 0) {
+              <th>Total</th><th>PS</th><th>WS</th>
+            }
+            @for (column of columnsByComponent().EX; track column.id) {
+              <th>{{ exShortLabel(column) }}</th>
+            }
+            @if (exBreakdown()) {
+              @for (column of columnsByComponent().EX; track column.id) {
+                <th>WS {{ exShortLabel(column) }}</th>
+              }
+            }
+            @if (columnsByComponent().EX.length > 0) {
+              <th>PS</th><th>WS</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="dp-hps">
+            <td class="dp-name">Highest Possible Score</td>
+            @for (column of columnsByComponent().WW; track column.id) {
+              <td>{{ column.highest_possible }}</td>
+            }
+            @if (columnsByComponent().WW.length > 0) {
+              <td>{{ hpsTotal('WW') }}</td><td>100</td><td>{{ sheet()!.weights.ww }}%</td>
+            }
+            @for (column of columnsByComponent().PT; track column.id) {
+              <td>{{ column.highest_possible }}</td>
+            }
+            @if (columnsByComponent().PT.length > 0) {
+              <td>{{ hpsTotal('PT') }}</td><td>100</td><td>{{ sheet()!.weights.pt }}%</td>
+            }
+            @for (column of columnsByComponent().EX; track column.id) {
+              <td>{{ column.highest_possible }}</td>
+            }
+            @if (exBreakdown()) {
+              @for (column of columnsByComponent().EX; track column.id) {
+                <td>{{ pfmt(exShares().get(column.id) ?? null) }}</td>
+              }
+            }
+            @if (columnsByComponent().EX.length > 0) {
+              <td>100</td><td>{{ sheet()!.weights.ex }}%</td>
+            }
+            <td></td><td></td><td></td>
+          </tr>
+          @for (group of printGroups(); track group.label) {
+            <tr class="dp-group"><td [attr.colspan]="printColspan()">{{ group.label }}</td></tr>
+            @for (row of group.rows; track row.learner.id; let i = $index) {
+              <tr>
+                <td class="dp-name">{{ i + 1 }}. {{ upperName(row.learner) }}</td>
+                @for (column of columnsByComponent().WW; track column.id) {
+                  <td>{{ pfmt(scoreValue(row.learner.id, column.id)) }}</td>
+                }
+                @if (columnsByComponent().WW.length > 0) {
+                  <td>{{ pfmt(printTotal(row, 'WW')) }}</td>
+                  <td>{{ pfmt(row.computed.components.WW.ps) }}</td>
+                  <td>{{ pfmt(row.computed.components.WW.ws) }}</td>
+                }
+                @for (column of columnsByComponent().PT; track column.id) {
+                  <td>{{ pfmt(scoreValue(row.learner.id, column.id)) }}</td>
+                }
+                @if (columnsByComponent().PT.length > 0) {
+                  <td>{{ pfmt(printTotal(row, 'PT')) }}</td>
+                  <td>{{ pfmt(row.computed.components.PT.ps) }}</td>
+                  <td>{{ pfmt(row.computed.components.PT.ws) }}</td>
+                }
+                @for (column of columnsByComponent().EX; track column.id) {
+                  <td>{{ pfmt(scoreValue(row.learner.id, column.id)) }}</td>
+                }
+                @if (exBreakdown()) {
+                  @for (column of columnsByComponent().EX; track column.id) {
+                    <td>{{ pfmt(row.exSub.get(column.id) ?? null) }}</td>
+                  }
+                }
+                @if (columnsByComponent().EX.length > 0) {
+                  <td>{{ pfmt(row.computed.components.EX.ps) }}</td>
+                  <td>{{ pfmt(row.computed.components.EX.ws) }}</td>
+                }
+                <td>{{ pfmt(row.computed.initial) }}</td>
+                <td>{{ pfmt(row.computed.qg) }}</td>
+                <td class="dp-desc">{{ row.computed.descriptor ?? '' }}</td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
+    </section>
+  }
+  @if (printTarget() === 'final-grades') {
+    <section class="deped-print" aria-label="Final grades printout">
+      <div class="dp-head">
+        <img class="dp-seal" src="/deped-seal.png" alt="" />
+        <div class="dp-title">
+          <h2>CLASS RECORD - FINAL GRADES</h2>
+        </div>
+        <img class="dp-logo" src="/deped-logo.webp" alt="" />
+      </div>
+      <div class="dp-fields">
+        <div class="dp-field"><span class="fl">Region</span><span class="fv">{{ teacher()?.region ?? '' }}</span></div>
+        <div class="dp-field"><span class="fl">Division</span><span class="fv">{{ teacher()?.division ?? '' }}</span></div>
+        <div class="dp-field"><span class="fl">School ID</span><span class="fv">{{ teacher()?.deped_school_id ?? '' }}</span></div>
+        <div class="dp-field wide"><span class="fl">School Name</span><span class="fv">{{ teacher()?.school_name ?? '' }}</span></div>
+        <div class="dp-field"><span class="fl">School Year</span><span class="fv">{{ sheet()!.academic_year }}</span></div>
+        <div class="dp-field"><span class="fl">Grade Level</span><span class="fv">{{ sheet()!.class.grade_level }}</span></div>
+        <div class="dp-field"><span class="fl">Section</span><span class="fv">{{ sheet()!.class.section_name }}</span></div>
+        <div class="dp-field"><span class="fl">Teacher</span><span class="fv">{{ teacherName() }}</span></div>
+        <div class="dp-field"><span class="fl">Subject</span><span class="fv">{{ sheet()!.class.subject_name }}</span></div>
+      </div>
+      <table class="dp-table">
+        <thead>
+          <tr>
+            <th rowspan="2" class="dp-name">Learners' Names</th>
+            <th [attr.colspan]="periods().length">{{ sheet()!.grading.period_label }} Grades</th>
+            <th rowspan="2">Final Grade</th>
+            <th rowspan="2">Descriptor</th>
+            <th rowspan="2">Remark</th>
+          </tr>
+          <tr>
+            @for (q of periods(); track q) {
+              <th>{{ sheet()!.grading.period_label }} {{ q }}</th>
+            }
+          </tr>
+        </thead>
+        <tbody>
+          @for (group of finalGroups(); track group.label) {
+            <tr class="dp-group"><td [attr.colspan]="periods().length + 4">{{ group.label }}</td></tr>
+            @for (row of group.rows; track row.learner.id; let i = $index) {
+              <tr>
+                <td class="dp-name">{{ i + 1 }}. {{ upperName(row.learner) }}</td>
+                @for (q of periods(); track q) {
+                  <td>{{ fmt(row.periodGrades[q] ?? null) }}</td>
+                }
+                <td>{{ fmt(row.final) }}</td>
+                <td class="dp-desc">{{ row.descriptor ?? '' }}</td>
+                <td>{{ row.remark }}</td>
+              </tr>
+            }
+          }
+        </tbody>
+      </table>
     </section>
   }
 }

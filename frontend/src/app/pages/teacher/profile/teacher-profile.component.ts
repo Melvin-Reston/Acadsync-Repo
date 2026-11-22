@@ -12,6 +12,7 @@ import { IconComponent } from '../../../shared/icon.component';
   selector: 'app-teacher-profile',
   imports: [FormsModule, IconComponent],
   templateUrl: './teacher-profile.component.html',
+  styleUrl: './teacher-profile.component.css',
 })
 export class TeacherProfileComponent {
   private readonly auth = inject(TeacherAuthService);
@@ -31,6 +32,12 @@ export class TeacherProfileComponent {
   protected mobile = '';
   protected presentAddress = '';
 
+  // School details for the DepEd print forms (Region, Division, School ID).
+  // The teacher's own entries; blank until filled in.
+  protected region = '';
+  protected division = '';
+  protected depedSchoolId = '';
+
   // Password change
   protected currentPassword = '';
   protected newPassword = '';
@@ -48,6 +55,9 @@ export class TeacherProfileComponent {
         this.email = response.teacher.email;
         this.mobile = response.teacher.mobile;
         this.presentAddress = response.teacher.present_address;
+        this.region = response.teacher.region ?? '';
+        this.division = response.teacher.division ?? '';
+        this.depedSchoolId = response.teacher.deped_school_id ?? '';
       },
       error: (error) => {
         this.loading.set(false);
@@ -68,6 +78,9 @@ export class TeacherProfileComponent {
         email: this.email,
         mobile: this.mobile,
         present_address: this.presentAddress,
+        region: this.region,
+        division: this.division,
+        deped_school_id: this.depedSchoolId,
       })
       .subscribe({
         next: (response) => {

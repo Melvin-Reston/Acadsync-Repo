@@ -9,6 +9,7 @@ import {
   AttendanceMark,
   AttendanceRoll,
   AttendanceStatus,
+  Sf2Report,
 } from './models';
 import { downloadBlob, toParams } from './helpers';
 
@@ -28,6 +29,14 @@ export class AttendanceService {
   roll(classId: number, date: string): Observable<AttendanceRoll> {
     return this.http.get<AttendanceRoll>(`${this.api}/attendance`, {
       params: toParams({ class_id: classId, date }),
+    });
+  }
+
+  // School Form 2 for one class and month (Batch 8): the month's daily
+  // attendance in SF2 shape, with the school details for the header.
+  sf2(classId: number, month: string): Observable<Sf2Report> {
+    return this.http.get<Sf2Report>(`${this.api}/attendance/sf2`, {
+      params: toParams({ class_id: classId, month }),
     });
   }
 

@@ -309,3 +309,184 @@
   .lmeta { white-space: normal; }
 
 }
+
+/* ---------- Tabs: Daily roll / SF2 ---------- */
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  border: none;
+  background: none;
+  padding: 10px 14px;
+  font: inherit;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.tab.active {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+
+/* ---------- SF2 preview ---------- */
+.sf2card {
+  padding: 0;
+}
+
+.sf2card .card-head {
+  padding: 16px 16px 12px;
+}
+
+.sf2card .table-wrap {
+  overflow-x: auto;
+  padding: 0 16px;
+}
+
+.sf2-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.sf2-table th,
+.sf2-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.sf2-table th {
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sf2-table .sf2-name {
+  text-align: left;
+  min-width: 200px;
+}
+
+.sf2-table .sf2-remarks {
+  min-width: 120px;
+}
+
+.sf2-note {
+  padding: 12px 16px 16px;
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* ---------- SF2 print form: never shown on screen ---------- */
+.deped-print {
+  display: none;
+}
+
+@media print {
+  .deped-print {
+    display: block;
+    page: deped-form;
+    color: #000;
+    background: #fff;
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  .dp-title-center {
+    text-align: center;
+    margin-bottom: 8px;
+  }
+
+  .dp-title-center h2 {
+    font-size: 13px;
+    margin: 0 0 2px;
+  }
+
+  .dp-title-center p {
+    font-size: 9px;
+    margin: 0;
+  }
+
+  .dp-fields {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px 20px;
+    margin-bottom: 8px;
+  }
+
+  .dp-field {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    flex: 1 1 26%;
+    min-width: 160px;
+  }
+
+  .dp-field.wide {
+    flex: 2 1 52%;
+  }
+
+  .dp-field .fl {
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .dp-field .fv {
+    flex: 1;
+    border-bottom: 1px solid #000;
+    min-height: 14px;
+    padding: 0 4px;
+  }
+
+  .dp-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  .dp-table th,
+  .dp-table td {
+    border: 1px solid #000;
+    padding: 2px 3px;
+    text-align: center;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .dp-table th {
+    font-weight: 700;
+    font-size: 8px;
+    line-height: 1.15;
+    white-space: normal;
+    background: #fff;
+  }
+
+  .dp-table .dp-name {
+    text-align: left;
+    width: 170px;
+  }
+
+  .dp-table .dp-total {
+    width: 46px;
+  }
+
+  .dp-table .dp-remarks {
+    width: 80px;
+  }
+
+  .dp-legend,
+  .dp-footnote {
+    font-size: 9px;
+    margin: 6px 0 0;
+  }
+}

@@ -1469,3 +1469,171 @@ describe('Migration 007 (quarters to terms)', () => {
     }
   });
 });
+
+// ---------- Final grade column (Batch 7 fix 2) ----------
+
+describe('Final grade column', () => {
+  // Encodes one period's scores for the given learners and files the
+  // period, with blanks allowed.
+  async function fillAndFile(token, classId, quarter, learnerValues) {
+    const sheet = await getSheet(token, classId, quarter);
+    const all = [];
+    for (const [learner, values] of learnerValues) all.push(...scoresFor(sheet, learner, values));
+    await saveScores(token, classId, quarter, all);
+    const filed = await api().post(`/api/teacher/grades/${classId}/submit`).set(bearer(token))
+      .send({ quarter, confirm_blanks: true });
+    assert.equal(filed.status, 200, JSON.stringify(filed.body));
+  }
+
+  test('a fresh sheet has no final grade yet', async () => {
+    const { token } = await signup();
+    const klass = await makeClass(token, { section_name: 'Luke' });
+    const alex = await makeLearner(token, { first_name: 'Alex', last_name: 'Rivera', learner_id: 'STU-2026-1048', sex: 'Male' });
+    await enrol(token, klass.id, alex.id);
+
+    const sheet = await getSheet(token, klass.id, 1);
+    assert.equal(sheet.finals.filed_periods, 0);
+    assert.equal(sheet.finals.total_periods, 3);
+    assert.equal(sheet.finals.grades[alex.id], null);
+  });
+
+  test('the final appears only once all three terms are filed, and saved-but-unfiled scores never count', async () => {
+    const { token } = await signup();
+    const klass = await makeClass(token, { section_name: 'Luke' });
+    const alex = await makeLearner(token, { first_name: 'Alex', last_name: 'Rivera', learner_id: 'STU-2026-1048', sex: 'Male' });
+    const isabella = await makeLearner(token, { first_name: 'Isabella', last_name: 'Flores', learner_id: 'STU-2026-1039', sex: 'Female' });
+    await enrol(token, klass.id, alex.id);
+    await enrol(token, klass.id, isabella.id);
+
+    // Term 1: Alex 90, Isabella 68. No final yet.
+    await fillAndFile(token, klass.id, 1, [[alex, WORKED], [isabella, LOW]]);
+    let sheet = await getSheet(token, klass.id, 1);
+    assert.equal(sheet.finals.filed_periods, 1);
+    assert.equal(sheet.finals.grades[alex.id], null);
+
+    // Term 2: Alex 100, Isabella 68. Still no final.
+    await fillAndFile(token, klass.id, 2, [[alex, PERFECT], [isabella, LOW]]);
+    sheet = await getSheet(token, klass.id, 2);
+    assert.equal(sheet.finals.filed_periods, 2);
+    assert.equal(sheet.finals.grades[alex.id], null);
+
+    // Term 3 scores saved but NOT filed: the final must stay blank.
+    const term3 = await getSheet(token, klass.id, 3);
+    await saveScores(token, klass.id, 3, [
+      ...scoresFor(term3, alex, LOW),
+      ...scoresFor(term3, isabella, LOW),
+    ]);
+    sheet = await getSheet(token, klass.id, 3);
+    assert.equal(sheet.finals.filed_periods, 2);
+    assert.equal(sheet.finals.grades[alex.id], null);
+
+    // Filing Term 3 shows the final: mean of 90, 100 and 68, rounded.
+    const filed = await api().post(`/api/teacher/grades/${klass.id}/submit`).set(bearer(token))
+      .send({ quarter: 3, confirm_blanks: true });
+    assert.equal(filed.status, 200, JSON.stringify(filed.body));
+    sheet = await getSheet(token, klass.id, 1);
+    assert.equal(sheet.finals.filed_periods, 3);
+    assert.equal(sheet.finals.total_periods, 3);
+    assert.equal(sheet.finals.grades[alex.id], 86);
+    assert.equal(sheet.finals.grades[isabella.id], 68);
+  });
+
+  test('editing scores after filing clears the final until the period is re-filed', async () => {
+    const { token } = await signup();
+    const klass = await makeClass(token, { section_name: 'Luke' });
+    const alex = await makeLearner(token, { first_name: 'Alex', last_name: 'Rivera', learner_id: 'STU-2026-1048', sex: 'Male' });
+    await enrol(token, klass.id, alex.id);
+
+    await fillAndFile(token, klass.id, 1, [[alex, WORKED]]);
+    await fillAndFile(token, klass.id, 2, [[alex, PERFECT]]);
+    await fillAndFile(token, klass.id, 3, [[alex, LOW]]);
+    let sheet = await getSheet(token, klass.id, 1);
+    assert.equal(sheet.finals.grades[alex.id], 86);
+
+    // One changed score clears the Term 1 submission — and the final.
+    const term1 = await getSheet(token, klass.id, 1);
+    await saveScores(token, klass.id, 1, scoresFor(term1, alex, { ww: [21] }));
+    sheet = await getSheet(token, klass.id, 1);
+    assert.equal(sheet.submission, null);
+    assert.equal(sheet.finals.filed_periods, 2);
+    assert.equal(sheet.finals.grades[alex.id], null);
+
+    // Re-filing brings the final back, recomputed from the new scores.
+    const filed = await api().post(`/api/teacher/grades/${klass.id}/submit`).set(bearer(token))
+      .send({ quarter: 1, confirm_blanks: false });
+    assert.equal(filed.status, 200, JSON.stringify(filed.body));
+    sheet = await getSheet(token, klass.id, 1);
+    const term1Grade = sheet.learners[0].computed.qg;
+    assert.equal(sheet.finals.filed_periods, 3);
+    assert.equal(sheet.finals.grades[alex.id], Math.round((term1Grade + 100 + 68) / 3));
+  });
+
+  test('a subject teacher with no advisory assignment sees finals for their own classes', async () => {
+    const { token } = await signup();
+    const klass = await makeClass(token, { section_name: 'Luke' });
+    const alex = await makeLearner(token, { first_name: 'Alex', last_name: 'Rivera', learner_id: 'STU-2026-1048', sex: 'Male' });
+    await enrol(token, klass.id, alex.id);
+
+    // This teacher never set an advisory assignment: Consolidation
+    // refuses them, but the grade sheet must still carry finals.
+    const refused = await api().get('/api/teacher/consolidation?quarter=1').set(bearer(token));
+    assert.equal(refused.status, 400, JSON.stringify(refused.body));
+    assert.equal(refused.body.code, 'NO_ADVISORY');
+
+    await fillAndFile(token, klass.id, 1, [[alex, WORKED]]);
+    await fillAndFile(token, klass.id, 2, [[alex, PERFECT]]);
+    await fillAndFile(token, klass.id, 3, [[alex, LOW]]);
+    const sheet = await getSheet(token, klass.id, 2);
+    assert.equal(sheet.finals.filed_periods, 3);
+    assert.equal(sheet.finals.grades[alex.id], 86);
+  });
+
+  test('a learner with an incomplete record in a filed period has no final grade', async () => {
+    const { token } = await signup();
+    const klass = await makeClass(token, { section_name: 'Luke' });
+    const alex = await makeLearner(token, { first_name: 'Alex', last_name: 'Rivera', learner_id: 'STU-2026-1048', sex: 'Male' });
+    const isabella = await makeLearner(token, { first_name: 'Isabella', last_name: 'Flores', learner_id: 'STU-2026-1039', sex: 'Female' });
+    await enrol(token, klass.id, alex.id);
+    await enrol(token, klass.id, isabella.id);
+
+    await fillAndFile(token, klass.id, 1, [[alex, WORKED], [isabella, LOW]]);
+    await fillAndFile(token, klass.id, 2, [[alex, PERFECT], [isabella, LOW]]);
+    // Term 3 is filed with Isabella blank (confirm_blanks).
+    await fillAndFile(token, klass.id, 3, [[alex, LOW]]);
+
+    const sheet = await getSheet(token, klass.id, 3);
+    assert.equal(sheet.finals.filed_periods, 3);
+    assert.equal(sheet.finals.grades[alex.id], 86);
+    assert.equal(sheet.finals.grades[isabella.id], null);
+  });
+
+  test('the final averages four quarters under DO 8', async () => {
+    const { token } = await signup();
+    const klass = await makeClass(token, { section_name: 'Luke', academic_year: '2025-2026' });
+    const alex = await makeLearner(token, { first_name: 'Alex', last_name: 'Rivera', learner_id: 'STU-2026-1048', sex: 'Male' });
+    await enrol(token, klass.id, alex.id);
+
+    const first = await getSheet(token, klass.id, 1);
+    assert.equal(first.grading.code, 'do8_2015');
+    assert.deepEqual(first.grading.periods, [1, 2, 3, 4]);
+    assert.equal(first.finals.total_periods, 4);
+
+    // Q1 92, Q2 100, Q3 70 — no final until Q4 is filed.
+    // DO 8 has a single Quarterly Assessment column, so the perfect and
+    // low sets carry one EX score, not three.
+    const PERFECT_DO8 = { ww: [25, 25, 25, 25], pt: [50, 50, 50, 50], ex: [50] };
+    const LOW_DO8 = { ww: [10, 10, 10, 10], pt: [20, 20, 20, 20], ex: [20] };
+    await fillAndFile(token, klass.id, 1, [[alex, WORKED_DO8]]);
+    await fillAndFile(token, klass.id, 2, [[alex, PERFECT_DO8]]);
+    await fillAndFile(token, klass.id, 3, [[alex, LOW_DO8]]);
+    let sheet = await getSheet(token, klass.id, 3);
+    assert.equal(sheet.finals.filed_periods, 3);
+    assert.equal(sheet.finals.grades[alex.id], null);
+
+    // Q4 92: mean of 92, 100, 70 and 92 is 88.5, rounded to 89.
+    await fillAndFile(token, klass.id, 4, [[alex, WORKED_DO8]]);
+    sheet = await getSheet(token, klass.id, 4);
+    assert.equal(sheet.finals.filed_periods, 4);
+    assert.equal(sheet.finals.grades[alex.id], 89);
+  });
+});

@@ -1730,15 +1730,20 @@ form > .form-grid + .alert {
 }
 
 
-/* ---------- Print: only the report card prints ---------- */
-/* The Report Card (Batch 5) is the one page that prints. The app chrome —
-   sidebar, top bar, scrim and anything marked .no-print — never prints, and
-   the page is true A5 with no margins. The card's own print rules live in
-   the report card component. */
+/* ---------- Print: only print sections print ---------- */
+/* Print sections carry their own layout; the app chrome — sidebar, top
+   bar, scrim and anything marked .no-print — never prints. Named pages
+   keep each form's size: the report card stays A5 portrait while the
+   DepEd forms print landscape. Each print section names its page. */
 @media print {
-  @page {
+  @page report-card {
     size: A5 portrait;
     margin: 0;
+  }
+
+  @page deped-form {
+    size: landscape;
+    margin: 10mm;
   }
 
   body {

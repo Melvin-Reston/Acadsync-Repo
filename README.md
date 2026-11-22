@@ -1,4 +1,4 @@
-# AcadSync — Admin Parts 1 and 2, Teacher Batches 1–7
+# AcadSync — Admin Parts 1 and 2, Teacher Batches 1–8
 
 One project with two folders:
 
@@ -14,6 +14,8 @@ Teacher Batch 1 adds the teacher side: teacher sign-up (Create Account with Choo
 Teacher Batch 4.1 adds the grading-system switch: the grading system is chosen per academic year in Settings (DO 8 s. 2015, DO 015 s. 2026 adjusted for SY 2026–2027, or DO 015 zero-based from SY 2027–2028), with three terms instead of four quarters under DO 015, Examinations columns with sub-weights, subject groups for the default weights, and final grades in Consolidation. See [Grading systems](#grading-systems) and [Upgrading from Teacher Batch 4](#upgrading-from-teacher-batch-4).
 
 Teacher Batch 6 adds Payments & Invoices for the teacher: the current plan with days left, the active plans with prices, the teacher's own invoices, and the receipt for one invoice — paid by scanning the administrator's QR code, with a screenshot and a reference number sent for confirmation. See [Payments & Invoices](#payments--invoices) and [Upgrading from Teacher Batch 5](#upgrading-from-teacher-batch-5).
+
+Teacher Batch 8 adds the DepEd print forms: the Class Record and Final Grades printouts on the Grades page, the School Form 2 (SF2) daily attendance report on the Attendance page, and the Region, Division and School ID the teacher enters on the Profile page, which print on the forms. See [Teacher Batch 8: DepEd print forms](#teacher-batch-8-deped-print-forms) and [Upgrading from Teacher Batch 7 fix 2](#upgrading-from-teacher-batch-7-fix-2).
 
 Already running Part 1? Go straight to [Upgrading from Part 1](#upgrading-from-part-1).
 
@@ -406,6 +408,42 @@ npm start
 
 No new `.env` settings are required.
 
+## Upgrading from Teacher Batch 7 fix 2
+
+Your `.env` file and everything in your database are kept. You do not run the seed again.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip the Teacher Batch 8 zip **over your existing `acadsync` folder** and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run migrate
+npm run dev
+```
+
+`npm run migrate` should print `Applied 010_teacher_school_details.sql`. It adds three optional fields (Region, Division, School ID) to the teacher's own record, for the DepEd print forms. Nothing else changes.
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. Nothing is lost; the new printouts are listed under [Teacher Batch 8: DepEd print forms](#teacher-batch-8-deped-print-forms).
+
+No new `.env` settings are required.
+
+## Teacher Batch 8: DepEd print forms
+
+1. **School details for DepEd forms** — on the **Profile** page, under Personal details, three optional fields: **Region**, **Division** and **School ID**. They print on the DepEd forms below, and stay blank on the forms when unset. Nothing else on the profile changes, and the teaching assignment stays read-only.
+2. **Class Record print** — on the **Grades** page, **Print class record** prints the current sheet in the DepEd Class Record format: the seal and DepEd logo, Region / Division / School ID / School Name / School Year, Grade Level / Section / Teacher / Subject, the Highest Possible Score row, then Written Works, Performance Tasks and Examinations (with the ST1 / ST2 / Term Exam sub-columns and their weighted scores under DO 015, or the single Quarterly Assessment block under DO 8), then Initial Grade, Term/Quarter Grade and Descriptor. Learners are grouped Male then Female, numbered separately. The printout shows the sheet as it is right now, including blanks — it is the working record. It prints landscape, in black and white.
+3. **Final Grades tab** — next to the term tabs on the **Grades** page. It shows every filed term side by side with the Final Grade, Descriptor and Remark (Passed at 75 or above, Failed below it, blank when there is no final grade yet). The data follows the same rule as the Final column: filed submissions only, and the final grade appears only once every term is filed. **Print final grades** prints it in the DepEd Class Record – Final Grades format, with the same header and Male/Female grouping.
+4. **SF2 tab** — on the **Attendance** page, next to Daily roll. Pick a month (June to April of the school year) to preview the **School Form 2 Daily Attendance Report of Learners**: Monday–Friday days only, names in alphabetical order, X for Absent, L for Late, E for Excused, blank for Present or no record, with Absent and Present totals that cover recorded school days only. **Print SF2** prints the form, landscape, in black and white, with no logos. The Remarks column stays blank for handwriting.
+
 ## Upgrading from Teacher Batch 6
 
 Your `.env` file and everything in your database are kept. You do not run the seed again.
@@ -434,6 +472,39 @@ npm start
 5. Open http://localhost:4200 and sign in as before. Classes & Sections, Grades and Attendance look different (see [Teacher Batch 7](#teacher-batch-7-enhancements-round-1)), but everything you had is still there.
 
 No new `.env` settings are required.
+
+## Upgrading from Teacher Batch 7 fix 1
+
+Your `.env` file and everything in your database are kept. You do not run the seed again.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip the Teacher Batch 7 fix 2 zip **over your existing `acadsync` folder** and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run migrate
+npm run dev
+```
+
+`npm run migrate` should print `Database is already up to date`. Fix 2 needs no new migration.
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. Nothing is lost; the change is listed under [Teacher Batch 7 fix 2](#teacher-batch-7-fix-2).
+
+No new `.env` settings are required.
+
+## Teacher Batch 7 fix 2
+
+One addition on top of fix 1: the Grades page now has a **Final** column at the right end of the encoding table, after the term grade. It shows the mean of the filed term grades for the class, rounded — and only once every term is filed; until then it shows —. It is computed from filed submissions only, so editing a score after filing clears the filing and the final disappears until the term is filed again. Any subject teacher sees the finals for their own classes; no advisory assignment is needed. The same Final grade shows on the per-learner cards on phones. Nothing about how grades are computed changes, and the general average stays in Consolidation.
 
 ## Upgrading from Teacher Batch 7
 

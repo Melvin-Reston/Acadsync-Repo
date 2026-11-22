@@ -55,6 +55,10 @@ function publicTeacher(teacher) {
     present_address: teacher.present_address,
     school_id: teacher.school_id,
     school_name: teacher.school_name || null,
+    // The teacher's own entries for the DepEd print forms; null until filled in.
+    region: teacher.region || null,
+    division: teacher.division || null,
+    deped_school_id: teacher.deped_school_id || null,
     must_change_password: teacher.must_change_password,
     is_restricted: teacher.is_restricted,
     is_adviser: teacher.is_adviser,

@@ -24,6 +24,9 @@ export interface TeacherProfileBody {
   email: string;
   mobile: string;
   present_address: string;
+  region?: string;
+  division?: string;
+  deped_school_id?: string;
 }
 
 export interface AdviserBody {

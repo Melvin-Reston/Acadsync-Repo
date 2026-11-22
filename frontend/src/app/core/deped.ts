@@ -342,6 +342,38 @@ export function computeLearnerGrade(
   };
 }
 
+// The weighted score of each Examinations sub-column, for the DepEd class
+// record printout (WS ST1 / WS ST2 / WS TE). This mirrors the EX branch of
+// computeLearnerGrade above: each encoded column's PS times its share of
+// the component — its sub-weight, or an equal share when no encoded column
+// has one. The shares add up to the component PS. Unencoded columns get
+// null. Under DO 8 there is no sub-column breakdown (a single QA column),
+// so callers only use this when the profile is a DO 015 one.
+export function exSubWs(
+  columns: GradeColumnLike[],
+  scores: Map<number, number | null>,
+  profileCode: string | null | undefined = 'do8_2015',
+): Map<number, number | null> {
+  const result = new Map<number, number | null>();
+  if (profileFor(profileCode).transmutation === 'do8') return result;
+  const group = columns.filter((column) => column.component === 'EX');
+  const encoded = group.filter((column) => {
+    const score = scores.get(column.id);
+    return score !== null && score !== undefined;
+  });
+  const totalWeight = encoded.reduce((sum, column) => sum + (Number(column.sub_weight) || 0), 0);
+  for (const column of group) {
+    const score = scores.get(column.id);
+    if (score === null || score === undefined) {
+      result.set(column.id, null);
+      continue;
+    }
+    const share = totalWeight > 0 ? Number(column.sub_weight) || 0 : 100 / encoded.length;
+    result.set(column.id, round2(((score / column.highest_possible) * 100 * share) / 100));
+  }
+  return result;
+}
+
 export function honorsFor(
   gwa: number | null,
   subjectGrades: (number | null | undefined)[] | null = null,

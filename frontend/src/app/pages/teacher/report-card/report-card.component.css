@@ -82,10 +82,15 @@
 }
 
 /* ---------- Print ---------- */
-/* In print the sheets stack one per page. This lives here, next to the
-   screen rule it overrides, so the print rule wins the cascade. */
+/* In print the sheets stack one per page, on the A5 named page. This
+   lives here, next to the screen rule it overrides, so the print rule
+   wins the cascade. */
 @media print {
   .sheets {
     display: block;
+  }
+
+  .sheet {
+    page: report-card;
   }
 }

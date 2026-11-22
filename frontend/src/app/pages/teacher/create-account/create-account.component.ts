@@ -193,6 +193,9 @@ export class TeacherCreateAccountComponent {
             is_adviser: false,
             advisory_grade: null,
             advisory_section: null,
+            region: null,
+            division: null,
+            deped_school_id: null,
           });
           this.goTo('created');
         },

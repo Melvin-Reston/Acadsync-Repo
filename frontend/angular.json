@@ -43,7 +43,9 @@
           "options": {
             "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
-            "allowedCommonJsDependencies": ["qrcode"],
+            "allowedCommonJsDependencies": [
+              "qrcode"
+            ],
             "assets": [
               {
                 "glob": "**/*",
@@ -65,7 +67,7 @@
                 {
                   "type": "anyComponentStyle",
                   "maximumWarning": "8kB",
-                  "maximumError": "12kB"
+                  "maximumError": "14kB"
                 }
               ],
               "outputHashing": "all"

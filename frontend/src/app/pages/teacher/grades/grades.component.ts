@@ -24,8 +24,9 @@ import {
   GradeLearnerRow,
   GradeSheet,
   SubmissionCheck,
+  TeacherSelf,
 } from '../../../core/models';
-import { computeLearnerGrade, DEFAULT_WEIGHTS } from '../../../core/deped';
+import { computeLearnerGrade, DEFAULT_WEIGHTS, descriptorFor, exSubWs } from '../../../core/deped';
 import { DropdownComponent, DropdownOption } from '../../../shared/dropdown.component';
 import { IconComponent } from '../../../shared/icon.component';
 import { ModalComponent } from '../../../shared/modal.component';
@@ -46,6 +47,7 @@ export class TeacherGradesComponent {
 
   protected readonly classes = signal<ClassItem[]>([]);
   protected readonly academicYear = signal<string | null>(null);
+  protected readonly teacher = signal<TeacherSelf | null>(null);
   protected readonly sheet = signal<GradeSheet | null>(null);
   protected readonly loading = signal(true);
   protected readonly error = signal('');
@@ -53,6 +55,11 @@ export class TeacherGradesComponent {
 
   protected readonly selectedClassId = signal<number | ''>('');
   protected readonly quarter = signal(1);
+
+  // Period encoding view, or the Final Grades tab (every filed period side
+  // by side). The DepEd print forms print from these same rows.
+  protected readonly view = signal<'period' | 'finals'>('period');
+  protected readonly printTarget = signal<'class-record' | 'final-grades' | null>(null);
 
   // The working scores: learner id -> column id -> score (null = blank).
   // Seeded from the saved sheet on load; typing updates these, and the
@@ -142,8 +149,78 @@ export class TeacherGradesComponent {
       return {
         learner,
         computed: computeLearnerGrade(sheet.columns, scores, sheet.weights, sheet.grading.code),
+        // The final grade, from filed submissions only — null until every
+        // period is filed. It never follows the unsaved draft.
+        final: sheet.finals.grades[learner.id] ?? null,
+        // The Examinations sub-column weighted scores (WS ST1 / WS ST2 /
+        // WS TE) for the DepEd class record printout.
+        exSub: exSubWs(sheet.columns, scores, sheet.grading.code),
       };
     });
+  });
+
+  // The printout shows the whole roster, unfiltered, grouped Male then
+  // Female with numbering restarted in each group — the DepEd form's order.
+  protected readonly printGroups = computed(() => {
+    const rows = this.rows();
+    const groups = [
+      { label: 'MALE', rows: rows.filter((row) => row.learner.sex === 'Male') },
+      { label: 'FEMALE', rows: rows.filter((row) => row.learner.sex === 'Female') },
+    ];
+    return groups.filter((group) => group.rows.length > 0);
+  });
+
+  // The Final Grades tab: every filed period side by side, from filed
+  // submissions only, with the final grade, descriptor and remark.
+  protected readonly finalRows = computed(() => {
+    const sheet = this.sheet();
+    if (!sheet) return [];
+    return sheet.learners.map((learner) => {
+      const periodGrades = sheet.finals.period_grades[learner.id] ?? {};
+      const final = sheet.finals.grades[learner.id] ?? null;
+      return {
+        learner,
+        periodGrades,
+        final,
+        descriptor: final === null ? null : descriptorFor(final, sheet.grading.code),
+        remark: final === null ? '' : final >= 75 ? 'Passed' : 'Failed',
+      };
+    });
+  });
+
+  protected readonly finalGroups = computed(() => {
+    const rows = this.finalRows();
+    const groups = [
+      { label: 'MALE', rows: rows.filter((row) => row.learner.sex === 'Male') },
+      { label: 'FEMALE', rows: rows.filter((row) => row.learner.sex === 'Female') },
+    ];
+    return groups.filter((group) => group.rows.length > 0);
+  });
+
+  // Whether the Examinations block prints with the ST1/ST2/TE sub-column
+  // breakdown (DO 015) or as a single block (DO 8).
+  protected readonly exBreakdown = computed(() => this.sheet()?.grading.code !== 'do8_2015');
+
+  // The share of the Examinations component each EX column carries, for the
+  // Highest Possible Score row: the sub-weight when any column has one,
+  // otherwise equal shares — the same rule the computation uses.
+  protected readonly exShares = computed(() => {
+    const sheet = this.sheet();
+    const shares = new Map<number, number>();
+    if (!sheet) return shares;
+    const ex = sheet.columns.filter((column) => column.component === 'EX');
+    if (ex.length === 0) return shares;
+    const anyWeight = ex.some((column) => column.sub_weight !== null && column.sub_weight !== undefined);
+    for (const column of ex) {
+      shares.set(column.id, anyWeight ? column.sub_weight ?? 0 : 100 / ex.length);
+    }
+    return shares;
+  });
+
+  protected readonly teacherName = computed(() => {
+    const teacher = this.teacher();
+    if (!teacher) return '';
+    return `${teacher.first_name} ${teacher.last_name}`.toUpperCase();
   });
 
   protected readonly filteredRows = computed(() => {
@@ -252,10 +329,16 @@ export class TeacherGradesComponent {
 
   constructor() {
     this.portal.me().subscribe({
-      next: (response) => this.academicYear.set(response.academic_year),
+      next: (response) => {
+        this.academicYear.set(response.academic_year);
+        this.teacher.set(response.teacher);
+      },
       error: () => undefined,
     });
     this.loadClasses();
+    // A print section renders only for the form being printed; clear it
+    // once the print dialog closes so the next print starts clean.
+    window.addEventListener('afterprint', () => this.printTarget.set(null));
   }
 
   // ---------- Loading ----------
@@ -314,9 +397,23 @@ export class TeacherGradesComponent {
   }
 
   protected onQuarterChange(value: number): void {
+    this.view.set('period');
     this.quarter.set(value);
     this.error.set('');
     this.loadSheet(value);
+  }
+
+  protected onFinalsTab(): void {
+    this.view.set('finals');
+    this.error.set('');
+  }
+
+  // Prints one DepEd form: the print section for it renders, then the
+  // browser print dialog opens. The section is print-only (hidden on
+  // screen) and the app chrome never prints.
+  protected printForm(target: 'class-record' | 'final-grades'): void {
+    this.printTarget.set(target);
+    window.setTimeout(() => window.print(), 60);
   }
 
   protected recalculate(): void {
@@ -585,9 +682,62 @@ export class TeacherGradesComponent {
     return String(Math.round(value * 100) / 100);
   }
 
+  // Print forms leave a cell blank when there is no value — a blank is not
+  // a zero on the working record.
+  protected pfmt(value: number | null | undefined): string {
+    if (value === null || value === undefined) return '';
+    return String(Math.round(value * 100) / 100);
+  }
+
   protected learnerName(learner: GradeLearnerRow): string {
     return `${learner.last_name}, ${learner.first_name}`;
   }
+
+  protected upperName(learner: GradeLearnerRow): string {
+    return `${learner.last_name}, ${learner.first_name}`.toUpperCase();
+  }
+
+  // Short header for an Examinations column on the class record: ST1, ST2,
+  // TE for the default columns, the column name for a teacher-added one.
+  protected exShortLabel(column: GradeColumn): string {
+    if (column.label === 'Summative Test 1') return 'ST1';
+    if (column.label === 'Summative Test 2') return 'ST2';
+    if (column.label === 'Term Exam') return 'TE';
+    return column.name;
+  }
+
+  // The Highest Possible Score row: the component total is the sum of its
+  // columns' highest possible scores; PS is 100 and WS is the weight.
+  protected hpsTotal(component: 'WW' | 'PT' | 'EX'): number {
+    const sheet = this.sheet();
+    if (!sheet) return 0;
+    return sheet.columns
+      .filter((column) => column.component === component)
+      .reduce((sum, column) => sum + column.highest_possible, 0);
+  }
+
+  // A component total on the printout: blank until at least one score is
+  // encoded in the component.
+  protected printTotal(row: { computed: { components: Record<'WW' | 'PT' | 'EX', { total: number; entered: number }> } }, component: 'WW' | 'PT' | 'EX'): number | null {
+    const part = row.computed.components[component];
+    return part.entered > 0 ? part.total : null;
+  }
+
+  // How many columns the class record print table has, for the group rows.
+  protected readonly printColspan = computed(() => {
+    const sheet = this.sheet();
+    if (!sheet) return 4;
+    const groups = this.columnsByComponent();
+    let total = 1 + 3; // learner name + Initial + Term Grade + Descriptor
+    for (const component of ['WW', 'PT'] as const) {
+      if (groups[component].length > 0) total += groups[component].length + 3;
+    }
+    // Examinations: the sub-columns plus PS and WS (2, not 3), plus the
+    // WS sub-columns under DO 015.
+    if (groups.EX.length > 0) total += groups.EX.length + 2;
+    if (this.exBreakdown() && groups.EX.length > 0) total += groups.EX.length;
+    return total;
+  });
 
   protected resetFilters(): void {
     this.search.set('');

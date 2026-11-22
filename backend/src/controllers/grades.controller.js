@@ -235,6 +235,11 @@ async function loadSheet(client, teacherId, classId, quarter) {
   );
   const directAdd = teacher.rows[0] ? shouldUseDirectAdd(teacher.rows[0], klass) : false;
 
+  // Final grades for this class, from filed submissions only. Any subject
+  // teacher sees them here — no advisory assignment is needed, unlike
+  // Consolidation.
+  const finals = await computeClassFinals(client, classId, year, profile);
+
   return {
     class: klass,
     quarter,
@@ -244,6 +249,10 @@ async function loadSheet(client, teacherId, classId, quarter) {
     columns,
     learners: sheetLearners,
     stats: deped.computeClassStats(sheetLearners),
+    // The mean of the filed period grades, per learner, once every period
+    // is filed — null until then. The Grades page shows it as the Final
+    // column.
+    finals,
     // The Grades page reads this to label its button: "Move to
     // Consolidation" for the adviser's own class, "Submit to adviser" otherwise.
     direct_add: directAdd,
@@ -848,6 +857,67 @@ function rankLearners(learners, gradeKey) {
   }
 }
 
+// The filed period grades for one class across the year's periods, from
+// filed submissions only: Map(period -> Map(roster key -> qg)). A period
+// with no submission is absent. Each period is computed under the profile
+// its submission was filed under, so a later switch never recomputes it.
+async function classFiledPeriodGrades(client, classId, year, profile, roster) {
+  const submitted = await client.query(
+    `SELECT quarter, profile FROM grade_submissions WHERE class_id = $1 AND academic_year = $2`,
+    [classId, year]
+  );
+  const byQuarter = new Map(submitted.rows.map((row) => [row.quarter, row.profile]));
+  const byPeriod = new Map();
+  for (const period of profile.periods) {
+    const submissionProfile = byQuarter.get(period);
+    if (!submissionProfile) continue;
+    byPeriod.set(period, await computeSubjectPeriodGrades(client, classId, period, submissionProfile, roster));
+  }
+  return byPeriod;
+}
+
+// The final grade for every learner of one class, from filed submissions
+// only: the mean of the period grades, and only once every period of the
+// active profile is filed. A learner with an incomplete record in any
+// filed period has no final grade yet. Keyed by learner id (the learners
+// table primary key), so the Grades page can attach it to its rows — any
+// subject teacher sees their own class's finals here, with no advisory
+// assignment needed. period_grades carries the filed grade of each period
+// per learner (null when that period is not filed), so the Final Grades tab
+// can show every period side by side from the same filed-only data.
+async function computeClassFinals(client, classId, year, profile) {
+  const enrolled = await client.query(
+    `SELECT l.id, l.first_name, l.last_name, l.learner_id, l.sex
+       FROM class_learners cl JOIN learners l ON l.id = cl.learner_id
+      WHERE cl.class_id = $1 ORDER BY l.last_name, l.first_name, l.id`,
+    [classId]
+  );
+  const roster = new Map();
+  for (const row of enrolled.rows) {
+    roster.set(String(row.learner_id).trim().toLowerCase(), {
+      ...row,
+      byClass: new Map([[classId, row.id]]),
+    });
+  }
+  const byPeriod = await classFiledPeriodGrades(client, classId, year, profile, roster);
+  const allFiled = profile.periods.every((period) => byPeriod.has(period));
+  const grades = {};
+  const periodGrades = {};
+  for (const [key, learner] of roster) {
+    periodGrades[learner.id] = {};
+    for (const period of profile.periods) {
+      periodGrades[learner.id][period] = byPeriod.has(period) ? byPeriod.get(period).get(key) ?? null : null;
+    }
+    if (!allFiled) {
+      grades[learner.id] = null;
+      continue;
+    }
+    const periodGradeList = profile.periods.map((period) => byPeriod.get(period).get(key) ?? null);
+    grades[learner.id] = deped.finalGrade(periodGradeList);
+  }
+  return { filed_periods: byPeriod.size, total_periods: profile.periods.length, grades, period_grades: periodGrades };
+}
+
 // The whole consolidation view for one advisory section and period. Built from
 // submitted grades only: a subject that has not been filed shows —, never a
 // number the teacher did not file.
@@ -1055,6 +1125,16 @@ async function buildFinals(client, adviser) {
     }
   }
 
+  // Filed period grades per class, computed once and shared with the
+  // Grades page finals: the per-period computation lives in one place.
+  const filedGradesCache = new Map();
+  async function filedGradesFor(classId) {
+    if (!filedGradesCache.has(classId)) {
+      filedGradesCache.set(classId, await classFiledPeriodGrades(client, classId, year, profile, roster));
+    }
+    return filedGradesCache.get(classId);
+  }
+
   // Final grade per subject per learner.
   const finalsBySubject = new Map(); // subject key -> Map(roster key -> final grade or null)
   for (const subject of subjectEntries) {
@@ -1068,8 +1148,7 @@ async function buildFinals(client, adviser) {
       );
       if (filedClassId === undefined) continue;
       filedPeriods += 1;
-      const submission = submissions.get(filedClassId).get(period);
-      const grades = await computeSubjectPeriodGrades(client, filedClassId, period, submission.profile, roster);
+      const grades = (await filedGradesFor(filedClassId)).get(period);
       for (const [rosterKey, qg] of grades) {
         if (!periodGrades.has(rosterKey)) periodGrades.set(rosterKey, []);
         periodGrades.get(rosterKey).push(qg);

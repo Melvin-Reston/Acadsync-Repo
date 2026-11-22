@@ -28,6 +28,7 @@ import {
   AttendanceRow,
   AttendanceStatus,
   ClassItem,
+  Sf2Report,
 } from '../../../core/models';
 import { IconComponent } from '../../../shared/icon.component';
 import { DropdownComponent, DropdownOption } from '../../../shared/dropdown.component';
@@ -49,6 +50,22 @@ const STATUS_SHORT: Record<AttendanceStatus, string> = {
 };
 
 type Filter = 'all' | AttendanceStatus | 'none';
+
+const ROMAN: Record<number, string> = { 7: 'I', 8: 'II', 9: 'III', 10: 'IV', 11: 'V', 12: 'VI' };
+
+const SF2_MONTHS: { value: number; label: string }[] = [
+  { value: 6, label: 'June' },
+  { value: 7, label: 'July' },
+  { value: 8, label: 'August' },
+  { value: 9, label: 'September' },
+  { value: 10, label: 'October' },
+  { value: 11, label: 'November' },
+  { value: 12, label: 'December' },
+  { value: 1, label: 'January' },
+  { value: 2, label: 'February' },
+  { value: 3, label: 'March' },
+  { value: 4, label: 'April' },
+];
 
 @Component({
   selector: 'app-teacher-attendance',
@@ -104,6 +121,45 @@ export class TeacherAttendanceComponent {
 
   // The QR check-in modal (its own component, with the camera).
   protected readonly scanOpen = signal(false);
+
+  // ---------- SF2 (School Form 2) ----------
+  // The SF2 tab shows the same class's saved rolls for one month,
+  // Monday–Friday only, and prints the DepEd form.
+  protected readonly sf2Tab = signal(false);
+  protected readonly sf2Month = signal('');
+  protected readonly sf2 = signal<Sf2Report | null>(null);
+  protected readonly sf2Loading = signal(false);
+  protected readonly sf2Error = signal('');
+  protected readonly sf2Printing = signal(false);
+
+  protected readonly sf2MonthOptions = computed<DropdownOption[]>(() => {
+    const year = this.academicYear();
+    if (!year) return [];
+    const start = Number(year.split('-')[0]);
+    return SF2_MONTHS.map((month) => ({
+      value: `${month.value >= 6 ? start : start + 1}-${String(month.value).padStart(2, '0')}`,
+      label: month.label,
+    }));
+  });
+
+  protected readonly sf2DefaultMonth = computed(() => {
+    const options = this.sf2MonthOptions();
+    if (options.length === 0) return '';
+    const now = manilaNow();
+    const current = now.date.slice(0, 7);
+    const currentOption = options.find((option) => String(option.value) === current);
+    if (currentOption) return String(currentOption.value);
+    // The current month is outside the school year: take the latest
+    // in-range month that has started, else the first month.
+    const started = options.filter((option) => String(option.value) <= current);
+    return String((started[started.length - 1] ?? options[0]).value);
+  });
+
+  // The grade level as the form shows it, e.g. "Grade 7 (Year I)".
+  protected gradeLevelLabel(gradeLevel: number): string {
+    const roman = ROMAN[gradeLevel];
+    return roman ? `Grade ${gradeLevel} (Year ${roman})` : `Grade ${gradeLevel}`;
+  }
 
   protected readonly counts = computed(() => {
     const learners = this.roll()?.learners ?? [];
@@ -183,6 +239,7 @@ export class TeacherAttendanceComponent {
       error: () => undefined,
     });
     this.loadClasses();
+    window.addEventListener('afterprint', () => this.sf2Printing.set(false));
   }
 
   // ---------- Loading ----------
@@ -242,7 +299,11 @@ export class TeacherAttendanceComponent {
 
   protected onClassChange(): void {
     this.error.set('');
-    this.loadRoll();
+    if (this.sf2Tab()) {
+      this.loadSf2();
+    } else {
+      this.loadRoll();
+    }
   }
 
   protected onDateChange(value: string): void {
@@ -250,6 +311,60 @@ export class TeacherAttendanceComponent {
     this.date.set(value);
     this.error.set('');
     this.loadRoll();
+  }
+
+  // ---------- SF2 ----------
+
+  protected onSf2Tab(): void {
+    this.sf2Tab.set(true);
+    if (!this.sf2Month()) this.sf2Month.set(this.sf2DefaultMonth());
+    this.loadSf2();
+  }
+
+  protected onRollTab(): void {
+    this.sf2Tab.set(false);
+  }
+
+  protected loadSf2(): void {
+    const classId = this.selectedClassId();
+    const month = this.sf2Month() || this.sf2DefaultMonth();
+    if (classId === '' || !month) return;
+    this.sf2Month.set(month);
+    this.sf2Loading.set(true);
+    this.sf2Error.set('');
+    this.attendance.sf2(classId, month).subscribe({
+      next: (report) => {
+        this.sf2.set(report);
+        this.sf2Loading.set(false);
+      },
+      error: (error) => {
+        this.sf2Loading.set(false);
+        this.sf2Error.set(errorMessage(error));
+      },
+    });
+  }
+
+  protected onSf2MonthChange(value: string | number): void {
+    this.sf2Month.set(String(value));
+    this.loadSf2();
+  }
+
+  protected printSf2(): void {
+    this.sf2Printing.set(true);
+    window.setTimeout(() => window.print(), 60);
+  }
+
+  // The mark letter on the SF2 form: X = Absent, L = Late, E = Excused,
+  // blank = Present or no record.
+  protected markLetter(status: string | null | undefined): string {
+    if (status === 'absent') return 'X';
+    if (status === 'late') return 'L';
+    if (status === 'excused') return 'E';
+    return '';
+  }
+
+  protected sf2Name(learner: { first_name: string; last_name: string }): string {
+    return `${learner.last_name}, ${learner.first_name}`.toUpperCase();
   }
 
   // ---------- Marking ----------

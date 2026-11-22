@@ -1,4 +1,4 @@
-<div class="page-head">
+<div class="page-head no-print">
   <div>
     <div class="eyebrow">Teacher Portal</div>
     <h1 class="page-title">Attendance</h1>
@@ -22,31 +22,55 @@
         countPlural="classes"
       />
     </div>
-    <div class="field">
-      <label for="attendance-date">Date</label>
-      <input id="attendance-date" type="date" class="input" [ngModel]="date()" (ngModelChange)="onDateChange($event)" [max]="today" />
-    </div>
+    @if (!sf2Tab()) {
+      <div class="field">
+        <label for="attendance-date">Date</label>
+        <input id="attendance-date" type="date" class="input" [ngModel]="date()" (ngModelChange)="onDateChange($event)" [max]="today" />
+      </div>
+    }
+    @if (sf2Tab()) {
+      <div class="field">
+        <label>Month</label>
+        <app-dropdown
+          [options]="sf2MonthOptions()"
+          [(ngModel)]="sf2Month"
+          (ngModelChange)="onSf2MonthChange($event)"
+          placeholder="Choose a month"
+          countSingular="month"
+          countPlural="months"
+        />
+      </div>
+    }
   </div>
 </div>
 
+<div class="tabs no-print" role="tablist" aria-label="Attendance views">
+  <button type="button" role="tab" class="tab" [class.active]="!sf2Tab()" [attr.aria-selected]="!sf2Tab()" (click)="onRollTab()">Daily roll</button>
+  <button type="button" role="tab" class="tab" [class.active]="sf2Tab()" [attr.aria-selected]="sf2Tab()" (click)="onSf2Tab()">SF2</button>
+</div>
+
 @if (error()) {
-  <div class="alert" role="alert">
+  <div class="alert no-print" role="alert">
     <app-icon name="alert" [size]="16" />
     <span>{{ error() }}</span>
   </div>
 }
 
 @if (loading() && !roll()) {
-  <p class="muted">Loading the roll…</p>
+  <p class="muted no-print">Loading the roll…</p>
 } @else if (classes().length === 0) {
-  <div class="card">
+  <div class="card no-print">
     <div class="empty">
       <p><b>No classes yet.</b></p>
       <p>Add a class first, then take attendance for it.</p>
       <a class="btn btn-primary" routerLink="/teacher/classes">Go to Classes &amp; Sections</a>
     </div>
   </div>
-} @else if (roll()) {
+} @else {
+  <!-- Everything screen-only lives in this wrapper so that only the
+       SF2 print section below ever prints. -->
+  <div class="no-print">
+  @if (roll() && !sf2Tab()) {
   <!-- Roll bar -->
   <section class="card rollbar" aria-label="Roll progress and actions">
     <div class="roll-progress">
@@ -173,6 +197,123 @@
         <span class="mono">{{ footDate() }}</span>
       </div>
     }
+  </section>
+  } @else if (sf2Tab()) {
+    <!-- SF2: the month's saved rolls, Monday–Friday only. -->
+    <section class="card sf2card" aria-label="School Form 2">
+      <div class="card-head">
+        <div>
+          <h2 class="card-title">School Form 2</h2>
+          <p class="muted">Daily Attendance Report of Learners · {{ sf2()?.month_label ?? '' }}</p>
+        </div>
+        <button type="button" class="btn" (click)="printSf2()" [disabled]="!sf2() || sf2()!.learners.length === 0">
+          <app-icon name="printer" [size]="16" /> Print SF2
+        </button>
+      </div>
+      @if (sf2Loading() && !sf2()) {
+        <p class="muted">Loading the month…</p>
+      } @else if (sf2Error()) {
+        <div class="alert" role="alert">
+          <app-icon name="alert" [size]="16" />
+          <span>{{ sf2Error() }}</span>
+        </div>
+      } @else if (sf2()) {
+        @if (sf2()!.learners.length === 0) {
+          <div class="empty">
+            <p><b>No learners enrolled in this class yet.</b></p>
+            <p>Enrol learners first, then take the roll.</p>
+            <a class="btn btn-primary" routerLink="/teacher/classes">Go to Classes &amp; Sections</a>
+          </div>
+        } @else {
+          <div class="table-wrap">
+            <table class="sf2-table">
+              <thead>
+                <tr>
+                  <th rowspan="2" class="sf2-name">Learners' Names</th>
+                  @for (day of sf2()!.days; track day.date) {
+                    <th>{{ day.day }}</th>
+                  }
+                  <th rowspan="2">Absent</th>
+                  <th rowspan="2">Present</th>
+                  <th rowspan="2" class="sf2-remarks">Remarks</th>
+                </tr>
+                <tr>
+                  @for (day of sf2()!.days; track day.date) {
+                    <th>{{ day.weekday }}</th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (learner of sf2()!.learners; track learner.id; let i = $index) {
+                  <tr>
+                    <td class="sf2-name">{{ i + 1 }}. {{ sf2Name(learner) }}</td>
+                    @for (day of sf2()!.days; track day.date) {
+                      <td>{{ markLetter(learner.marks[day.date]) }}</td>
+                    }
+                    <td>{{ learner.totals.absent }}</td>
+                    <td>{{ learner.totals.present }}</td>
+                    <td class="sf2-remarks"></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <p class="sf2-note">X = Absent · L = Late · E = Excused · blank = Present or no record. Totals cover recorded school days only.</p>
+        }
+      }
+    </section>
+  }
+  </div>
+}
+
+<!-- SF2 printout: hidden on screen, printed only. No logos on this form. -->
+@if (sf2Printing() && sf2()) {
+  <section class="deped-print" aria-label="School Form 2 printout">
+    <div class="dp-title-center">
+      <h2>School Form 2 (SF2) Daily Attendance Report of Learners</h2>
+      <p>(This replaces Form 1, Form 2 &amp; SF5 Form 4 – Absenteeism and Dropout Profile)</p>
+    </div>
+    <div class="dp-fields">
+      <div class="dp-field"><span class="fl">School ID</span><span class="fv">{{ sf2()!.school.deped_school_id ?? '' }}</span></div>
+      <div class="dp-field"><span class="fl">School Year</span><span class="fv">{{ sf2()!.school_year }}</span></div>
+      <div class="dp-field"><span class="fl">Report for the Month of</span><span class="fv">{{ sf2()!.month_label }}</span></div>
+      <div class="dp-field wide"><span class="fl">Name of School</span><span class="fv">{{ sf2()!.school.name }}</span></div>
+      <div class="dp-field"><span class="fl">Grade Level</span><span class="fv">{{ gradeLevelLabel(sf2()!.class.grade_level) }}</span></div>
+      <div class="dp-field"><span class="fl">Section</span><span class="fv">{{ sf2()!.class.section_name }}</span></div>
+    </div>
+    <table class="dp-table">
+      <thead>
+        <tr>
+          <th rowspan="2" class="dp-name">Learners' Names</th>
+          @for (day of sf2()!.days; track day.date) {
+            <th>{{ day.day }}</th>
+          }
+          <th rowspan="2" class="dp-total">Absent</th>
+          <th rowspan="2" class="dp-total">Present</th>
+          <th rowspan="2" class="dp-remarks">Remarks</th>
+        </tr>
+        <tr>
+          @for (day of sf2()!.days; track day.date) {
+            <th>{{ day.weekday }}</th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        @for (learner of sf2()!.learners; track learner.id; let i = $index) {
+          <tr>
+            <td class="dp-name">{{ i + 1 }}. {{ sf2Name(learner) }}</td>
+            @for (day of sf2()!.days; track day.date) {
+              <td>{{ markLetter(learner.marks[day.date]) }}</td>
+            }
+            <td>{{ learner.totals.absent }}</td>
+            <td>{{ learner.totals.present }}</td>
+            <td class="dp-remarks"></td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    <p class="dp-legend">Legend: X = Absent, L = Late, E = Excused, blank = Present or no record.</p>
+    <p class="dp-footnote">Totals cover recorded school days only.</p>
   </section>
 }
 

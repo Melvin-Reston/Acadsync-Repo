@@ -66,6 +66,33 @@
             <input id="address" name="presentAddress" type="text" class="input" [(ngModel)]="presentAddress" />
           </div>
 
+          <h3 class="subhead">School details for DepEd forms</h3>
+
+          <div class="form-grid">
+            <div class="field">
+              <label for="region">Region</label>
+              <input id="region" name="region" type="text" class="input" [class.invalid]="errors()['region']" [(ngModel)]="region" />
+              @if (errors()['region']) {
+                <span class="field-error">{{ errors()['region'] }}</span>
+              }
+            </div>
+            <div class="field">
+              <label for="division">Division</label>
+              <input id="division" name="division" type="text" class="input" [class.invalid]="errors()['division']" [(ngModel)]="division" />
+              @if (errors()['division']) {
+                <span class="field-error">{{ errors()['division'] }}</span>
+              }
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="school-id">School ID</label>
+            <input id="school-id" name="depedSchoolId" type="text" class="input" [class.invalid]="errors()['deped_school_id']" [(ngModel)]="depedSchoolId" />
+            @if (errors()['deped_school_id']) {
+              <span class="field-error">{{ errors()['deped_school_id'] }}</span>
+            }
+          </div>
+
           <div class="form-actions">
             <button type="submit" class="btn btn-primary" [disabled]="saving()">
               {{ saving() ? 'Saving…' : 'Save profile' }}

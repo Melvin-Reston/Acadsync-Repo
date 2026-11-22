@@ -109,6 +109,110 @@ async function getRoll(req, res) {
   });
 }
 
+// ---------- School Form 2 (Batch 8) ----------
+
+const SF2_WEEKDAYS = ['', 'M', 'T', 'W', 'TH', 'F', '']; // index by getUTCDay(): 1 Mon .. 5 Fri
+const SF2_MONTHS = [
+  'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
+  'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER',
+];
+
+// GET /api/teacher/attendance/sf2?class_id=&month=YYYY-MM
+// The month's daily attendance for one class, in School Form 2 shape: one
+// column per Monday–Friday day, X = Absent, L = Late, E = Excused, blank =
+// Present or no record. Totals follow the Report Card day rule — a day
+// counts Present on a Present/Late record, Excused on an Excused record,
+// Absent on an Absent record — and only days with a saved record count, so
+// a day with no saved roll stays blank and out of the totals. Excused days
+// are separate: they count in neither the PRESENT nor the ABSENT total.
+async function getSf2(req, res) {
+  const { class_id, month } = req.valid.query;
+  const klass = await findClass(class_id, req.teacher.id);
+  const [year, monthNumber] = month.split('-').map(Number);
+
+  // The school details the teacher entered for the DepEd forms.
+  const teacher = await db.query(
+    `SELECT t.region, t.division, t.deped_school_id, s.name AS school_name
+       FROM teachers t JOIN schools s ON s.id = t.school_id WHERE t.id = $1`,
+    [req.teacher.id]
+  );
+
+  // Monday–Friday days of the month only (UTC dates, so no timezone shifts).
+  const daysInMonth = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  const days = [];
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const date = new Date(Date.UTC(year, monthNumber - 1, day));
+    const weekday = date.getUTCDay();
+    if (weekday >= 1 && weekday <= 5) {
+      days.push({
+        date: `${month}-${String(day).padStart(2, '0')}`,
+        day,
+        weekday: SF2_WEEKDAYS[weekday],
+      });
+    }
+  }
+
+  const learners = await db.query(
+    `SELECT l.id, l.first_name, l.last_name, l.learner_id
+       FROM class_learners cl JOIN learners l ON l.id = cl.learner_id
+      WHERE cl.class_id = $1 ORDER BY l.last_name, l.first_name, l.id`,
+    [class_id]
+  );
+
+  const nextMonth = monthNumber === 12
+    ? `${year + 1}-01-01`
+    : `${year}-${String(monthNumber + 1).padStart(2, '0')}-01`;
+  const marks = await db.query(
+    `SELECT learner_id, date::text AS date, status FROM attendance
+      WHERE class_id = $1 AND date >= $2 AND date < $3`,
+    [class_id, `${month}-01`, nextMonth]
+  );
+  const byLearner = new Map();
+  const schoolDays = new Set(days.map((day) => day.date));
+  for (const row of marks.rows) {
+    // A roll saved on a weekend is not a school day: it stays out of the
+    // marks and the totals entirely.
+    if (!schoolDays.has(row.date)) continue;
+    if (!byLearner.has(row.learner_id)) byLearner.set(row.learner_id, {});
+    byLearner.get(row.learner_id)[row.date] = row.status;
+  }
+
+  const rows = learners.rows.map((learner) => {
+    const marksByDate = byLearner.get(learner.id) || {};
+    let present = 0;
+    let absent = 0;
+    for (const date of Object.keys(marksByDate)) {
+      const status = marksByDate[date];
+      if (status === 'present' || status === 'late') present += 1;
+      else if (status === 'absent') absent += 1;
+    }
+    return {
+      id: learner.id,
+      first_name: learner.first_name,
+      last_name: learner.last_name,
+      learner_id: learner.learner_id,
+      marks: marksByDate,
+      totals: { present, absent },
+    };
+  });
+
+  const school = teacher.rows[0] || {};
+  res.json({
+    class: klass,
+    month,
+    month_label: SF2_MONTHS[monthNumber - 1],
+    school_year: String(klass.academic_year || '').replace('-', ' - '),
+    school: {
+      name: school.school_name || null,
+      region: school.region || null,
+      division: school.division || null,
+      deped_school_id: school.deped_school_id || null,
+    },
+    days,
+    learners: rows,
+  });
+}
+
 // POST /api/teacher/attendance  { class_id, date, marks: [{ learner_id, status, method?, time_in? }] }
 // Saves the whole roll for one class and date in one transaction. Re-saving an
 // existing date replaces it. A learner's time-in is kept when their status did
@@ -257,6 +361,7 @@ async function checkIn(req, res) {
 module.exports = {
   learnerIdFromCode,
   getRoll,
+  getSf2,
   saveRoll,
   lookupLearner,
   checkIn,
