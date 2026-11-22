@@ -698,9 +698,6 @@
   color: var(--red);
 }
 
-.grades-table td.col-ww { background: color-mix(in srgb, var(--amber-tint) 55%, transparent); }
-.grades-table td.col-pt { background: color-mix(in srgb, var(--accent-tint) 55%, transparent); }
-.grades-table td.col-qa { background: color-mix(in srgb, var(--brown-tint) 55%, transparent); }
 
 .empty-row {
   text-align: center;
@@ -987,6 +984,9 @@
     background: #fff;
     font-size: 10px;
     line-height: 1.35;
+    /* Exact color adjustment keeps the header backgrounds in print. */
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
     /* The deped-form page has no margin (so the browser adds no
        date/title/URL/page number); the form carries its own inset. */
     padding: 10mm;
@@ -1008,7 +1008,6 @@
   .dp-logo {
     height: 34px;
     width: auto;
-    object-fit: contain;
   }
 
   .dp-title {
@@ -1018,7 +1017,6 @@
 
   .dp-title h2 {
     font-size: 14px;
-    letter-spacing: 0.04em;
     margin: 0;
   }
 
@@ -1070,7 +1068,7 @@
   .dp-table th,
   .dp-table td {
     border: 1px solid #000;
-    padding: 2px 2px;
+    padding: 2px;
     text-align: center;
     overflow: hidden;
     white-space: nowrap;
@@ -1081,7 +1079,6 @@
     font-size: 8px;
     line-height: 1.15;
     white-space: normal;
-    background: #fff;
   }
 
   .dp-table .dp-name {
@@ -1093,20 +1090,15 @@
     width: 140px;
   }
 
-  /* The three grade columns get fixed widths so their headers and the
-     descriptor words fit; the score columns share the rest. */
-  .dp-table thead .dp-num-col {
-    width: 50px;
-  }
-
-  .dp-table thead .dp-desc-col {
-    width: 62px;
-  }
-
   .dp-table tr.dp-group td {
     font-weight: 700;
     text-align: left;
-    background: #fff;
+  }
+
+  /* Class record only: gray MALE/FEMALE bars; Final Grades keeps white. */
+  .dp-class-record tr.dp-group td {
+    background: #999;
+    color: #fff;
   }
 
   .dp-table tr.dp-hps td {
@@ -1114,7 +1106,14 @@
   }
 
   .dp-table .dp-desc {
-    font-size: 9px;
     white-space: normal;
   }
+
+  tr.dp-topbar td { background: #002060; }
+  th.dp-term, th.dp-info-label, td.dp-info-value, th.dp-component { background: #f2f2f2; }
+  th.dp-term { font-size: 16px; }
+  th.dp-info-label, tr.dp-learners-bar td { text-align: left; }
+  th.dp-score-num { background: #c9daf8; }
+  td.dp-hps-label { text-align: right; font-style: italic; }
+  tr.dp-learners-bar td { background: #002060; color: #fff; font-weight: 700; }
 }

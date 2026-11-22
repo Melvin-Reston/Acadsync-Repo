@@ -739,6 +739,59 @@ export class TeacherGradesComponent {
     return total;
   });
 
+  // The period heading in the class record print header, e.g. FIRST TERM,
+  // SECOND TERM, FIRST QUARTER — the ordinal word for the open period
+  // plus the grading system's period label, never hardcoded.
+  protected readonly periodOrdinalLabel = computed(() => {
+    const sheet = this.sheet();
+    if (!sheet) return '';
+    const ordinals: Record<number, string> = { 1: 'FIRST', 2: 'SECOND', 3: 'THIRD', 4: 'FOURTH' };
+    const word = ordinals[this.quarter()] ?? String(this.quarter());
+    return `${word} ${sheet.grading.period_label.toUpperCase()}`;
+  });
+
+  // Colspans for the class record print header, generalised to the
+  // sheet's real column counts. The Grade Level / Section block spans
+  // the WW columns; the Teacher and Subject blocks together span the
+  // rest (PT + EX + the three grade columns), Teacher wider than
+  // Subject, roughly PT + half the EX block. Every row sums to
+  // printColspan().
+  protected readonly printHeaderSpans = computed(() => {
+    const groups = this.columnsByComponent();
+    const ww = groups.WW.length > 0 ? groups.WW.length + 3 : 0;
+    const pt = groups.PT.length > 0 ? groups.PT.length + 3 : 0;
+    const ex = groups.EX.length > 0
+      ? groups.EX.length + 2 + (this.exBreakdown() ? groups.EX.length : 0)
+      : 0;
+    const total = this.printColspan();
+    const gradeSpan = ww > 0 ? ww : pt > 0 ? pt : ex > 0 ? ex : 1;
+    const rest = total - 1 - gradeSpan;
+    let teacherSpan = pt + Math.ceil(ex / 2);
+    if (rest >= 4) teacherSpan = Math.min(Math.max(teacherSpan, 2), rest - 2);
+    else teacherSpan = Math.max(1, rest - 1);
+    const subjectSpan = rest - teacherSpan;
+    const gradeLabel = Math.max(1, Math.floor(gradeSpan / 3));
+    const teacherLabel = Math.max(1, Math.floor(teacherSpan / 4));
+    const subjectLabel = Math.max(1, Math.floor(subjectSpan / 3));
+    return {
+      ww, pt, ex, total,
+      gradeLabel, gradeValue: gradeSpan - gradeLabel,
+      teacherLabel, teacherValue: teacherSpan - teacherLabel,
+      subjectLabel, subjectValue: subjectSpan - subjectLabel,
+    };
+  });
+
+  // One width per print column, so the header colspans stay aligned with
+  // the data columns below under table-layout: fixed (the header's first
+  // row is a single full-width bar and carries no per-column widths).
+  protected readonly printColWidths = computed(() => {
+    const spans = this.printHeaderSpans();
+    const widths: number[] = [140];
+    for (let i = 0; i < spans.ww + spans.pt + spans.ex; i++) widths.push(30);
+    widths.push(50, 50, 62);
+    return widths;
+  });
+
   protected resetFilters(): void {
     this.search.set('');
     this.sexFilter.set('all');

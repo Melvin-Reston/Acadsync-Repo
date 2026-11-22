@@ -416,7 +416,7 @@
 
   <!-- DepEd print forms: hidden on screen, printed only. -->
   @if (printTarget() === 'class-record') {
-    <section class="deped-print" aria-label="Class record printout">
+    <section class="deped-print dp-class-record" aria-label="Class record printout">
       <div class="dp-head">
         <img class="dp-seal" src="/deped-seal.png" alt="" />
         <div class="dp-title">
@@ -430,43 +430,57 @@
         <div class="dp-field col-4"><span class="fl">School ID</span><span class="fv">{{ teacher()?.deped_school_id ?? '' }}</span></div>
         <div class="dp-field col-6"><span class="fl">School Name</span><span class="fv">{{ teacher()?.school_name ?? '' }}</span></div>
         <div class="dp-field col-3"><span class="fl">School Year</span><span class="fv">{{ sheet()!.academic_year }}</span></div>
-        <div class="dp-field col-3"><span class="fl">Grade Level</span><span class="fv">{{ sheet()!.class.grade_level }}</span></div>
-        <div class="dp-field col-4"><span class="fl">Section</span><span class="fv">{{ sheet()!.class.section_name }}</span></div>
-        <div class="dp-field col-4"><span class="fl">Teacher</span><span class="fv">{{ teacherName() }}</span></div>
-        <div class="dp-field col-4"><span class="fl">Subject</span><span class="fv">{{ sheet()!.class.subject_name }}</span></div>
       </div>
       <table class="dp-table">
+        <colgroup>
+          @for (width of printColWidths(); track $index) {
+            <col [style.width.px]="width" />
+          }
+        </colgroup>
         <thead>
+          <tr class="dp-topbar"><td [attr.colspan]="printColspan()"></td></tr>
           <tr>
-            <th rowspan="2" class="dp-name">Learners' Names</th>
+            <th rowspan="4" class="dp-term">{{ periodOrdinalLabel() }}</th>
+            <th class="dp-info-label" [attr.colspan]="printHeaderSpans().gradeLabel">GRADE LEVEL</th>
+            <td class="dp-info-value" [attr.colspan]="printHeaderSpans().gradeValue">{{ sheet()!.class.grade_level }}</td>
+            <th rowspan="2" class="dp-info-label" [attr.colspan]="printHeaderSpans().teacherLabel">TEACHER</th>
+            <td rowspan="2" class="dp-info-value" [attr.colspan]="printHeaderSpans().teacherValue">{{ teacherName() }}</td>
+            <th rowspan="2" class="dp-info-label" [attr.colspan]="printHeaderSpans().subjectLabel">SUBJECT</th>
+            <td rowspan="2" class="dp-info-value" [attr.colspan]="printHeaderSpans().subjectValue">{{ sheet()!.class.subject_name }}</td>
+          </tr>
+          <tr>
+            <th class="dp-info-label" [attr.colspan]="printHeaderSpans().gradeLabel">SECTION</th>
+            <td class="dp-info-value" [attr.colspan]="printHeaderSpans().gradeValue">{{ sheet()!.class.section_name }}</td>
+          </tr>
+          <tr>
             @if (columnsByComponent().WW.length > 0) {
-              <th [attr.colspan]="columnsByComponent().WW.length + 3">Written / Oral Works (WWs)</th>
+              <th class="dp-component" [attr.colspan]="printHeaderSpans().ww">Written / Oral Works (WWs)</th>
             }
             @if (columnsByComponent().PT.length > 0) {
-              <th [attr.colspan]="columnsByComponent().PT.length + 3">Product / Performance Tasks (PTs)</th>
+              <th class="dp-component" [attr.colspan]="printHeaderSpans().pt">Product / Performance Tasks (PTs)</th>
             }
             @if (columnsByComponent().EX.length > 0) {
-              <th [attr.colspan]="columnsByComponent().EX.length + 2 + (exBreakdown() ? columnsByComponent().EX.length : 0)">{{ sheet()!.grading.third_label }} ({{ sheet()!.grading.third_short }}s)</th>
+              <th class="dp-component" [attr.colspan]="printHeaderSpans().ex">{{ sheet()!.grading.third_label }} ({{ sheet()!.grading.third_short }}s)</th>
             }
-            <th rowspan="2" class="dp-num-col">Initial Grade</th>
-            <th rowspan="2" class="dp-num-col">{{ sheet()!.grading.period_label }} Grade</th>
-            <th rowspan="2" class="dp-desc-col">Descriptor</th>
+            <th rowspan="2" class="dp-component dp-num-col">Initial Grade</th>
+            <th rowspan="2" class="dp-component dp-num-col">{{ sheet()!.grading.period_label }} Grade</th>
+            <th rowspan="2" class="dp-component dp-desc-col">Descriptor</th>
           </tr>
           <tr>
             @for (column of columnsByComponent().WW; track column.id) {
-              <th>{{ column.position }}</th>
+              <th class="dp-score-num">{{ column.position }}</th>
             }
             @if (columnsByComponent().WW.length > 0) {
               <th>Total</th><th>PS</th><th>WS</th>
             }
             @for (column of columnsByComponent().PT; track column.id) {
-              <th>{{ column.position }}</th>
+              <th class="dp-score-num">{{ column.position }}</th>
             }
             @if (columnsByComponent().PT.length > 0) {
               <th>Total</th><th>PS</th><th>WS</th>
             }
             @for (column of columnsByComponent().EX; track column.id) {
-              <th>{{ exShortLabel(column) }}</th>
+              <th class="dp-score-num">{{ exShortLabel(column) }}</th>
             }
             @if (exBreakdown()) {
               @for (column of columnsByComponent().EX; track column.id) {
@@ -480,7 +494,7 @@
         </thead>
         <tbody>
           <tr class="dp-hps">
-            <td class="dp-name">Highest Possible Score</td>
+            <td class="dp-hps-label">HIGHEST POSSIBLE SCORE</td>
             @for (column of columnsByComponent().WW; track column.id) {
               <td>{{ column.highest_possible }}</td>
             }
@@ -506,6 +520,7 @@
             }
             <td></td><td></td><td></td>
           </tr>
+          <tr class="dp-learners-bar"><td [attr.colspan]="printColspan()">LEARNERS' NAMES</td></tr>
           @for (group of printGroups(); track group.label) {
             <tr class="dp-group"><td [attr.colspan]="printColspan()">{{ group.label }}</td></tr>
             @for (row of group.rows; track row.learner.id; let i = $index) {
