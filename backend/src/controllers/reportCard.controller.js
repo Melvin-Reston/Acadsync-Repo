@@ -20,6 +20,10 @@ const {
   sectionRoster,
   computeSubjectPeriodGrades,
   academicYear,
+  loadManualSubjects,
+  attachManualSubjects,
+  manualPeriodGrades,
+  manualHasGrades,
 } = require('./grades.controller');
 
 const MONTH_LABELS = ['Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr'];
@@ -78,7 +82,9 @@ async function buildReportCards(client, adviser) {
 
   // One entry per subject name, in consolidation order. When two teachers
   // teach the same subject to the section, the first filed class carries
-  // the grades; the card names both teachers.
+  // the grades; the card names both teachers. Manual subjects (Batch 8
+  // fix 10) merge in by name the same way: a real filing wins a period,
+  // the manual grades fill periods with no real submission.
   const subjectEntries = [];
   {
     const byName = new Map();
@@ -94,6 +100,7 @@ async function buildReportCards(client, adviser) {
       subject.class_ids.push(klass.id);
     }
   }
+  attachManualSubjects(subjectEntries, await loadManualSubjects(client, adviser, year));
 
   // The period grades for each subject, per learner. A subject only appears
   // on the card when at least one period has been filed for it — the card
@@ -108,13 +115,19 @@ async function buildReportCards(client, adviser) {
       const filedClassId = subject.class_ids.find(
         (classId) => submissions.has(classId) && submissions.get(classId).has(period)
       );
-      if (filedClassId === undefined) continue;
-      filedPeriods += 1;
-      const submission = submissions.get(filedClassId).get(period);
-      periodGradesByPeriod.set(
-        period,
-        await computeSubjectPeriodGrades(client, filedClassId, period, submission.profile, roster)
-      );
+      // A real filed submission takes precedence for the period; the
+      // manual grades fill periods with no real submission.
+      if (filedClassId !== undefined) {
+        filedPeriods += 1;
+        const submission = submissions.get(filedClassId).get(period);
+        periodGradesByPeriod.set(
+          period,
+          await computeSubjectPeriodGrades(client, filedClassId, period, submission.profile, roster)
+        );
+      } else if (subject.manual && manualHasGrades(subject.manual, period)) {
+        filedPeriods += 1;
+        periodGradesByPeriod.set(period, manualPeriodGrades(subject.manual, period, roster));
+      }
     }
     if (filedPeriods === 0) continue;
     const grades = new Map(); // roster key -> [qg per period, in profile order]
@@ -127,6 +140,7 @@ async function buildReportCards(client, adviser) {
     subjectCards.push({
       subject_name: subject.subject_name,
       teacher_name: subject.teacher_names.join(' · '),
+      manual: subject.manual !== null,
       grades,
     });
   }

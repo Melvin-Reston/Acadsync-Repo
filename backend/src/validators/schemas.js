@@ -329,6 +329,19 @@ const teacherProfileSchema = z.object({
   division: optionalText('Division', 60),
   deped_school_id: optionalText('School ID', 20),
   school_head_name: optionalText('School head', 100),
+  // The school calendar for SF2 (Batch 8 fix 10): the first and last day
+  // of classes. An empty value clears the date back to unset; the
+  // last-day-must-follow-first-day check happens in the controller, which
+  // can see the date already stored when only one side is sent.
+  classes_start_date: optionalDate,
+  classes_end_date: optionalDate,
+});
+
+// One holiday on the teacher's school calendar: a real date and a name
+// (for example "Independence Day"). One row per date per teacher.
+const holidaySchema = z.object({
+  date: dateString,
+  name: text('Holiday name', 100),
 });
 
 const teacherAdviserSchema = z
@@ -633,6 +646,45 @@ const remindSchema = z.object({
   quarter: wholeNumber('Quarter', 1, 4),
 });
 
+// A manual subject in Consolidation (Batch 8 fix 10): the adviser creates
+// the subject when its teacher has no AcadSync account. The teacher's name
+// is plain display text — no account is created for them. Grades arrive
+// later as JSON parsed from the adviser's CSV upload, never as a file.
+const manualSubjectCreateSchema = z.object({
+  subject_name: text('Subject name', 120),
+  teacher_name: text('Subject teacher name', 120),
+});
+
+const manualSubjectUpdateSchema = z
+  .object({
+    subject_name: text('Subject name', 120).optional(),
+    teacher_name: text('Subject teacher name', 120).optional(),
+  })
+  .refine((value) => value.subject_name !== undefined || value.teacher_name !== undefined, {
+    message: 'Change the subject name or the subject teacher name.',
+  });
+
+// One filed grade per learner per period, as parsed from the CSV: the
+// learner is matched by Learner ID, the grade is the term grade as given
+// (0–100, no floor). A blank cell in the CSV is simply absent here —
+// it is not filed, never 0. The handler re-validates every row against
+// the section roster before anything is written.
+const manualGradesSchema = z.object({
+  grades: z
+    .array(
+      z.object({
+        learner_id: text('Learner ID', 50),
+        quarter: wholeNumber('Period', 1, 4),
+        grade: z
+          .number({ error: 'Grade must be a number.' })
+          .finite('Grade must be a number.')
+          .min(0, 'Grade must be 0 or more.')
+          .max(100, 'Grade must be 100 or less.'),
+      })
+    )
+    .max(1000, 'Upload at most 1000 grades at a time.'),
+});
+
 // The teacher's comment on a report card: one learner, one period. A blank
 // comment clears the saved one, so the comment itself is optional text.
 const reportCardCommentSchema = z.object({
@@ -677,6 +729,7 @@ module.exports = {
   teacherRegisterSchema,
   teacherProfileSchema,
   teacherAdviserSchema,
+  holidaySchema,
   teacherSubscriptionSchema,
   subjectSchema,
   classListSchema,
@@ -706,5 +759,8 @@ module.exports = {
   gradeSubmitSchema,
   consolidationQuerySchema,
   remindSchema,
+  manualSubjectCreateSchema,
+  manualSubjectUpdateSchema,
+  manualGradesSchema,
   reportCardCommentSchema,
 };

@@ -13,7 +13,7 @@ import {
   subscriptionStatusTone,
   time12,
 } from '../../../core/helpers';
-import { FieldErrors, Plan, TeacherDashboard } from '../../../core/models';
+import { FieldErrors, Plan, TeacherDashboard, TeacherHoliday } from '../../../core/models';
 import { TeacherPortalService } from '../../../core/teacher-portal.service';
 import { TeacherAuthService } from '../../../core/teacher-auth.service';
 import { ToastService } from '../../../core/toast.service';
@@ -41,6 +41,24 @@ export class TeacherDashboardComponent {
   protected isAdviser = false;
   protected advisoryGrade: number | null = null;
   protected advisorySection = '';
+
+  // School details for the DepEd print forms (Region, Division, School ID).
+  // The teacher's own entries on the teachers record (migration 010); the
+  // same fields the Profile page edits, so both forms stay in step.
+  protected region = '';
+  protected division = '';
+  protected depedSchoolId = '';
+
+  // School calendar for SF2 (Batch 8 fix 10): the first and last day of
+  // classes on the teachers record (migration 013), and the teacher's
+  // holidays. Empty dates mean unset, and SF2 then counts every weekday.
+  protected classesStartDate = '';
+  protected classesEndDate = '';
+  protected readonly holidays = signal<TeacherHoliday[]>([]);
+  protected readonly holidayErrors = signal<FieldErrors>({});
+  protected readonly holidaySaving = signal(false);
+  protected newHolidayDate = '';
+  protected newHolidayName = '';
 
   protected readonly advisoryGradeOptions: DropdownOption[] = [7, 8, 9, 10, 11, 12].map((grade) => ({
     value: grade,
@@ -80,6 +98,12 @@ export class TeacherDashboardComponent {
         this.isAdviser = teacher.is_adviser;
         this.advisoryGrade = teacher.advisory_grade;
         this.advisorySection = teacher.advisory_section ?? '';
+        this.region = teacher.region ?? '';
+        this.division = teacher.division ?? '';
+        this.depedSchoolId = teacher.deped_school_id ?? '';
+        this.classesStartDate = teacher.classes_start_date ?? '';
+        this.classesEndDate = teacher.classes_end_date ?? '';
+        this.holidays.set(dashboard.holidays ?? []);
       },
       error: (error) => {
         this.loading.set(false);
@@ -118,6 +142,7 @@ export class TeacherDashboardComponent {
     this.formErrors.set(errors);
     if (Object.keys(errors).length > 0) return;
 
+    this.error.set('');
     this.saving.set(true);
     this.portal
       .updateAdviser({
@@ -127,14 +152,35 @@ export class TeacherDashboardComponent {
       })
       .subscribe({
         next: (response) => {
-          this.saving.set(false);
-          const current = this.data();
-          if (current) {
-            this.data.set({ ...current, teacher: { ...current.teacher, ...response.teacher } });
-          }
-          // Keep the layout's teacher card in step with the filed assignment.
-          this.auth.setTeacher(response.teacher);
-          this.toast.success('Assignment saved.');
+          this.applyTeacher(response.teacher);
+          // The school details and calendar dates ride on the same Save
+          // button: they are the teacher's own fields on the same record,
+          // saved through the profile endpoint, which only changes the
+          // fields sent.
+          this.portal
+            .updateSchoolDetails({
+              region: this.region.trim(),
+              division: this.division.trim(),
+              deped_school_id: this.depedSchoolId.trim(),
+              classes_start_date: this.classesStartDate,
+              classes_end_date: this.classesEndDate,
+            })
+            .subscribe({
+              next: (details) => {
+                this.saving.set(false);
+                this.applyTeacher(details.teacher);
+                this.toast.success('Assignment saved.');
+              },
+              error: (error) => {
+                // The assignment itself is already saved above; only the
+                // school details and calendar dates failed, so keep the
+                // typed values in the form for a retry instead of clearing
+                // them.
+                this.saving.set(false);
+                this.formErrors.set(fieldErrors(error));
+                this.error.set(errorMessage(error));
+              },
+            });
         },
         error: (error) => {
           this.saving.set(false);
@@ -142,6 +188,72 @@ export class TeacherDashboardComponent {
           this.error.set(errorMessage(error));
         },
       });
+  }
+
+  private applyTeacher(teacher: TeacherDashboard['teacher']): void {
+    const current = this.data();
+    if (current) {
+      this.data.set({ ...current, teacher: { ...current.teacher, ...teacher } });
+    }
+    // Keep the layout's teacher card in step with the filed assignment.
+    this.auth.setTeacher(teacher);
+  }
+
+  // A YYYY-MM-DD date as "Jun 15, 2026", or an em dash when unset.
+  // Parsed from the text itself, never through Date, so the timezone
+  // cannot move it a day.
+  protected calendarDateLabel(value: string | null): string {
+    if (!value) return '—';
+    const [year, month, day] = value.split('-').map(Number);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${months[month - 1]} ${day}, ${year}`;
+  }
+
+  // Holidays save the moment they are added or removed — they are a list,
+  // not part of the Save assignment form.
+  protected addHoliday(): void {
+    const errors: FieldErrors = {};
+    if (!this.newHolidayDate) errors['date'] = 'Choose a date.';
+    if (!this.newHolidayName.trim()) errors['name'] = 'Type the holiday name.';
+    this.holidayErrors.set(errors);
+    if (Object.keys(errors).length > 0) return;
+
+    this.error.set('');
+    this.holidaySaving.set(true);
+    this.portal
+      .addHoliday({ date: this.newHolidayDate, name: this.newHolidayName.trim() })
+      .subscribe({
+        next: (response) => {
+          this.holidaySaving.set(false);
+          this.holidays.set(
+            [...this.holidays(), response.holiday].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)
+          );
+          this.newHolidayDate = '';
+          this.newHolidayName = '';
+          this.toast.success('Holiday added.');
+        },
+        error: (error) => {
+          this.holidaySaving.set(false);
+          this.holidayErrors.set(fieldErrors(error));
+          this.error.set(errorMessage(error));
+        },
+      });
+  }
+
+  protected removeHoliday(holiday: TeacherHoliday): void {
+    this.error.set('');
+    this.holidaySaving.set(true);
+    this.portal.deleteHoliday(holiday.id).subscribe({
+      next: () => {
+        this.holidaySaving.set(false);
+        this.holidays.set(this.holidays().filter((item) => item.id !== holiday.id));
+        this.toast.success('Holiday removed.');
+      },
+      error: (error) => {
+        this.holidaySaving.set(false);
+        this.error.set(errorMessage(error));
+      },
+    });
   }
 
   protected openPlanPicker(): void {

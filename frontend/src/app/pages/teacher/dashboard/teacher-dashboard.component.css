@@ -1,5 +1,13 @@
 /* Teacher Dashboard: two columns on wide screens, stacked on phones. */
 
+/* School details heading inside My Assignment, matching the Profile page. */
+.subhead {
+  margin: 18px 0 2px;
+  font-family: var(--serif);
+  font-size: 17px;
+  font-weight: 600;
+}
+
 /* Filed assignment slip: a perforated card, like a filed paper slip. */
 .slip {
   margin-top: 18px;
@@ -17,4 +25,11 @@
   text-transform: uppercase;
   color: var(--muted);
   margin-bottom: 12px;
+}
+
+.holiday-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }

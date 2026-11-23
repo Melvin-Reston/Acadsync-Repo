@@ -11,7 +11,7 @@
 // after the admin switches this year's. A filed submission keeps the profile
 // it was filed under, so a switch can never recompute a filed grade.
 const db = require('../db');
-const { badRequest, notFound } = require('../utils/httpError');
+const { badRequest, notFound, conflict } = require('../utils/httpError');
 const { sendCsv } = require('../utils/csv');
 const { findClass } = require('./classes.controller');
 const deped = require('../utils/deped');
@@ -723,14 +723,16 @@ async function sectionClasses(client, adviser, year) {
 // submission for this section, otherwise the first period. A period from
 // before a switch (Quarter 4) is clamped to the highest period the profile
 // offers.
-async function resolveConsolidationQuarter(client, classIds, requested, profile) {
+async function resolveConsolidationQuarter(client, classIds, requested, profile, manualMaxQuarter = null) {
   if (requested) return requested;
-  if (classIds.length === 0) return profile.periods[0];
-  const result = await client.query(
-    'SELECT MAX(quarter)::int AS quarter FROM grade_submissions WHERE class_id = ANY($1::int[])',
-    [classIds]
-  );
-  const max = result.rows[0].quarter || profile.periods[0];
+  let max = manualMaxQuarter || profile.periods[0];
+  if (classIds.length > 0) {
+    const result = await client.query(
+      'SELECT MAX(quarter)::int AS quarter FROM grade_submissions WHERE class_id = ANY($1::int[])',
+      [classIds]
+    );
+    if (result.rows[0].quarter) max = Math.max(max, result.rows[0].quarter);
+  }
   return Math.min(max, profile.periods[profile.periods.length - 1]);
 }
 
@@ -843,6 +845,131 @@ function groupSubjectsByName(classes, submissions, reminders) {
   return [...subjectsByName.values()];
 }
 
+// ---------- Manual subjects (Batch 8 fix 10) ----------
+// A manual subject is created by an adviser when the subject teacher has
+// no AcadSync account: there is no class, no score columns and no Grades
+// page filing. The adviser uploads one CSV carrying every period's term
+// grades, and Consolidation (and the Report Card) treat those grades like
+// filed grades. A manual grade is the term grade as given — it is never
+// recomputed from WW/PT/EX scores and no floor is applied; the profile
+// frozen on the subject at creation supplies the descriptor bands.
+
+// Every manual subject for one adviser's section and year, with its
+// grades: Map(period -> Map(roster key -> grade)). Roster keys are the
+// school learner IDs, lowercased and trimmed, the same keys
+// sectionRoster builds.
+async function loadManualSubjects(client, adviser, year) {
+  const subjects = await client.query(
+    `SELECT id, adviser_id, school_id, subject_name, teacher_name, grade_level,
+            section_name, academic_year, profile_code, created_at, updated_at
+       FROM manual_subjects
+      WHERE adviser_id = $1 AND grade_level = $2
+        AND LOWER(TRIM(section_name)) = LOWER(TRIM($3))
+        AND academic_year = $4 AND school_id = $5
+      ORDER BY LOWER(TRIM(subject_name)), id`,
+    [adviser.id, adviser.advisory_grade, adviser.advisory_section, year, adviser.school_id]
+  );
+  const rows = subjects.rows;
+  const grades = new Map(); // manual subject id -> Map(period -> Map(roster key -> grade))
+  if (rows.length > 0) {
+    const gradeRows = await client.query(
+      `SELECT manual_subject_id, LOWER(TRIM(learner_id_text)) AS roster_key,
+              quarter, grade::text AS grade
+         FROM manual_subject_grades
+        WHERE manual_subject_id = ANY($1::int[])`,
+      [rows.map((row) => row.id)]
+    );
+    for (const row of gradeRows.rows) {
+      if (!grades.has(row.manual_subject_id)) grades.set(row.manual_subject_id, new Map());
+      const byPeriod = grades.get(row.manual_subject_id);
+      if (!byPeriod.has(row.quarter)) byPeriod.set(row.quarter, new Map());
+      byPeriod.get(row.quarter).set(row.roster_key, Number(row.grade));
+    }
+  }
+  return rows.map((row) => ({ ...row, grades: grades.get(row.id) || new Map() }));
+}
+
+// Merges manual subjects into subject entries built from real classes
+// (groupSubjectsByName / buildFinals / buildReportCards shapes). Each
+// entry gains `manual` (the manual subject row, or null). A manual subject
+// whose name matches a real class merges into that entry — the real
+// filing takes precedence per period, the manual grades fill the rest.
+// A manual subject with no real class is inserted in alphabetical
+// position, so the merged list keeps Consolidation's existing order.
+function attachManualSubjects(entries, manualSubjects) {
+  const byKey = new Map(entries.map((entry) => [entry.subject_name.trim().toLowerCase(), entry]));
+  const orphans = [];
+  for (const manual of manualSubjects) {
+    const key = manual.subject_name.trim().toLowerCase();
+    const entry = byKey.get(key);
+    if (entry) {
+      entry.manual = manual;
+    } else {
+      orphans.push(manual);
+    }
+  }
+  orphans.sort(
+    (a, b) =>
+      a.subject_name.trim().toLowerCase().localeCompare(b.subject_name.trim().toLowerCase()) || a.id - b.id
+  );
+  for (const manual of orphans) {
+    const key = manual.subject_name.trim().toLowerCase();
+    const entry = {
+      subject_name: manual.subject_name,
+      teacher_names: [manual.teacher_name],
+      class_ids: [],
+      // A manual subject with no real class has nothing filed yet: the
+      // period view fills `submitted` in from its grades, and it must
+      // never read as reminded (there is no class to remind).
+      submitted: false,
+      submitted_at: null,
+      reminded_at: null,
+      manual,
+    };
+    const index = entries.findIndex((entry) => entry.subject_name.trim().toLowerCase() > key);
+    if (index === -1) entries.push(entry);
+    else entries.splice(index, 0, entry);
+    byKey.set(key, entry);
+  }
+  for (const entry of entries) {
+    if (!('manual' in entry)) entry.manual = null;
+  }
+  return entries;
+}
+
+// One period's manual grades, one entry per roster learner (null when the
+// learner has no manual grade for the period).
+function manualPeriodGrades(manual, quarter, roster) {
+  const byPeriod = manual ? manual.grades.get(quarter) : undefined;
+  const out = new Map();
+  for (const key of roster.keys()) out.set(key, byPeriod ? byPeriod.get(key) ?? null : null);
+  return out;
+}
+
+// A manual subject counts as filed for a period when at least one roster
+// learner has a manual grade for it — mirroring "submit anyway" for a
+// real filing, where a filed period counts even with blanks left in it.
+function manualHasGrades(manual, quarter) {
+  const byPeriod = manual ? manual.grades.get(quarter) : undefined;
+  return !!byPeriod && byPeriod.size > 0;
+}
+
+// The highest period with a manual grade for one adviser's section and
+// year, or null when there are no manual grades yet. Used to open
+// Consolidation on the highest period that already has data.
+async function maxManualQuarter(client, adviser, year) {
+  const result = await client.query(
+    `SELECT MAX(g.quarter)::int AS quarter
+       FROM manual_subject_grades g
+       JOIN manual_subjects s ON s.id = g.manual_subject_id
+      WHERE s.adviser_id = $1 AND s.grade_level = $2
+        AND LOWER(TRIM(s.section_name)) = LOWER(TRIM($3))
+        AND s.academic_year = $4 AND s.school_id = $5`,
+    [adviser.id, adviser.advisory_grade, adviser.advisory_section, year, adviser.school_id]
+  );
+  return result.rows[0] ? result.rows[0].quarter : null;
+}
+
 // Rank learners by a grade, highest first. Learners with the same grade share a rank.
 function rankLearners(learners, gradeKey) {
   const ranked = learners.filter((learner) => learner[gradeKey] !== null).sort((a, b) => b[gradeKey] - a[gradeKey]);
@@ -949,9 +1076,14 @@ async function buildConsolidation(client, adviser, quarter) {
     for (const row of reminded.rows) reminders.set(row.class_id, row.reminded_at);
   }
 
-  const subjects = groupSubjectsByName(classes, submissions, reminders);
+  const subjects = attachManualSubjects(
+    groupSubjectsByName(classes, submissions, reminders),
+    await loadManualSubjects(client, adviser, year)
+  );
 
   // Grades for the submitted subjects, computed under each filing's own profile.
+  // For a merged subject, a real filed submission takes precedence for the
+  // period; the manual grades fill periods with no real submission.
   const gradesBySubject = new Map(); // subject key -> Map(roster key -> qg or null)
   const averagesBySubject = new Map(); // subject key -> mean grade or null
   for (const subject of subjects) {
@@ -962,8 +1094,15 @@ async function buildConsolidation(client, adviser, quarter) {
       perLearner = await computeSubjectPeriodGrades(
         client, filedClassId, quarter, submissions.get(filedClassId).profile, roster
       );
+    } else if (subject.manual) {
+      perLearner = manualPeriodGrades(subject.manual, quarter, roster);
     } else {
       for (const rosterKey of roster.keys()) perLearner.set(rosterKey, null);
+    }
+    // A manual subject counts as submitted for the period when at least
+    // one roster learner has a manual grade for it.
+    if (!subject.submitted && subject.manual && manualHasGrades(subject.manual, quarter)) {
+      subject.submitted = true;
     }
     gradesBySubject.set(key, perLearner);
     const filed = [...perLearner.values()].filter((qg) => qg !== null);
@@ -1054,6 +1193,12 @@ async function buildConsolidation(client, adviser, quarter) {
         reminded: subject.reminded_at !== null,
         reminded_at: subject.reminded_at,
         average: subject.average,
+        // A manual subject has no class to remind: the adviser manages
+        // its grades themself. has_manual covers a merged subject, whose
+        // manual grades are managed the same way.
+        manual: subject.manual !== null,
+        manual_subject_id: subject.manual ? subject.manual.id : null,
+        profile_code: subject.manual ? subject.manual.profile_code : null,
         // True when the teacher who still needs to file is the adviser
         // themself: a direct-add needs no reminder, so the Remind button
         // is hidden for this subject in Consolidation.
@@ -1106,7 +1251,12 @@ async function buildFinals(client, adviser) {
       submissions.get(row.class_id).set(row.quarter, { submitted_at: row.submitted_at, profile: row.profile });
     }
   }
-  const hasData = [...submissions.values()].some((byPeriod) => byPeriod.size > 0);
+  const manualSubjects = await loadManualSubjects(client, adviser, year);
+  const hasManualData = manualSubjects.some((manual) =>
+    [...manual.grades.values()].some((byPeriod) => byPeriod.size > 0)
+  );
+  const hasData =
+    [...submissions.values()].some((byPeriod) => byPeriod.size > 0) || hasManualData;
 
   // One entry per subject name, as in the period view.
   const subjectEntries = [];
@@ -1124,6 +1274,7 @@ async function buildFinals(client, adviser) {
       subject.class_ids.push(klass.id);
     }
   }
+  attachManualSubjects(subjectEntries, manualSubjects);
 
   // Filed period grades per class, computed once and shared with the
   // Grades page finals: the per-period computation lives in one place.
@@ -1146,9 +1297,16 @@ async function buildFinals(client, adviser) {
       const filedClassId = subject.class_ids.find(
         (classId) => submissions.has(classId) && submissions.get(classId).has(period)
       );
-      if (filedClassId === undefined) continue;
+      // A real filed submission takes precedence for the period; the
+      // manual grades fill periods with no real submission.
+      let grades = null;
+      if (filedClassId !== undefined) {
+        grades = (await filedGradesFor(filedClassId)).get(period);
+      } else if (subject.manual && manualHasGrades(subject.manual, period)) {
+        grades = manualPeriodGrades(subject.manual, period, roster);
+      }
+      if (grades === null) continue;
       filedPeriods += 1;
-      const grades = (await filedGradesFor(filedClassId)).get(period);
       for (const [rosterKey, qg] of grades) {
         if (!periodGrades.has(rosterKey)) periodGrades.set(rosterKey, []);
         periodGrades.get(rosterKey).push(qg);
@@ -1220,6 +1378,9 @@ async function buildFinals(client, adviser) {
       filed_periods: subject.filed_periods,
       total_periods: subject.total_periods,
       average: subject.average,
+      manual: subject.manual !== null,
+      manual_subject_id: subject.manual ? subject.manual.id : null,
+      profile_code: subject.manual ? subject.manual.profile_code : null,
     })),
     learners,
     readiness: {
@@ -1286,7 +1447,10 @@ async function getConsolidation(req, res) {
   }
 
   const classes = await sectionClasses(db, adviser, year);
-  const quarter = await resolveConsolidationQuarter(db, classes.map((klass) => klass.id), requestedQuarter, profile);
+  const manualMax = await maxManualQuarter(db, adviser, year);
+  const quarter = await resolveConsolidationQuarter(
+    db, classes.map((klass) => klass.id), requestedQuarter, profile, manualMax
+  );
   const view = await buildConsolidation(db, adviser, quarter);
 
   if (format === 'csv') {
@@ -1354,6 +1518,305 @@ async function remindTeacher(req, res) {
   });
 }
 
+// ---------- Manual subjects: endpoints (Batch 8 fix 10) ----------
+
+// The one manual subject a signed-in adviser may touch: same adviser,
+// same school, same grade/section and year. Anything else is a 404, the
+// same as for another teacher's class.
+async function loadOwnedManualSubject(client, adviser, year, id) {
+  const result = await client.query(
+    `SELECT id, adviser_id, school_id, subject_name, teacher_name, grade_level,
+            section_name, academic_year, profile_code, created_at, updated_at
+       FROM manual_subjects WHERE id = $1`,
+    [id]
+  );
+  const row = result.rows[0];
+  if (
+    !row ||
+    row.adviser_id !== adviser.id ||
+    row.school_id !== adviser.school_id ||
+    row.grade_level !== adviser.advisory_grade ||
+    row.section_name.trim().toLowerCase() !== adviser.advisory_section.trim().toLowerCase() ||
+    row.academic_year !== year
+  ) {
+    throw notFound('That manual subject was not found.');
+  }
+  return row;
+}
+
+// Does a real class with this subject name already exist for the
+// adviser's section and year? A manual subject must not duplicate one:
+// the two would merge in Consolidation and the real filing would win
+// every period anyway.
+async function realClassWithSubject(client, adviser, year, subjectName) {
+  const classes = await sectionClasses(client, adviser, year);
+  return classes.some(
+    (klass) => klass.subject_name.trim().toLowerCase() === subjectName.trim().toLowerCase()
+  );
+}
+
+async function manualSubjectWithName(client, adviser, year, subjectName, excludeId = null) {
+  const result = await client.query(
+    `SELECT 1 FROM manual_subjects
+      WHERE adviser_id = $1 AND LOWER(TRIM(subject_name)) = LOWER(TRIM($2))
+        AND grade_level = $3 AND LOWER(TRIM(section_name)) = LOWER(TRIM($4))
+        AND academic_year = $5 AND ($6::int IS NULL OR id <> $6)`,
+    [adviser.id, subjectName, adviser.advisory_grade, adviser.advisory_section, year, excludeId]
+  );
+  return result.rows.length > 0;
+}
+
+function manualSubjectShape(row, gradeCount, periodsWithGrades) {
+  return {
+    id: row.id,
+    subject_name: row.subject_name,
+    teacher_name: row.teacher_name,
+    grade_level: row.grade_level,
+    section_name: row.section_name,
+    academic_year: row.academic_year,
+    profile_code: row.profile_code,
+    grade_count: gradeCount,
+    periods_with_grades: periodsWithGrades,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+// GET /api/teacher/consolidation/manual-subjects
+async function listManualSubjects(req, res) {
+  const adviser = await adviserOf(db, req.teacher.id);
+  if (!adviser) {
+    throw badRequest('Set your advisory assignment on the Dashboard first.', {
+      code: 'NO_ADVISORY',
+      errors: { advisory_section: 'Choose an advisory grade and section on the Dashboard.' },
+    });
+  }
+  const year = await academicYear();
+  const manualSubjects = await loadManualSubjects(db, adviser, year);
+  const subjects = manualSubjects.map((manual) => {
+    const periodsWithGrades = [...manual.grades.keys()]
+      .filter((quarter) => manual.grades.get(quarter).size > 0)
+      .sort((a, b) => a - b);
+    const gradeCount = [...manual.grades.values()].reduce((sum, byPeriod) => sum + byPeriod.size, 0);
+    return manualSubjectShape(manual, gradeCount, periodsWithGrades);
+  });
+  res.json({ manual_subjects: subjects });
+}
+
+// POST /api/teacher/consolidation/manual-subjects
+async function createManualSubject(req, res) {
+  const adviser = await adviserOf(db, req.teacher.id);
+  if (!adviser) {
+    throw badRequest('Set your advisory assignment on the Dashboard first.', {
+      code: 'NO_ADVISORY',
+      errors: { advisory_section: 'Choose an advisory grade and section on the Dashboard.' },
+    });
+  }
+  const year = await academicYear();
+  const profile = await grading.getGradingProfile(db, year);
+  const { subject_name, teacher_name } = req.valid.body;
+  if (await realClassWithSubject(db, adviser, year, subject_name)) {
+    throw conflict(`A class for "${subject_name}" already exists for this section. Upload the subject teacher's grades through that class instead.`);
+  }
+  if (await manualSubjectWithName(db, adviser, year, subject_name)) {
+    throw conflict(`You already created a manual subject named "${subject_name}" for this section.`);
+  }
+  try {
+    const result = await db.query(
+      `INSERT INTO manual_subjects
+         (adviser_id, school_id, subject_name, teacher_name, grade_level, section_name, academic_year, profile_code)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, adviser_id, school_id, subject_name, teacher_name, grade_level,
+                 section_name, academic_year, profile_code, created_at, updated_at`,
+      [
+        adviser.id,
+        adviser.school_id,
+        subject_name,
+        teacher_name,
+        adviser.advisory_grade,
+        adviser.advisory_section,
+        year,
+        profile.code,
+      ]
+    );
+    res.status(201).json({ manual_subject: manualSubjectShape(result.rows[0], 0, []) });
+  } catch (error) {
+    if (error.code === '23505') {
+      throw conflict(`You already created a manual subject named "${subject_name}" for this section.`);
+    }
+    throw error;
+  }
+}
+
+// PATCH /api/teacher/consolidation/manual-subjects/:id
+async function updateManualSubject(req, res) {
+  const adviser = await adviserOf(db, req.teacher.id);
+  if (!adviser) {
+    throw badRequest('Set your advisory assignment on the Dashboard first.', {
+      code: 'NO_ADVISORY',
+      errors: { advisory_section: 'Choose an advisory grade and section on the Dashboard.' },
+    });
+  }
+  const year = await academicYear();
+  const manual = await loadOwnedManualSubject(db, adviser, year, req.valid.params.id);
+  const { subject_name, teacher_name } = req.valid.body;
+  const nextName = subject_name !== undefined ? subject_name : manual.subject_name;
+  if (nextName.trim().toLowerCase() !== manual.subject_name.trim().toLowerCase()) {
+    if (await realClassWithSubject(db, adviser, year, nextName)) {
+      throw conflict(`A class for "${nextName}" already exists for this section, so this manual subject cannot be renamed to it.`);
+    }
+    if (await manualSubjectWithName(db, adviser, year, nextName, manual.id)) {
+      throw conflict(`You already created a manual subject named "${nextName}" for this section.`);
+    }
+  }
+  try {
+    const result = await db.query(
+      `UPDATE manual_subjects
+          SET subject_name = $1, teacher_name = $2, updated_at = NOW()
+        WHERE id = $3
+        RETURNING id, adviser_id, school_id, subject_name, teacher_name, grade_level,
+                  section_name, academic_year, profile_code, created_at, updated_at`,
+      [nextName, teacher_name !== undefined ? teacher_name : manual.teacher_name, manual.id]
+    );
+    const loaded = await loadManualSubjects(db, adviser, year);
+    const refreshed = loaded.find((row) => row.id === manual.id);
+    const periodsWithGrades = [...refreshed.grades.keys()]
+      .filter((quarter) => refreshed.grades.get(quarter).size > 0)
+      .sort((a, b) => a - b);
+    const gradeCount = [...refreshed.grades.values()].reduce((sum, byPeriod) => sum + byPeriod.size, 0);
+    res.json({ manual_subject: manualSubjectShape(result.rows[0], gradeCount, periodsWithGrades) });
+  } catch (error) {
+    if (error.code === '23505') {
+      throw conflict(`You already created a manual subject named "${nextName}" for this section.`);
+    }
+    throw error;
+  }
+}
+
+// DELETE /api/teacher/consolidation/manual-subjects/:id
+async function deleteManualSubject(req, res) {
+  const adviser = await adviserOf(db, req.teacher.id);
+  if (!adviser) {
+    throw badRequest('Set your advisory assignment on the Dashboard first.', {
+      code: 'NO_ADVISORY',
+      errors: { advisory_section: 'Choose an advisory grade and section on the Dashboard.' },
+    });
+  }
+  const year = await academicYear();
+  const manual = await loadOwnedManualSubject(db, adviser, year, req.valid.params.id);
+  // Grades go with the subject (ON DELETE CASCADE).
+  await db.query('DELETE FROM manual_subjects WHERE id = $1', [manual.id]);
+  res.json({ message: `Manual subject "${manual.subject_name}" was deleted.` });
+}
+
+// GET /api/teacher/consolidation/manual-subjects/:id/template — the CSV
+// template, prefilled with one row per roster learner (Learner ID +
+// "Last, First", blank grade cells), so the adviser fills grades against
+// the correct IDs. An empty roster yields the header only.
+async function downloadManualTemplate(req, res) {
+  const adviser = await adviserOf(db, req.teacher.id);
+  if (!adviser) {
+    throw badRequest('Set your advisory assignment on the Dashboard first.', {
+      code: 'NO_ADVISORY',
+      errors: { advisory_section: 'Choose an advisory grade and section on the Dashboard.' },
+    });
+  }
+  const year = await academicYear();
+  const profile = await grading.getGradingProfile(db, year);
+  const manual = await loadOwnedManualSubject(db, adviser, year, req.valid.params.id);
+  const classes = await sectionClasses(db, adviser, year);
+  const roster = await sectionRoster(db, adviser, classes.map((klass) => klass.id));
+  const headers = [
+    { header: 'Learner ID', value: (row) => row.learner_id },
+    { header: 'Student Name', value: (row) => `${row.last_name}, ${row.first_name}` },
+  ];
+  for (const period of profile.periods) {
+    headers.push({ header: `${profile.periodLabel} ${period}`, value: () => '' });
+  }
+  const safe = (value) => String(value).replace(/[^A-Za-z0-9]+/g, '-').toLowerCase();
+  sendCsv(
+    res,
+    `manual-grades-${safe(manual.subject_name)}.csv`,
+    headers,
+    [...roster.values()]
+  );
+}
+
+// POST /api/teacher/consolidation/manual-subjects/:id/grades — file the
+// parsed CSV grades as JSON. The backend re-validates everything against
+// the section roster: any invalid row blocks the whole filing
+// (all-or-nothing). Re-uploading replaces the subject's grades entirely.
+async function fileManualGrades(req, res) {
+  const adviser = await adviserOf(db, req.teacher.id);
+  if (!adviser) {
+    throw badRequest('Set your advisory assignment on the Dashboard first.', {
+      code: 'NO_ADVISORY',
+      errors: { advisory_section: 'Choose an advisory grade and section on the Dashboard.' },
+    });
+  }
+  const year = await academicYear();
+  const profile = await grading.getGradingProfile(db, year);
+  const manual = await loadOwnedManualSubject(db, adviser, year, req.valid.params.id);
+  const classes = await sectionClasses(db, adviser, year);
+  const roster = await sectionRoster(db, adviser, classes.map((klass) => klass.id));
+  if (roster.size === 0) {
+    throw badRequest('Enrol learners in this section first before uploading grades.', {
+      code: 'EMPTY_ROSTER',
+    });
+  }
+  const invalid = [];
+  const seen = new Set();
+  const valid = [];
+  for (const entry of req.valid.body.grades) {
+    const rosterKey = entry.learner_id.trim().toLowerCase();
+    const problems = [];
+    if (!roster.has(rosterKey)) problems.push('Learner ID not found in this section.');
+    if (!profile.periods.includes(entry.quarter)) {
+      problems.push(`${profile.periodLabel} ${entry.quarter} is not a period in ${year}.`);
+    }
+    const duplicateKey = `${rosterKey}|${entry.quarter}`;
+    if (seen.has(duplicateKey)) problems.push('Duplicate row for this learner and period.');
+    seen.add(duplicateKey);
+    if (problems.length > 0) {
+      invalid.push({
+        learner_id: entry.learner_id,
+        quarter: entry.quarter,
+        grade: entry.grade,
+        errors: problems,
+      });
+    } else {
+      valid.push({ learner_id_text: entry.learner_id.trim(), quarter: entry.quarter, grade: entry.grade });
+    }
+  }
+  if (invalid.length > 0) {
+    throw badRequest(
+      `${invalid.length} grade row${invalid.length === 1 ? '' : 's'} could not be filed. Fix the rows and upload again — nothing was saved.`,
+      { code: 'MANUAL_GRADES_INVALID', invalid_rows: invalid }
+    );
+  }
+  await db.withTransaction(async (client) => {
+    await client.query('DELETE FROM manual_subject_grades WHERE manual_subject_id = $1', [manual.id]);
+    for (const row of valid) {
+      await client.query(
+        `INSERT INTO manual_subject_grades (manual_subject_id, learner_id_text, quarter, grade)
+         VALUES ($1, $2, $3, $4)`,
+        [manual.id, row.learner_id_text, row.quarter, row.grade]
+      );
+    }
+    await client.query('UPDATE manual_subjects SET updated_at = NOW() WHERE id = $1', [manual.id]);
+  });
+  const loaded = await loadManualSubjects(db, adviser, year);
+  const refreshed = loaded.find((row) => row.id === manual.id);
+  const periodsWithGrades = [...refreshed.grades.keys()]
+    .filter((quarter) => refreshed.grades.get(quarter).size > 0)
+    .sort((a, b) => a - b);
+  const gradeCount = [...refreshed.grades.values()].reduce((sum, byPeriod) => sum + byPeriod.size, 0);
+  res.json({
+    manual_subject: manualSubjectShape(refreshed, gradeCount, periodsWithGrades),
+    filed: valid.length,
+  });
+}
+
 // The Dashboard's consolidation card: real readiness for the adviser's section
 // (submitted / total subjects for the current period), or null when the teacher
 // is not an adviser.
@@ -1363,7 +1826,10 @@ async function fetchConsolidationReadiness(teacherId) {
   const year = await academicYear();
   const profile = await grading.getGradingProfile(db, year);
   const classes = await sectionClasses(db, adviser, year);
-  const quarter = await resolveConsolidationQuarter(db, classes.map((klass) => klass.id), null, profile);
+  const manualMax = await maxManualQuarter(db, adviser, year);
+  const quarter = await resolveConsolidationQuarter(
+    db, classes.map((klass) => klass.id), null, profile, manualMax
+  );
   const view = await buildConsolidation(db, adviser, quarter);
   return {
     grade: view.adviser.grade,
@@ -1390,6 +1856,12 @@ module.exports = {
   submitGrades,
   getConsolidation,
   remindTeacher,
+  listManualSubjects,
+  createManualSubject,
+  updateManualSubject,
+  deleteManualSubject,
+  downloadManualTemplate,
+  fileManualGrades,
   fetchConsolidationReadiness,
   // Shared by the Report Card (Batch 5), which reads the same consolidated
   // grades: the card is built from these helpers, never by recomputing.
@@ -1400,4 +1872,10 @@ module.exports = {
   academicYear,
   buildConsolidation,
   buildFinals,
+  // Shared by the Report Card (Batch 8 fix 10): manual grades are read
+  // through the same helpers Consolidation uses.
+  loadManualSubjects,
+  attachManualSubjects,
+  manualPeriodGrades,
+  manualHasGrades,
 };

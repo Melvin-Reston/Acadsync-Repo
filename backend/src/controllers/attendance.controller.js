@@ -119,8 +119,10 @@ const SF2_MONTHS = [
 
 // GET /api/teacher/attendance/sf2?class_id=&month=YYYY-MM
 // The month's daily attendance for one class, in School Form 2 shape: one
-// column per Monday–Friday day, X = Absent, L = Late, E = Excused, blank =
-// Present. Marks come only from the saved daily roll — never invented.
+// column per school day (a Monday–Friday day inside the teacher's first
+// and last day of classes that is not a holiday they entered), X = Absent,
+// L = Late, E = Excused, blank = Present. Marks come only from the saved
+// daily roll — never invented.
 // "Today" is the current date in the school timezone (APP_TIMEZONE,
 // Asia/Manila by default), worked out here on the server. A day after today
 // has no value and counts in neither total. A day today or earlier with no
@@ -138,28 +140,64 @@ async function getSf2(req, res) {
   const klass = await findClass(class_id, req.teacher.id);
   const [year, monthNumber] = month.split('-').map(Number);
 
-  // The school details the teacher entered for the DepEd forms.
+  // The school details the teacher entered for the DepEd forms, plus the
+  // school calendar (first/last day of classes) from the dashboard.
   const teacher = await db.query(
     `SELECT t.first_name, t.last_name, t.region, t.division, t.deped_school_id,
-            t.school_head_name, s.name AS school_name
+            t.school_head_name, s.name AS school_name,
+            t.classes_start_date::text AS classes_start_date,
+            t.classes_end_date::text AS classes_end_date
        FROM teachers t JOIN schools s ON s.id = t.school_id WHERE t.id = $1`,
     [req.teacher.id]
   );
+  const calendar = teacher.rows[0] || {};
+  const holidays = await db.query(
+    'SELECT date::text AS date, name FROM teacher_holidays WHERE teacher_id = $1 ORDER BY date',
+    [req.teacher.id]
+  );
+  const holidayByDate = new Map(holidays.rows.map((row) => [row.date, row.name]));
 
   // Monday–Friday days of the month only (UTC dates, so no timezone shifts).
+  // A weekday is a school day only when classes have opened, have not
+  // ended, and the day is not a holiday the teacher entered. Days that are
+  // not school days get no column, no mark, and count in nothing — the
+  // same treatment weekends already get. When the calendar dates are
+  // unset, every weekday counts, exactly as before.
   const daysInMonth = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
-  const days = [];
+  const weekdays = [];
   for (let day = 1; day <= daysInMonth; day += 1) {
     const date = new Date(Date.UTC(year, monthNumber - 1, day));
     const weekday = date.getUTCDay();
     if (weekday >= 1 && weekday <= 5) {
-      days.push({
+      weekdays.push({
         date: `${month}-${String(day).padStart(2, '0')}`,
         day,
         weekday: SF2_WEEKDAYS[weekday],
       });
     }
   }
+  const isSchoolDay = (day) => {
+    if (calendar.classes_start_date && day.date < calendar.classes_start_date) return false;
+    if (calendar.classes_end_date && day.date > calendar.classes_end_date) return false;
+    if (holidayByDate.has(day.date)) return false;
+    return true;
+  };
+  const days = weekdays.filter(isSchoolDay);
+  // Weekdays that are not school days, for the preview note: the reason a
+  // day is out, and the holiday name when one was entered.
+  const nonSchoolDays = weekdays
+    .filter((day) => !isSchoolDay(day))
+    .map((day) => ({
+      date: day.date,
+      day: day.day,
+      weekday: day.weekday,
+      reason: holidayByDate.has(day.date)
+        ? 'holiday'
+        : day.date < (calendar.classes_start_date || '')
+          ? 'before_first_day'
+          : 'after_last_day',
+      name: holidayByDate.get(day.date) || null,
+    }));
 
   // Male first, then Female, each group alphabetical by last name — the
   // DepEd form's order, with one continuous numbering across both groups.
@@ -182,7 +220,8 @@ async function getSf2(req, res) {
   const byLearner = new Map();
   const schoolDays = new Set(days.map((day) => day.date));
   for (const row of marks.rows) {
-    // A roll saved on a weekend is not a school day: it stays out of the
+    // A roll saved on a day that is not a school day — a weekend, before
+    // classes open, after they end, or a holiday — stays out of the
     // marks and the totals entirely.
     if (!schoolDays.has(row.date)) continue;
     if (!byLearner.has(row.learner_id)) byLearner.set(row.learner_id, {});
@@ -307,6 +346,7 @@ async function getSf2(req, res) {
       school_head_name: school.school_head_name || null,
     },
     days,
+    non_school_days: nonSchoolDays,
     learners: rows,
     combined,
     totals_by_gender: totalsByGender,

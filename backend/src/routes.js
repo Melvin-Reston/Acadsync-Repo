@@ -52,6 +52,9 @@ teacher.patch('/me', validate(s.teacherProfileSchema), teacherPortal.updateMe);
 teacher.patch('/me/adviser', validate(s.teacherAdviserSchema), teacherPortal.updateAdviser);
 teacher.post('/change-password', validate(s.changePasswordSchema), teacherPortal.changePassword);
 teacher.get('/dashboard', teacherPortal.getDashboard);
+teacher.get('/holidays', teacherPortal.listHolidays);
+teacher.post('/holidays', validate(s.holidaySchema), teacherPortal.addHoliday);
+teacher.delete('/holidays/:id', idParam, teacherPortal.deleteHoliday);
 teacher.get('/today-classes', teacherPortal.getTodayClasses);
 teacher.get('/subscription', teacherPortal.getMySubscription);
 teacher.post('/subscription', validate(s.teacherSubscriptionSchema), teacherPortal.createMySubscription);
@@ -109,6 +112,27 @@ teacher.get('/grades/:id/submission-check', idParam, validate(s.gradeSheetQueryS
 teacher.post('/grades/:id/submit', idParam, validate(s.gradeSubmitSchema), grades.submitGrades);
 teacher.get('/consolidation', validate(s.consolidationQuerySchema, 'query'), grades.getConsolidation);
 teacher.post('/consolidation/remind', validate(s.remindSchema), grades.remindTeacher);
+
+// Manual subjects in Consolidation (Batch 8 fix 10): the adviser creates
+// the subject when its teacher has no AcadSync account, then uploads the
+// term grades as a CSV. Grades arrive as JSON parsed by the frontend; the
+// backend re-validates every row against the section roster.
+teacher.get('/consolidation/manual-subjects', grades.listManualSubjects);
+teacher.post('/consolidation/manual-subjects', validate(s.manualSubjectCreateSchema), grades.createManualSubject);
+teacher.patch(
+  '/consolidation/manual-subjects/:id',
+  idParam,
+  validate(s.manualSubjectUpdateSchema),
+  grades.updateManualSubject
+);
+teacher.delete('/consolidation/manual-subjects/:id', idParam, grades.deleteManualSubject);
+teacher.get('/consolidation/manual-subjects/:id/template', idParam, grades.downloadManualTemplate);
+teacher.post(
+  '/consolidation/manual-subjects/:id/grades',
+  idParam,
+  validate(s.manualGradesSchema),
+  grades.fileManualGrades
+);
 
 // Report Card (Batch 5): the adviser's section, one card per learner, filled
 // from the consolidated grades and the attendance records.

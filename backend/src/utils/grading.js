@@ -58,7 +58,17 @@ async function assertSwitchAllowed(client, academicYear) {
     'SELECT COUNT(*)::int AS count FROM grade_submissions WHERE academic_year = $1',
     [academicYear]
   );
-  if (result.rows[0].count > 0) {
+  // Manual grades filed by an adviser count the same way: they were filed
+  // under the profile frozen on the manual subject, and switching the
+  // year's system underneath them would make the frozen and current
+  // systems disagree about the same year.
+  const manual = await client.query(
+    `SELECT COUNT(*)::int AS count FROM manual_subject_grades g
+       JOIN manual_subjects s ON s.id = g.manual_subject_id
+      WHERE s.academic_year = $1`,
+    [academicYear]
+  );
+  if (result.rows[0].count > 0 || manual.rows[0].count > 0) {
     throw badRequest(
       `Grades have already been filed for ${academicYear}, so the grading system for that year cannot be changed.`,
       {

@@ -53,6 +53,9 @@
       <span class="meter" aria-hidden="true"><i [style.width.%]="view()!.readiness.pct"></i></span>
     </div>
     <div class="readiness-actions">
+      <button type="button" class="btn" (click)="openCreate()">
+        <app-icon name="plus" [size]="16" /> Add manual subject
+      </button>
       <button type="button" class="btn" (click)="refresh()" [disabled]="refreshing()">
         <app-icon name="refresh" [size]="16" /> {{ refreshing() ? 'Refreshing…' : 'Refresh' }}
       </button>
@@ -75,35 +78,50 @@
     <div class="card">
       <div class="empty">
         <p><b>No subjects for this section yet.</b></p>
-        <p>When classes are created for Grade {{ view()!.grade }} {{ view()!.section }}, their subjects will appear here.</p>
+        <p>When classes are created for Grade {{ view()!.grade }} {{ view()!.section }}, their subjects will appear here. If a subject's teacher has no AcadSync account, add it as a manual subject and upload the grades yourself.</p>
+        <button type="button" class="btn btn-primary" (click)="openCreate()">
+          <app-icon name="plus" [size]="16" /> Add manual subject
+        </button>
       </div>
     </div>
   } @else {
     <section class="subjects" aria-label="Subjects">
-      @for (subject of view()!.subjects; track subject.class_id) {
+      @for (subject of view()!.subjects; track subject.subject_name) {
         <article class="card subject-card">
           <div class="subject-head">
             <span class="card-title">{{ subject.subject_name }}</span>
-            @if (subject.submitted) {
-              <span class="pill accent">Submitted</span>
-            } @else {
-              <span class="pill amber">Waiting</span>
-            }
+            <span class="subject-pills">
+              @if (subject.manual) {
+                <span class="pill plain">Manual</span>
+              }
+              @if (subject.submitted) {
+                <span class="pill accent">Submitted</span>
+              } @else {
+                <span class="pill amber">Waiting</span>
+              }
+            </span>
           </div>
           <p class="muted">{{ subject.teacher_name }}</p>
           <div class="subject-foot">
             <span class="muted">Average {{ subject.average === null ? '—' : subject.average }}</span>
-            @if (!subject.submitted && !subject.own_class) {
-              <button type="button" class="btn btn-small" (click)="remind(subject.class_id)" [disabled]="reminding() === subject.class_id">
-                {{ reminding() === subject.class_id ? 'Sending…' : subject.reminded ? 'Remind again' : 'Remind teacher' }}
-              </button>
-            } @else if (!subject.submitted && subject.own_class) {
-              <!-- The adviser teaches this subject themself: there is no one
-                   to remind — the grades are filed from the Grades page. -->
-              <span class="muted">Yours to file</span>
-            } @else if (subject.reminded) {
-              <span class="pill plain">Reminder sent</span>
-            }
+            <span class="subject-actions">
+              @if (subject.manual) {
+                <button type="button" class="btn btn-small" (click)="openManage(subject)">
+                  <app-icon name="edit" [size]="14" /> Manage grades
+                </button>
+              }
+              @if (!subject.submitted && !subject.own_class && subject.class_id !== null) {
+                <button type="button" class="btn btn-small" (click)="remind(subject.class_id)" [disabled]="reminding() === subject.class_id">
+                  {{ reminding() === subject.class_id ? 'Sending…' : subject.reminded ? 'Remind again' : 'Remind teacher' }}
+                </button>
+              } @else if (!subject.submitted && subject.own_class) {
+                <!-- The adviser teaches this subject themself: there is no one
+                     to remind — the grades are filed from the Grades page. -->
+                <span class="muted">Yours to file</span>
+              } @else if (subject.reminded) {
+                <span class="pill plain">Reminder sent</span>
+              }
+            </span>
           </div>
         </article>
       }
@@ -126,7 +144,7 @@
         <thead>
           <tr>
             <th>Learner</th>
-            @for (subject of view()!.subjects; track subject.class_id) {
+            @for (subject of view()!.subjects; track subject.subject_name) {
               <th class="center">{{ subject.subject_name }}</th>
             }
             <th class="center">GWA</th>
@@ -141,7 +159,7 @@
                 <span class="cell-main">{{ learnerName(learner) }}</span>
                 <span class="cell-sub">{{ learner.learner_id }} · {{ learner.sex }}</span>
               </td>
-              @for (subject of view()!.subjects; track subject.class_id) {
+              @for (subject of view()!.subjects; track subject.subject_name) {
                 <td class="center num" [class.below]="learner.grades[subject.subject_name] !== null && (learner.grades[subject.subject_name] ?? 100) < 75">
                   {{ fmt(learner.grades[subject.subject_name]) }}
                 </td>
@@ -245,5 +263,172 @@
         <p class="legend">A final grade is the mean of the subject's {{ finals()!.period_label.toLowerCase() }} grades, and only appears once every {{ finals()!.period_label.toLowerCase() }} is filed for that subject.</p>
       </div>
     }
+  }
+
+  <!-- Add manual subject -->
+  @if (createOpen()) {
+    <app-modal title="Add manual subject" (closed)="createOpen.set(false)">
+      <p class="muted">For a subject whose teacher has no AcadSync account. The teacher gives you the grade sheet, and you upload the grades as a CSV from the subject card.</p>
+      @if (createError()) {
+        <div class="alert" role="alert">
+          <app-icon name="alert" [size]="16" />
+          <span>{{ createError() }}</span>
+        </div>
+      }
+      <form (ngSubmit)="createManual()">
+        <div class="field">
+          <label for="manual-subject-name">Subject name</label>
+          <input id="manual-subject-name" class="input" type="text" autocomplete="off"
+            [ngModel]="createName()" (ngModelChange)="createName.set($event)" name="subjectName" required />
+        </div>
+        <div class="field">
+          <label for="manual-teacher-name">Subject teacher's name</label>
+          <input id="manual-teacher-name" class="input" type="text" autocomplete="off"
+            [ngModel]="createTeacher()" (ngModelChange)="createTeacher.set($event)" name="teacherName" required />
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn" (click)="createOpen.set(false)">Cancel</button>
+          <button type="submit" class="btn btn-primary" [disabled]="creating() || !createName().trim() || !createTeacher().trim()">
+            {{ creating() ? 'Adding…' : 'Add subject' }}
+          </button>
+        </div>
+      </form>
+    </app-modal>
+  }
+
+  <!-- Manage a manual subject: rename, template download, CSV upload, delete -->
+  @if (manageSubject(); as manual) {
+    <app-modal [title]="'Manual subject · ' + manual.subject_name" (closed)="closeManage()">
+      @if (manageError()) {
+        <div class="alert" role="alert">
+          <app-icon name="alert" [size]="16" />
+          <span>{{ manageError() }}</span>
+        </div>
+      }
+      <div class="field">
+        <label for="manage-subject-name">Subject name</label>
+        <input id="manage-subject-name" class="input" type="text" autocomplete="off"
+          [ngModel]="manageName()" (ngModelChange)="manageName.set($event)" name="manageSubjectName" />
+      </div>
+      <div class="field">
+        <label for="manage-teacher-name">Subject teacher's name</label>
+        <input id="manage-teacher-name" class="input" type="text" autocomplete="off"
+          [ngModel]="manageTeacher()" (ngModelChange)="manageTeacher.set($event)" name="manageTeacherName" />
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" (click)="saveManualDetails()" [disabled]="savingDetails() || !manageName().trim() || !manageTeacher().trim()">
+          {{ savingDetails() ? 'Saving…' : 'Save changes' }}
+        </button>
+      </div>
+
+      <hr class="modal-divider" />
+
+      <p class="muted">
+        Download the template — one row per learner in Grade {{ view()!.grade }} {{ view()!.section }} — fill in the
+        {{ view()!.grading.period_label.toLowerCase() }} grades, then choose the file to check it before filing.
+        @if (manual.grade_count > 0) {
+          Uploading again replaces all {{ manual.grade_count }} filed grade{{ manual.grade_count === 1 ? '' : 's' }} for this subject.
+        }
+      </p>
+      <div class="modal-actions">
+        <button type="button" class="btn" (click)="downloadTemplate()" [disabled]="view()!.learners.length === 0">
+          <app-icon name="download" [size]="16" /> Download CSV template
+        </button>
+        <label class="btn file-label">
+          Choose CSV file
+          <input type="file" accept=".csv,text/csv" (change)="onManualFile($event)" hidden />
+        </label>
+      </div>
+      @if (view()!.learners.length === 0) {
+        <p class="muted">Enrol learners in this section first before uploading grades.</p>
+      }
+
+      @if (preview(); as check) {
+        <p class="muted mono">{{ previewFileName() }} · {{ check.rows.length }} row{{ check.rows.length === 1 ? '' : 's' }} · {{ check.skipped }} skipped</p>
+        @if (check.errors.length > 0) {
+          <div class="alert" role="alert">
+            <app-icon name="alert" [size]="16" />
+            <span>Nothing was filed. Fix these rows and choose the file again:</span>
+          </div>
+          <ul class="issue-list">
+            @for (issue of check.errors; track issue) {
+              <li>{{ issue }}</li>
+            }
+          </ul>
+        }
+        @if (check.warnings.length > 0) {
+          <div class="alert warn" role="alert">
+            <app-icon name="alert" [size]="16" />
+            <span>Check the names before filing — rows are matched by Learner ID:</span>
+          </div>
+          <ul class="issue-list">
+            @for (issue of check.warnings; track issue) {
+              <li>{{ issue }}</li>
+            }
+          </ul>
+        }
+        @if (check.rows.length > 0) {
+          <div class="table-wrap preview-wrap">
+            <table class="table preview-table">
+              <thead>
+                <tr>
+                  <th>Learner ID</th>
+                  <th>Student Name</th>
+                  @for (period of periods(); track period) {
+                    <th class="center">{{ view()!.grading.period_label }} {{ period }}</th>
+                  }
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (row of check.rows; track row.line) {
+                  <tr [class.row-error]="row.has_error" [class.row-skipped]="row.skipped && !row.has_error">
+                    <td class="mono">{{ row.learner_id }}</td>
+                    <td>
+                      {{ row.file_name || '—' }}
+                      @if (row.name_mismatch && row.roster_name) {
+                        <span class="cell-sub">Roster: {{ row.roster_name }}</span>
+                      }
+                    </td>
+                    @for (grade of row.grades; track $index) {
+                      <td class="center num">{{ grade === null ? '—' : grade }}</td>
+                    }
+                    <td>
+                      @if (row.has_error) {
+                        <span class="pill red">Error</span>
+                      } @else if (row.skipped) {
+                        <span class="pill plain">Skipped</span>
+                      } @else {
+                        <span class="pill accent">Ready</span>
+                      }
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+        <div class="modal-actions">
+          <button type="button" class="btn btn-primary" (click)="fileGrades()"
+            [disabled]="filing() || check.errors.length > 0 || check.grades.length === 0">
+            {{ filing() ? 'Filing…' : 'File ' + check.grades.length + ' grade' + (check.grades.length === 1 ? '' : 's') }}
+          </button>
+        </div>
+      }
+
+      <hr class="modal-divider" />
+
+      <div class="modal-actions danger-zone">
+        @if (!confirmDelete()) {
+          <button type="button" class="btn btn-danger" (click)="deleteManual()">Delete manual subject</button>
+        } @else {
+          <span class="muted">Delete this subject and all its filed grades? This cannot be undone.</span>
+          <button type="button" class="btn" (click)="confirmDelete.set(false)">Keep it</button>
+          <button type="button" class="btn btn-danger" (click)="deleteManual()" [disabled]="deleting()">
+            {{ deleting() ? 'Deleting…' : 'Yes, delete' }}
+          </button>
+        }
+      </div>
+    </app-modal>
   }
 }

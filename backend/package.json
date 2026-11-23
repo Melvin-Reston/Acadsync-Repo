@@ -13,7 +13,7 @@
     "migrate": "node scripts/migrate.js",
     "seed": "node scripts/seed.js",
     "seed:reset": "node scripts/seed.js --reset-passwords",
-    "test": "node --test --test-concurrency=1 tests/api.test.js tests/billing.test.js tests/teacher.test.js tests/classes.test.js tests/attendance.test.js tests/grades.test.js tests/report-card.test.js tests/teacher-payments.test.js tests/deped-forms.test.js"
+    "test": "node --test --test-concurrency=1 tests/api.test.js tests/billing.test.js tests/teacher.test.js tests/classes.test.js tests/attendance.test.js tests/grades.test.js tests/report-card.test.js tests/teacher-payments.test.js tests/deped-forms.test.js tests/manual-subjects.test.js tests/manual-subjects-do8.test.js"
   },
   "dependencies": {
     "bcryptjs": "3.0.3",

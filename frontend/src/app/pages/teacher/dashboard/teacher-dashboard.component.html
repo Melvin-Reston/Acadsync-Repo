@@ -136,12 +136,94 @@
             </div>
           </div>
 
+          <h3 class="subhead">School details for DepEd forms</h3>
+
+          <div class="form-grid">
+            <div class="field">
+              <label for="region">Region</label>
+              <input id="region" name="region" type="text" class="input" [class.invalid]="formErrors()['region']" [(ngModel)]="region" />
+              @if (formErrors()['region']) {
+                <span class="field-error">{{ formErrors()['region'] }}</span>
+              }
+            </div>
+            <div class="field">
+              <label for="division">Division</label>
+              <input id="division" name="division" type="text" class="input" [class.invalid]="formErrors()['division']" [(ngModel)]="division" />
+              @if (formErrors()['division']) {
+                <span class="field-error">{{ formErrors()['division'] }}</span>
+              }
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="school-id">School ID</label>
+            <input id="school-id" name="depedSchoolId" type="text" class="input" [class.invalid]="formErrors()['deped_school_id']" [(ngModel)]="depedSchoolId" />
+            @if (formErrors()['deped_school_id']) {
+              <span class="field-error">{{ formErrors()['deped_school_id'] }}</span>
+            }
+          </div>
+
+          <h3 class="subhead">School calendar</h3>
+
+          <div class="form-grid">
+            <div class="field">
+              <label for="classes-start">First day of classes</label>
+              <input id="classes-start" name="classesStartDate" type="date" class="input" [class.invalid]="formErrors()['classes_start_date']" [(ngModel)]="classesStartDate" />
+              @if (formErrors()['classes_start_date']) {
+                <span class="field-error">{{ formErrors()['classes_start_date'] }}</span>
+              }
+            </div>
+            <div class="field">
+              <label for="classes-end">Last day of classes</label>
+              <input id="classes-end" name="classesEndDate" type="date" class="input" [class.invalid]="formErrors()['classes_end_date']" [(ngModel)]="classesEndDate" />
+              @if (formErrors()['classes_end_date']) {
+                <span class="field-error">{{ formErrors()['classes_end_date'] }}</span>
+              }
+            </div>
+          </div>
+
           <div class="form-actions">
             <button type="submit" class="btn btn-primary" [disabled]="saving()">
               {{ saving() ? 'Saving…' : 'Save assignment' }}
             </button>
           </div>
         </form>
+
+        <!-- Holidays: saved the moment they are added or removed, not by Save assignment. -->
+        <h3 class="subhead">Holidays</h3>
+        <div class="form-grid">
+          <div class="field">
+            <label for="holiday-date">Date</label>
+            <input id="holiday-date" name="newHolidayDate" type="date" class="input" [class.invalid]="holidayErrors()['date']" [(ngModel)]="newHolidayDate" />
+            @if (holidayErrors()['date']) {
+              <span class="field-error">{{ holidayErrors()['date'] }}</span>
+            }
+          </div>
+          <div class="field">
+            <label for="holiday-name">Holiday name</label>
+            <input id="holiday-name" name="newHolidayName" type="text" class="input" [class.invalid]="holidayErrors()['name']" [(ngModel)]="newHolidayName" placeholder="Independence Day" />
+            @if (holidayErrors()['name']) {
+              <span class="field-error">{{ holidayErrors()['name'] }}</span>
+            }
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn" (click)="addHoliday()" [disabled]="holidaySaving()">
+            {{ holidaySaving() ? 'Adding…' : 'Add holiday' }}
+          </button>
+        </div>
+        @if (holidays().length === 0) {
+          <p class="muted">No holidays added.</p>
+        } @else {
+          <ul class="plain-list holiday-list">
+            @for (holiday of holidays(); track holiday.id) {
+              <li>
+                <span>{{ calendarDateLabel(holiday.date) }} · {{ holiday.name }}</span>
+                <button type="button" class="btn btn-small" (click)="removeHoliday(holiday)" [disabled]="holidaySaving()">Remove</button>
+              </li>
+            }
+          </ul>
+        }
 
         <!-- Filed assignment slip -->
         <div class="slip">
@@ -168,6 +250,26 @@
             <div>
               <dt>School year</dt>
               <dd>{{ data()?.academic_year }}</dd>
+            </div>
+            <div>
+              <dt>Region</dt>
+              <dd>{{ teacher.region ?? '—' }}</dd>
+            </div>
+            <div>
+              <dt>Division</dt>
+              <dd>{{ teacher.division ?? '—' }}</dd>
+            </div>
+            <div>
+              <dt>School ID</dt>
+              <dd>{{ teacher.deped_school_id ?? '—' }}</dd>
+            </div>
+            <div>
+              <dt>First day of classes</dt>
+              <dd>{{ calendarDateLabel(teacher.classes_start_date) }}</dd>
+            </div>
+            <div>
+              <dt>Last day of classes</dt>
+              <dd>{{ calendarDateLabel(teacher.classes_end_date) }}</dd>
             </div>
           </dl>
         </div>

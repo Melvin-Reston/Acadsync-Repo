@@ -16,15 +16,199 @@ import { RouterLink } from '@angular/router';
 import { ConsolidationService } from '../../../core/consolidation.service';
 import { ToastService } from '../../../core/toast.service';
 import { errorMessage } from '../../../core/helpers';
-import { ConsolidationFinals, ConsolidationView } from '../../../core/models';
+import { ConsolidationFinals, ConsolidationView, ManualSubject } from '../../../core/models';
 import { IconComponent } from '../../../shared/icon.component';
 import { DropdownComponent, DropdownOption } from '../../../shared/dropdown.component';
+import { ModalComponent } from '../../../shared/modal.component';
+
+// ---- Manual subject CSV parsing (Batch 8 fix 10) ----
+// The template header is "Learner ID,Student Name,Term 1,Term 2,Term 3"
+// (or "Quarter 1..Quarter 4" for a DO 8 year). Rows are matched by Learner
+// ID only; the name is a mismatch warning, never a rejection. Parsing
+// tolerates a BOM, CRLF line endings, and quoted names with commas.
+interface ManualCsvGrade {
+  learner_id: string;
+  quarter: number;
+  grade: number;
+}
+
+interface ManualPreviewRow {
+  line: number;
+  learner_id: string;
+  file_name: string;
+  roster_name: string | null;
+  name_mismatch: boolean;
+  has_error: boolean;
+  grades: (number | null)[];
+  skipped: boolean;
+}
+
+interface ManualPreview {
+  rows: ManualPreviewRow[];
+  errors: string[];
+  warnings: string[];
+  grades: ManualCsvGrade[];
+  skipped: number;
+}
+
+function parseCsvRows(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let cell = '';
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (quoted) {
+      if (char === '"') {
+        if (text[i + 1] === '"') {
+          cell += '"';
+          i++;
+        } else {
+          quoted = false;
+        }
+      } else {
+        cell += char;
+      }
+      continue;
+    }
+    if (char === '"') {
+      quoted = true;
+    } else if (char === ',') {
+      row.push(cell);
+      cell = '';
+    } else if (char === '\n') {
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = '';
+    } else if (char === '\r') {
+      // CRLF: the \n that follows ends the row.
+    } else {
+      cell += char;
+    }
+  }
+  if (cell !== '' || row.length > 0) {
+    row.push(cell);
+    rows.push(row);
+  }
+  return rows;
+}
+
+function nameTokens(name: string): string[] {
+  return name
+    .toLowerCase()
+    .split(/[^a-z]+/)
+    .filter(Boolean)
+    .sort();
+}
+
+function parseManualCsv(
+  text: string,
+  periods: number[],
+  roster: { learner_id: string; first_name: string; last_name: string }[],
+): ManualPreview {
+  const cleaned = text.replace(/^\uFEFF/, '');
+  const rawRows = parseCsvRows(cleaned).filter((row) => row.some((cell) => cell.trim() !== ''));
+  const preview: ManualPreview = { rows: [], errors: [], warnings: [], grades: [], skipped: 0 };
+  if (rawRows.length === 0) {
+    preview.errors.push('The file is empty. Download the CSV template and fill in the grades.');
+    return preview;
+  }
+  const header = rawRows[0];
+  if (header.length < 2 + periods.length) {
+    preview.errors.push(
+      `The header must have Learner ID, Student Name, and one column per period (${periods.length} columns of grades).`,
+    );
+    return preview;
+  }
+  const rosterById = new Map(
+    roster.map((learner) => [
+      learner.learner_id.trim().toLowerCase(),
+      `${learner.last_name}, ${learner.first_name}`,
+    ]),
+  );
+  const seen = new Set<string>();
+  for (let i = 1; i < rawRows.length; i++) {
+    const line = i + 1;
+    const row = rawRows[i];
+    const learnerId = (row[0] ?? '').trim();
+    const fileName = (row[1] ?? '').trim();
+    const grades: (number | null)[] = [];
+    const rowErrors: string[] = [];
+    for (let p = 0; p < periods.length; p++) {
+      const cell = (row[2 + p] ?? '').trim();
+      if (cell === '') {
+        grades.push(null);
+        continue;
+      }
+      if (!/^\d+(\.\d{1,2})?$/.test(cell)) {
+        rowErrors.push(`Line ${line}: "${cell}" is not a number.`);
+        grades.push(null);
+        continue;
+      }
+      const grade = Number(cell);
+      if (grade < 0 || grade > 100) {
+        rowErrors.push(`Line ${line}: ${grade} is outside 0–100.`);
+        grades.push(null);
+        continue;
+      }
+      grades.push(grade);
+    }
+    if (learnerId === '') {
+      if (fileName === '' && grades.every((grade) => grade === null)) continue;
+      preview.errors.push(`Line ${line}: Learner ID is missing.`);
+      continue;
+    }
+    const key = learnerId.toLowerCase();
+    let hasError = rowErrors.length > 0;
+    if (seen.has(key)) {
+      preview.errors.push(`Line ${line}: Learner ID "${learnerId}" appears more than once.`);
+      hasError = true;
+    }
+    seen.add(key);
+    const rosterName = rosterById.get(key) ?? null;
+    if (rosterName === null) {
+      preview.errors.push(`Line ${line}: Learner ID "${learnerId}" is not in this section.`);
+      hasError = true;
+    }
+    preview.errors.push(...rowErrors);
+    const skipped = grades.every((grade) => grade === null);
+    let nameMismatch = false;
+    if (rosterName !== null && fileName !== '') {
+      nameMismatch = nameTokens(fileName).join(' ') !== nameTokens(rosterName).join(' ');
+      if (nameMismatch) {
+        preview.warnings.push(
+          `Line ${line}: the name "${fileName}" does not match the roster name "${rosterName}" for ${learnerId}. The row is matched by Learner ID.`,
+        );
+      }
+    }
+    if (skipped) preview.skipped += 1;
+    preview.rows.push({
+      line,
+      learner_id: learnerId,
+      file_name: fileName,
+      roster_name: rosterName,
+      name_mismatch: nameMismatch,
+      has_error: hasError,
+      grades,
+      skipped,
+    });
+    if (!hasError && !skipped) {
+      grades.forEach((grade, p) => {
+        if (grade !== null) {
+          preview.grades.push({ learner_id: learnerId, quarter: periods[p], grade });
+        }
+      });
+    }
+  }
+  return preview;
+}
 
 type Tab = 'all' | 'honors' | 'at_risk';
 
 @Component({
   selector: 'app-teacher-consolidation',
-  imports: [FormsModule, RouterLink, IconComponent, DropdownComponent],
+  imports: [FormsModule, RouterLink, IconComponent, DropdownComponent, ModalComponent],
   templateUrl: './consolidation.component.html',
   styleUrl: './consolidation.component.css',
 })
@@ -42,6 +226,25 @@ export class TeacherConsolidationComponent {
   protected readonly search = signal('');
   protected readonly tab = signal<Tab>('all');
   protected readonly reminding = signal<number | null>(null);
+
+  // Manual subjects (Batch 8 fix 10): created by the adviser when the
+  // subject teacher has no AcadSync account, with grades uploaded as a CSV.
+  protected readonly manualSubjects = signal<ManualSubject[]>([]);
+  protected readonly createOpen = signal(false);
+  protected readonly createName = signal('');
+  protected readonly createTeacher = signal('');
+  protected readonly createError = signal('');
+  protected readonly creating = signal(false);
+  protected readonly manageSubject = signal<ManualSubject | null>(null);
+  protected readonly manageName = signal('');
+  protected readonly manageTeacher = signal('');
+  protected readonly manageError = signal('');
+  protected readonly savingDetails = signal(false);
+  protected readonly preview = signal<ManualPreview | null>(null);
+  protected readonly previewFileName = signal('');
+  protected readonly filing = signal(false);
+  protected readonly deleting = signal(false);
+  protected readonly confirmDelete = signal(false);
 
   // The periods the active grading system offers: Terms 1–3 under DO 015,
   // Quarters 1–4 under DO 8.
@@ -118,6 +321,7 @@ export class TeacherConsolidationComponent {
         this.view.set(view);
         this.quarter.set(view.quarter);
         this.loading.set(false);
+        this.loadManualSubjects();
         this.loadFinals();
       },
       error: (error) => {
@@ -181,6 +385,7 @@ export class TeacherConsolidationComponent {
         this.view.set(view);
         this.refreshing.set(false);
         this.toast.success('Consolidation refreshed.');
+        this.loadManualSubjects();
         this.loadFinals();
       },
       error: (error) => {
@@ -202,6 +407,184 @@ export class TeacherConsolidationComponent {
       error: (error) => {
         this.reminding.set(null);
         this.error.set(errorMessage(error));
+      },
+    });
+  }
+
+  // ---- Manual subjects (Batch 8 fix 10) ----
+
+  private loadManualSubjects(): void {
+    if (!this.view()?.has_advisory) {
+      this.manualSubjects.set([]);
+      return;
+    }
+    this.consolidation.listManualSubjects().subscribe({
+      next: (response) => this.manualSubjects.set(response.manual_subjects),
+      error: () => this.manualSubjects.set([]),
+    });
+  }
+
+  protected openCreate(): void {
+    this.createName.set('');
+    this.createTeacher.set('');
+    this.createError.set('');
+    this.createOpen.set(true);
+  }
+
+  protected createManual(): void {
+    const subjectName = this.createName().trim();
+    const teacherName = this.createTeacher().trim();
+    if (!subjectName || !teacherName) {
+      this.createError.set('Enter the subject name and the subject teacher\u2019s name.');
+      return;
+    }
+    this.creating.set(true);
+    this.createError.set('');
+    this.consolidation.createManualSubject(subjectName, teacherName).subscribe({
+      next: () => {
+        this.creating.set(false);
+        this.createOpen.set(false);
+        this.toast.success(`Manual subject "${subjectName}" added. Upload its grades from the subject card.`);
+        this.load(this.quarter());
+      },
+      error: (error) => {
+        this.creating.set(false);
+        this.createError.set(errorMessage(error));
+      },
+    });
+  }
+
+  protected openManage(subject: { manual_subject_id: number | null }): void {
+    const manual = this.manualSubjects().find((row) => row.id === subject.manual_subject_id) ?? null;
+    if (!manual) return;
+    this.manageSubject.set(manual);
+    this.manageName.set(manual.subject_name);
+    this.manageTeacher.set(manual.teacher_name);
+    this.manageError.set('');
+    this.preview.set(null);
+    this.previewFileName.set('');
+    this.confirmDelete.set(false);
+  }
+
+  protected closeManage(): void {
+    this.manageSubject.set(null);
+  }
+
+  protected downloadTemplate(): void {
+    const manual = this.manageSubject();
+    if (!manual) return;
+    const safe = manual.subject_name.replace(/[^A-Za-z0-9]+/g, '-').toLowerCase();
+    this.consolidation.downloadManualTemplate(manual.id, `manual-grades-${safe}.csv`);
+  }
+
+  protected onManualFile(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    const view = this.view();
+    if (!view || view.learners.length === 0) {
+      this.manageError.set('Enrol learners in this section first before uploading grades.');
+      this.preview.set(null);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      this.previewFileName.set(file.name);
+      this.manageError.set('');
+      this.preview.set(parseManualCsv(String(reader.result ?? ''), this.periods(), view.learners));
+    };
+    reader.onerror = () => {
+      this.manageError.set('The file could not be read. Try choosing it again.');
+    };
+    reader.readAsText(file);
+  }
+
+  protected fileGrades(): void {
+    const manual = this.manageSubject();
+    const preview = this.preview();
+    if (!manual || !preview || preview.errors.length > 0) return;
+    if (preview.grades.length === 0) {
+      this.manageError.set('The file has no grades to file. Fill in at least one grade, then choose the file again.');
+      return;
+    }
+    this.filing.set(true);
+    this.manageError.set('');
+    this.consolidation.fileManualGrades(manual.id, preview.grades).subscribe({
+      next: (response) => {
+        this.filing.set(false);
+        this.closeManage();
+        this.toast.success(`${response.filed} grade${response.filed === 1 ? '' : 's'} filed for "${manual.subject_name}".`);
+        this.load(this.quarter());
+      },
+      error: (error) => {
+        this.filing.set(false);
+        this.manageError.set(this.manualFileError(error));
+      },
+    });
+  }
+
+  // A rejected filing lists every invalid row, so the adviser can fix the
+  // file and upload again. Nothing is saved when any row is invalid.
+  private manualFileError(error: unknown): string {
+    const body = (error as { error?: { message?: string; invalid_rows?: { learner_id: string; quarter: number; errors: string[] }[] } })?.error;
+    const invalid = body?.invalid_rows ?? [];
+    if (invalid.length === 0) return errorMessage(error);
+    const lines = invalid.map((row) => `${row.learner_id} · ${this.periodLabelFor(row.quarter)}: ${row.errors.join(' ')}`);
+    return `${body?.message ?? 'Some rows could not be filed.'} ${lines.join(' ')}`;
+  }
+
+  private periodLabelFor(quarter: number): string {
+    const view = this.view();
+    return `${view?.grading.period_label ?? 'Period'} ${quarter}`;
+  }
+
+  protected saveManualDetails(): void {
+    const manual = this.manageSubject();
+    if (!manual) return;
+    const subjectName = this.manageName().trim();
+    const teacherName = this.manageTeacher().trim();
+    if (!subjectName || !teacherName) {
+      this.manageError.set('Enter the subject name and the subject teacher\u2019s name.');
+      return;
+    }
+    if (subjectName === manual.subject_name && teacherName === manual.teacher_name) return;
+    this.savingDetails.set(true);
+    this.manageError.set('');
+    this.consolidation
+      .updateManualSubject(manual.id, { subject_name: subjectName, teacher_name: teacherName })
+      .subscribe({
+        next: (response) => {
+          this.savingDetails.set(false);
+          this.manageSubject.set(response.manual_subject);
+          this.toast.success('Manual subject updated.');
+          this.load(this.quarter());
+        },
+        error: (error) => {
+          this.savingDetails.set(false);
+          this.manageError.set(errorMessage(error));
+        },
+      });
+  }
+
+  protected deleteManual(): void {
+    const manual = this.manageSubject();
+    if (!manual) return;
+    if (!this.confirmDelete()) {
+      this.confirmDelete.set(true);
+      return;
+    }
+    this.deleting.set(true);
+    this.consolidation.deleteManualSubject(manual.id).subscribe({
+      next: (response) => {
+        this.deleting.set(false);
+        this.closeManage();
+        this.toast.success(response.message);
+        this.load(this.quarter());
+      },
+      error: (error) => {
+        this.deleting.set(false);
+        this.manageError.set(errorMessage(error));
       },
     });
   }

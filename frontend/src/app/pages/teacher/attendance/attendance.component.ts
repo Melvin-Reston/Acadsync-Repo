@@ -355,6 +355,32 @@ export class TeacherAttendanceComponent {
     window.setTimeout(() => window.print(), 60);
   }
 
+  // The weekdays in the SF2 month that are not school days, as one line
+  // for the preview only (the note carries .no-print, so the printed form
+  // is unchanged): the ranges before the first day of classes and after
+  // the last day, and each holiday by name.
+  protected nonSchoolNote(): string {
+    const report = this.sf2();
+    const days = report?.non_school_days ?? [];
+    if (days.length === 0) return '';
+    const label = (date: string): string => {
+      const [, month, day] = date.split('-').map(Number);
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${months[month - 1]} ${day}`;
+    };
+    const range = (list: typeof days): string =>
+      list.length === 1 ? label(list[0].date) : `${label(list[0].date)}–${label(list[list.length - 1].date)}`;
+    const parts: string[] = [];
+    const before = days.filter((day) => day.reason === 'before_first_day');
+    if (before.length > 0) parts.push(`${range(before)} — before first day of classes`);
+    for (const day of days.filter((day) => day.reason === 'holiday')) {
+      parts.push(`${label(day.date)} — ${day.name ?? 'Holiday'}`);
+    }
+    const after = days.filter((day) => day.reason === 'after_last_day');
+    if (after.length > 0) parts.push(`${range(after)} — after last day of classes`);
+    return `No classes: ${parts.join('; ')}.`;
+  }
+
   // The mark letter on the SF2 form: X = Absent, L = Late, E = Excused,
   // blank = Present. The API sends marks only for days today or earlier:
   // a past day with no saved roll arrives as 'absent', and a future day

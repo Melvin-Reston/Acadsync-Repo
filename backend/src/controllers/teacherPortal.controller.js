@@ -21,6 +21,8 @@ async function findSelf(teacherId, client = db) {
     `SELECT t.id, t.first_name, t.last_name, t.email, t.mobile, t.present_address, t.username,
             t.school_id, s.name AS school_name, s.city_region AS school_city_region,
             t.region, t.division, t.deped_school_id, t.school_head_name,
+            t.classes_start_date::text AS classes_start_date,
+            t.classes_end_date::text AS classes_end_date,
             t.must_change_password, t.is_restricted, t.restriction_reason,
             t.is_adviser, t.advisory_grade, t.advisory_section, t.created_at,
             sub.id AS subscription_id, sub.plan_id, sub.plan_name, sub.price AS plan_price,
@@ -71,7 +73,8 @@ async function getMe(req, res) {
   });
 }
 
-// PATCH /api/teacher/me  (only name, email, mobile, address and the school details for DepEd forms)
+// PATCH /api/teacher/me  (only name, email, mobile, address, the school details for DepEd forms,
+// and the school calendar dates for SF2)
 // The teaching assignment is read-only here: it has its own form (/me/adviser).
 async function updateMe(req, res) {
   const forbiddenKeys = [
@@ -88,7 +91,7 @@ async function updateMe(req, res) {
   ];
   const refused = Object.keys(req.body || {}).filter((key) => forbiddenKeys.includes(key));
   if (refused.length > 0) {
-    throw badRequest('Only your name, email, mobile, address and school details can be changed here. Your teaching assignment is read-only.', {
+    throw badRequest('Only your name, email, mobile, address, school details and school calendar can be changed here. Your teaching assignment is read-only.', {
       code: 'VALIDATION_ERROR',
       errors: { [refused[0]]: 'This cannot be changed here.' },
     });
@@ -113,6 +116,35 @@ async function updateMe(req, res) {
   if (sent.includes('division')) set('division', body.division, true);
   if (sent.includes('deped_school_id')) set('deped_school_id', body.deped_school_id, true);
   if (sent.includes('school_head_name')) set('school_head_name', body.school_head_name, true);
+  // The calendar dates arrive as YYYY-MM-DD, or undefined when the field
+  // was sent empty (optionalDate turns '' into undefined) — an empty
+  // value clears the date back to unset (NULL). The last day must not
+  // come before the first day, counting the date already stored when
+  // only one side of the pair is sent.
+  const setDate = (column, value) => {
+    values.push(value || null);
+    sets.push(`${column} = $${values.length}`);
+  };
+  if (sent.includes('classes_start_date') || sent.includes('classes_end_date')) {
+    const current = await db.query(
+      'SELECT classes_start_date::text AS classes_start_date, classes_end_date::text AS classes_end_date FROM teachers WHERE id = $1',
+      [req.teacher.id]
+    );
+    const effectiveStart = sent.includes('classes_start_date')
+      ? body.classes_start_date || null
+      : current.rows[0].classes_start_date;
+    const effectiveEnd = sent.includes('classes_end_date')
+      ? body.classes_end_date || null
+      : current.rows[0].classes_end_date;
+    if (effectiveStart && effectiveEnd && effectiveEnd < effectiveStart) {
+      throw badRequest('Please check the highlighted fields.', {
+        code: 'VALIDATION_ERROR',
+        errors: { classes_end_date: 'The last day of classes must be on or after the first day of classes.' },
+      });
+    }
+  }
+  if (sent.includes('classes_start_date')) setDate('classes_start_date', body.classes_start_date);
+  if (sent.includes('classes_end_date')) setDate('classes_end_date', body.classes_end_date);
   if (sets.length > 0) {
     values.push(req.teacher.id);
     await db.query(
@@ -164,6 +196,51 @@ async function changePassword(req, res) {
   res.json({ message: 'Password changed.', token: signTeacherToken(teacher), teacher: publicTeacher(teacher) });
 }
 
+// The teacher's holidays, oldest first. Dates come back as YYYY-MM-DD text,
+// never as timestamps, so the dashboard and SF2 compare them directly.
+async function fetchHolidays(teacherId, client = db) {
+  const result = await client.query(
+    'SELECT id, date::text AS date, name FROM teacher_holidays WHERE teacher_id = $1 ORDER BY date, id',
+    [teacherId]
+  );
+  return result.rows;
+}
+
+// GET /api/teacher/holidays  (the teacher's own holiday list)
+async function listHolidays(req, res) {
+  res.json({ items: await fetchHolidays(req.teacher.id) });
+}
+
+// POST /api/teacher/holidays  { date, name }  (add one holiday; a date can be a holiday only once)
+async function addHoliday(req, res) {
+  const { date, name } = req.valid.body;
+  const existing = await db.query(
+    'SELECT id FROM teacher_holidays WHERE teacher_id = $1 AND date = $2',
+    [req.teacher.id, date]
+  );
+  if (existing.rowCount > 0) {
+    throw badRequest('Please check the highlighted fields.', {
+      code: 'VALIDATION_ERROR',
+      errors: { date: 'That date is already a holiday.' },
+    });
+  }
+  const result = await db.query(
+    'INSERT INTO teacher_holidays (teacher_id, date, name) VALUES ($1, $2, $3) RETURNING id, date::text AS date, name',
+    [req.teacher.id, date, name]
+  );
+  res.status(201).json({ holiday: result.rows[0] });
+}
+
+// DELETE /api/teacher/holidays/:id  (remove one holiday; another teacher's holiday is not found)
+async function deleteHoliday(req, res) {
+  const result = await db.query(
+    'DELETE FROM teacher_holidays WHERE id = $1 AND teacher_id = $2 RETURNING id',
+    [req.valid.params.id, req.teacher.id]
+  );
+  if (result.rowCount === 0) throw notFound('Holiday not found.');
+  res.json({ deleted: true });
+}
+
 // GET /api/teacher/dashboard  (everything the dashboard shows: teacher, plan, next invoice, announcements,
 // the teacher's classes today and how many classes and learners they have)
 async function getDashboard(req, res) {
@@ -198,6 +275,7 @@ async function getDashboard(req, res) {
     learner_count: counts.rows[0].learner_count,
     today_classes: await fetchTodayClasses(req.teacher.id),
     consolidation: await fetchConsolidationReadiness(req.teacher.id),
+    holidays: await fetchHolidays(req.teacher.id),
   });
 }
 
@@ -419,6 +497,10 @@ module.exports = {
   updateMe,
   updateAdviser,
   changePassword,
+  listHolidays,
+  addHoliday,
+  deleteHoliday,
+  fetchHolidays,
   getDashboard,
   getTodayClasses,
   getMySubscription,

@@ -416,6 +416,10 @@ export interface TeacherSelf {
   division: string | null;
   deped_school_id: string | null;
   school_head_name: string | null;
+  // The school calendar for SF2 (Batch 8 fix 10): the first and last day
+  // of classes, as YYYY-MM-DD text; null until filled in.
+  classes_start_date: string | null;
+  classes_end_date: string | null;
   must_change_password: boolean;
   is_restricted: boolean;
   is_adviser: boolean;
@@ -491,6 +495,14 @@ export interface TeacherAnnouncement {
   created_at: string;
 }
 
+// One holiday on the teacher's school calendar: a date (YYYY-MM-DD) and
+// the name the teacher gave it.
+export interface TeacherHoliday {
+  id: number;
+  date: string;
+  name: string;
+}
+
 export interface TeacherDashboard {
   teacher: TeacherSelf;
   subscription: TeacherSubscription | null;
@@ -499,6 +511,7 @@ export interface TeacherDashboard {
   academic_year: string | null;
   class_count: number;
   learner_count: number;
+  holidays: TeacherHoliday[];
   today_classes: TodayClass[];
   // Consolidation readiness for the teacher's advisory section (Batch 4).
   // Null when the teacher has no advisory assignment.
@@ -705,6 +718,17 @@ export interface Sf2Summary {
   total: Sf2SummaryGroup;
 }
 
+// A weekday in the month that is not a school day: before the first day
+// of classes, after the last day, or a holiday the teacher entered.
+// `name` carries the holiday name, or null for the other two reasons.
+export interface Sf2NonSchoolDay {
+  date: string; // YYYY-MM-DD
+  day: number;
+  weekday: string; // M, T, W, TH, F
+  reason: 'before_first_day' | 'after_last_day' | 'holiday';
+  name: string | null;
+}
+
 export interface Sf2Report {
   class: ClassItem;
   month: string; // YYYY-MM
@@ -719,6 +743,7 @@ export interface Sf2Report {
     school_head_name: string | null;
   };
   days: Sf2Day[];
+  non_school_days: Sf2NonSchoolDay[];
   learners: Sf2Learner[];
   // The last table row: learners present per day, and the month's totals.
   combined: {
@@ -881,6 +906,36 @@ export interface ConsolidationSubject {
   // True when the teacher who still needs to file is the adviser themself:
   // a direct-add needs no reminder, so the Remind button is hidden.
   own_class: boolean;
+  // A manual subject (Batch 8 fix 10): created by the adviser when the
+  // subject teacher has no AcadSync account, with grades uploaded as a CSV.
+  // A merged subject (a real class and a manual subject with the same name)
+  // is manual too — its manual grades fill periods with no real filing.
+  manual: boolean;
+  manual_subject_id: number | null;
+  profile_code: string | null;
+}
+
+// A manual subject in Consolidation (Batch 8 fix 10): the adviser creates
+// the subject when its teacher has no AcadSync account. The teacher's name
+// is plain display text — no account is created for them. Grades arrive by
+// CSV upload and are counted like filed grades.
+export interface ManualSubject {
+  id: number;
+  subject_name: string;
+  teacher_name: string;
+  grade_level: number;
+  section_name: string;
+  academic_year: string;
+  profile_code: string;
+  grade_count: number;
+  periods_with_grades: number[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ManualGradesFileResponse {
+  manual_subject: ManualSubject;
+  filed: number;
 }
 
 export interface ConsolidationLearner {
@@ -929,6 +984,10 @@ export interface ConsolidationFinalSubject {
   filed_periods: number;
   total_periods: number;
   average: number | null;
+  // A manual subject (Batch 8 fix 10) — see ConsolidationSubject.
+  manual: boolean;
+  manual_subject_id: number | null;
+  profile_code: string | null;
 }
 
 export interface ConsolidationFinalLearner {

@@ -43,6 +43,13 @@ async function assertSchoolExists(schoolId) {
   }
 }
 
+// A calendar date as YYYY-MM-DD text, from a text column value or a Date object.
+function calendarDate(value) {
+  if (!value) return null;
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
+}
+
 // The teacher details that are safe to send to the browser (never the password hash).
 function publicTeacher(teacher) {
   return {
@@ -60,6 +67,11 @@ function publicTeacher(teacher) {
     division: teacher.division || null,
     deped_school_id: teacher.deped_school_id || null,
     school_head_name: teacher.school_head_name || null,
+    // The school calendar dates for SF2; null until filled in. They arrive
+    // as YYYY-MM-DD text from findSelf, or as Date objects from SELECT *
+    // rows — both become YYYY-MM-DD text here.
+    classes_start_date: calendarDate(teacher.classes_start_date),
+    classes_end_date: calendarDate(teacher.classes_end_date),
     must_change_password: teacher.must_change_password,
     is_restricted: teacher.is_restricted,
     is_adviser: teacher.is_adviser,
@@ -143,7 +155,8 @@ async function login(req, res) {
 
   const result = await db.query(
     `SELECT id, first_name, last_name, email, username, password_hash, must_change_password,
-            is_restricted, restriction_reason, failed_attempts, locked_until, token_version
+            is_restricted, restriction_reason, failed_attempts, locked_until, token_version,
+            classes_start_date::text AS classes_start_date, classes_end_date::text AS classes_end_date
        FROM teachers WHERE username = $1 OR email = $1`,
     [loginValue]
   );

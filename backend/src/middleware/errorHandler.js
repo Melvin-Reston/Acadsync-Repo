@@ -12,6 +12,7 @@ const UNIQUE_MESSAGES = {
   payments_one_pending_key: { field: 'reference_number', message: 'A payment for this invoice is already waiting for confirmation.' },
   payments_one_confirmed_key: { field: 'reference_number', message: 'This invoice already has a confirmed payment.' },
   schools_name_place_key: { field: 'name', message: 'A school with this name already exists in that city or region.' },
+  teacher_holidays_teacher_date_key: { field: 'date', message: 'That date is already a holiday.' },
 };
 
 function notFoundHandler(req, res) {

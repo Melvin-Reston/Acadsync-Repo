@@ -7,6 +7,10 @@
 // Batch 8 fix 5 replaces the fix-3 blank-means-present rule: SF2 marks come
 // only from the saved daily roll, days after today (Asia/Manila) show no
 // value and count in neither total, and past days with no saved row mark X.
+// Batch 8 fix 10 adds the school calendar (migration 013): the first and
+// last day of classes on the teacher's record, and the teacher's own
+// holiday list. Weekdays outside the calendar are not school days in SF2:
+// no column, no mark, and they count in nothing.
 // Run with: npm test
 const { test, describe, before, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -749,5 +753,222 @@ describe('SF2 daily attendance report', () => {
 
     const anon = await api().get(`/api/teacher/attendance/sf2?class_id=${klass.id}&month=2026-07`);
     assert.equal(anon.status, 401, JSON.stringify(anon.body));
+  });
+});
+
+// ---------- School calendar for SF2 (Batch 8 fix 10, migration 013) ----------
+
+describe('School calendar for SF2', () => {
+  test('the calendar dates start null, save through the profile update, and an empty value clears them', async () => {
+    const { token } = await signup();
+    const me = await api().get('/api/teacher/me').set(bearer(token));
+    assert.equal(me.body.teacher.classes_start_date, null);
+    assert.equal(me.body.teacher.classes_end_date, null);
+
+    const updated = await api()
+      .patch('/api/teacher/me')
+      .set(bearer(token))
+      .send({ classes_start_date: '2026-06-15', classes_end_date: '2027-03-27' });
+    assert.equal(updated.status, 200, JSON.stringify(updated.body));
+    assert.equal(updated.body.teacher.classes_start_date, '2026-06-15');
+    assert.equal(updated.body.teacher.classes_end_date, '2027-03-27');
+
+    const cleared = await api()
+      .patch('/api/teacher/me')
+      .set(bearer(token))
+      .send({ classes_end_date: '' });
+    assert.equal(cleared.status, 200, JSON.stringify(cleared.body));
+    assert.equal(cleared.body.teacher.classes_start_date, '2026-06-15');
+    assert.equal(cleared.body.teacher.classes_end_date, null);
+  });
+
+  test('the last day must not come before the first day, counting the date already stored, and bad dates are refused', async () => {
+    const { token } = await signup();
+
+    const both = await api()
+      .patch('/api/teacher/me')
+      .set(bearer(token))
+      .send({ classes_start_date: '2026-06-15', classes_end_date: '2026-06-14' });
+    assert.equal(both.status, 400, JSON.stringify(both.body));
+    assert.equal(both.body.errors.classes_end_date, 'The last day of classes must be on or after the first day of classes.');
+
+    const bad = await api()
+      .patch('/api/teacher/me')
+      .set(bearer(token))
+      .send({ classes_start_date: '2026-02-31' });
+    assert.equal(bad.status, 400, JSON.stringify(bad.body));
+
+    // One-sided: the stored start date still bounds a later end date.
+    const start = await api().patch('/api/teacher/me').set(bearer(token)).send({ classes_start_date: '2026-06-15' });
+    assert.equal(start.status, 200, JSON.stringify(start.body));
+    const early = await api().patch('/api/teacher/me').set(bearer(token)).send({ classes_end_date: '2026-06-10' });
+    assert.equal(early.status, 400, JSON.stringify(early.body));
+    const me = await api().get('/api/teacher/me').set(bearer(token));
+    assert.equal(me.body.teacher.classes_end_date, null);
+    assert.equal(me.body.teacher.classes_start_date, '2026-06-15');
+  });
+
+  test('holidays can be added, listed on the dashboard, and removed; a date can be a holiday only once', async () => {
+    const { token } = await signup();
+    const dashboard = await api().get('/api/teacher/dashboard').set(bearer(token));
+    assert.equal(dashboard.status, 200, JSON.stringify(dashboard.body));
+    assert.deepEqual(dashboard.body.holidays, []);
+
+    const added = await api()
+      .post('/api/teacher/holidays')
+      .set(bearer(token))
+      .send({ date: '2026-06-12', name: 'Independence Day' });
+    assert.equal(added.status, 201, JSON.stringify(added.body));
+    assert.equal(added.body.holiday.date, '2026-06-12');
+    assert.equal(added.body.holiday.name, 'Independence Day');
+
+    const duplicate = await api()
+      .post('/api/teacher/holidays')
+      .set(bearer(token))
+      .send({ date: '2026-06-12', name: 'Independence Day again' });
+    assert.equal(duplicate.status, 400, JSON.stringify(duplicate.body));
+    assert.equal(duplicate.body.errors.date, 'That date is already a holiday.');
+
+    const unnamed = await api().post('/api/teacher/holidays').set(bearer(token)).send({ date: '2026-08-21' });
+    assert.equal(unnamed.status, 400, JSON.stringify(unnamed.body));
+
+    const listed = await api().get('/api/teacher/dashboard').set(bearer(token));
+    assert.equal(listed.body.holidays.length, 1);
+    assert.equal(listed.body.holidays[0].name, 'Independence Day');
+
+    const removed = await api().delete(`/api/teacher/holidays/${added.body.holiday.id}`).set(bearer(token));
+    assert.equal(removed.status, 200, JSON.stringify(removed.body));
+    const empty = await api().get('/api/teacher/dashboard').set(bearer(token));
+    assert.deepEqual(empty.body.holidays, []);
+  });
+
+  test('holidays belong to one teacher, and anonymous requests are refused', async () => {
+    const { token } = await signup();
+    const added = await api()
+      .post('/api/teacher/holidays')
+      .set(bearer(token))
+      .send({ date: '2026-06-12', name: 'Independence Day' });
+    assert.equal(added.status, 201, JSON.stringify(added.body));
+
+    const other = await signup({ school_id: otherSchoolId });
+    const foreign = await api().delete(`/api/teacher/holidays/${added.body.holiday.id}`).set(bearer(other.token));
+    assert.equal(foreign.status, 404, JSON.stringify(foreign.body));
+
+    const anon = await api().post('/api/teacher/holidays').send({ date: '2026-08-21', name: 'Ninoy Aquino Day' });
+    assert.equal(anon.status, 401, JSON.stringify(anon.body));
+    const anonList = await api().get('/api/teacher/holidays');
+    assert.equal(anonList.status, 401, JSON.stringify(anonList.body));
+  });
+
+  test('SF2 with no calendar set counts every weekday, as before', async () => {
+    const { token } = await signup();
+    const klass = await makeClass(token, { section_name: 'Luke' });
+    const alex = await makeLearner(token, { first_name: 'Alex', last_name: 'Rivera', sex: 'Male' });
+    await enrol(token, klass.id, alex.id);
+
+    const response = await getSf2(token, klass.id, '2026-06');
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    // June 2026 has 22 weekdays.
+    assert.equal(response.body.days.length, 22);
+    assert.deepEqual(response.body.non_school_days, []);
+    assert.equal(response.body.summary.days_of_classes, 22);
+    assert.deepEqual(response.body.learners[0].totals, { present: 0, absent: 22 });
+  });
+
+  test('SF2 excludes the weekdays before the first day of classes, and a roll saved on one is ignored', async () => {
+    const { token } = await signup();
+    await api().patch('/api/teacher/me').set(bearer(token)).send({ classes_start_date: '2026-06-15' });
+    const klass = await makeClass(token, { section_name: 'Luke' });
+    const alex = await makeLearner(token, { first_name: 'Alex', last_name: 'Rivera', sex: 'Male' });
+    await enrol(token, klass.id, alex.id);
+
+    // A roll saved before classes open must not appear on the form.
+    await saveRoll(token, klass.id, '2026-06-10', [{ learner_id: alex.id, status: 'present', method: 'manual', time_in: '07:30' }]);
+
+    const response = await getSf2(token, klass.id, '2026-06');
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    const report = response.body;
+    // June 15–30 holds 12 weekdays.
+    assert.equal(report.days.length, 12);
+    assert.deepEqual(report.days[0], { date: '2026-06-15', day: 15, weekday: 'M' });
+    assert.ok(!report.days.some((day) => day.date < '2026-06-15'));
+    assert.equal(report.non_school_days.length, 10);
+    assert.ok(report.non_school_days.every((day) => day.reason === 'before_first_day'));
+    assert.equal(report.summary.days_of_classes, 12);
+    assert.equal(report.learners[0].marks['2026-06-10'], undefined);
+    assert.equal(report.learners[0].marks['2026-06-15'], 'absent');
+    assert.deepEqual(report.learners[0].totals, { present: 0, absent: 12 });
+  });
+
+  test('SF2 excludes holidays even when a roll was saved that day, and names them in the non-school days', async () => {
+    const { token } = await signup();
+    await api().patch('/api/teacher/me').set(bearer(token)).send({ classes_start_date: '2026-06-15' });
+    const added = await api()
+      .post('/api/teacher/holidays')
+      .set(bearer(token))
+      .send({ date: '2026-06-17', name: 'Independence Day' });
+    assert.equal(added.status, 201, JSON.stringify(added.body));
+    const klass = await makeClass(token, { section_name: 'Luke' });
+    const alex = await makeLearner(token, { first_name: 'Alex', last_name: 'Rivera', sex: 'Male' });
+    await enrol(token, klass.id, alex.id);
+
+    await saveRoll(token, klass.id, '2026-06-16', [{ learner_id: alex.id, status: 'present', method: 'manual', time_in: '07:30' }]);
+    await saveRoll(token, klass.id, '2026-06-17', [{ learner_id: alex.id, status: 'present', method: 'manual', time_in: '07:30' }]);
+
+    const response = await getSf2(token, klass.id, '2026-06');
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    const report = response.body;
+    assert.equal(report.days.length, 11);
+    assert.ok(!report.days.some((day) => day.date === '2026-06-17'));
+    const holiday = report.non_school_days.find((day) => day.date === '2026-06-17');
+    assert.deepEqual(holiday, { date: '2026-06-17', day: 17, weekday: 'W', reason: 'holiday', name: 'Independence Day' });
+    assert.equal(report.learners[0].marks['2026-06-16'], 'present');
+    assert.equal(report.learners[0].marks['2026-06-17'], undefined);
+    assert.deepEqual(report.learners[0].totals, { present: 1, absent: 10 });
+    assert.equal(report.combined.present_by_day['2026-06-16'], 1);
+    assert.equal(report.combined.present_by_day['2026-06-17'], undefined);
+    assert.equal(report.summary.days_of_classes, 11);
+  });
+
+  test('SF2 excludes the weekdays after the last day of classes', async () => {
+    const { token } = await signup();
+    await api()
+      .patch('/api/teacher/me')
+      .set(bearer(token))
+      .send({ classes_start_date: '2026-06-15', classes_end_date: '2026-06-19' });
+    const klass = await makeClass(token, { section_name: 'Luke' });
+    const alex = await makeLearner(token, { first_name: 'Alex', last_name: 'Rivera', sex: 'Male' });
+    await enrol(token, klass.id, alex.id);
+
+    const response = await getSf2(token, klass.id, '2026-06');
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    const report = response.body;
+    assert.equal(report.days.length, 5);
+    assert.deepEqual(report.days[4], { date: '2026-06-19', day: 19, weekday: 'F' });
+    // 10 days before opening, 7 weekdays after the last day.
+    assert.equal(report.non_school_days.length, 17);
+    assert.equal(report.non_school_days.filter((day) => day.reason === 'after_last_day').length, 7);
+    assert.equal(report.summary.days_of_classes, 5);
+    assert.deepEqual(report.learners[0].totals, { present: 0, absent: 5 });
+  });
+
+  test('days before classes open do not feed the five-consecutive-absences count', async () => {
+    const { token } = await signup();
+    await api()
+      .patch('/api/teacher/me')
+      .set(bearer(token))
+      .send({ classes_start_date: '2026-06-15', classes_end_date: '2026-06-19' });
+    const klass = await makeClass(token, { section_name: 'Luke' });
+    const alex = await makeLearner(token, { first_name: 'Alex', last_name: 'Rivera', sex: 'Male' });
+    await enrol(token, klass.id, alex.id);
+
+    // Present on the first day, then four school days with no roll: a run
+    // of four, not five — the ten weekdays before opening must not extend it.
+    await saveRoll(token, klass.id, '2026-06-15', [{ learner_id: alex.id, status: 'present', method: 'manual', time_in: '07:30' }]);
+
+    const response = await getSf2(token, klass.id, '2026-06');
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    assert.deepEqual(response.body.learners[0].totals, { present: 1, absent: 4 });
+    assert.equal(response.body.summary.total.absent_five_days, 0);
   });
 });

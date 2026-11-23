@@ -199,7 +199,7 @@
     }
   </section>
   } @else if (sf2Tab()) {
-    <!-- SF2: the month's saved rolls, Monday–Friday only. -->
+    <!-- SF2: the month's saved rolls, school days only. -->
     <section class="card sf2card" aria-label="School Form 2">
       <div class="card-head">
         <div>
@@ -225,6 +225,9 @@
             <a class="btn btn-primary" routerLink="/teacher/classes">Go to Classes &amp; Sections</a>
           </div>
         } @else {
+          @if (nonSchoolNote()) {
+            <p class="muted no-print">{{ nonSchoolNote() }}</p>
+          }
           <div class="table-wrap">
             <table class="sf2-table">
               <thead>

@@ -5,7 +5,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { ConsolidationFinals, ConsolidationView } from './models';
+import { ConsolidationFinals, ConsolidationView, ManualGradesFileResponse, ManualSubject } from './models';
 import { downloadBlob, toParams } from './helpers';
 
 @Injectable({ providedIn: 'root' })
@@ -60,5 +60,57 @@ export class ConsolidationService {
       .subscribe({
         next: (blob) => downloadBlob(blob, filename),
       });
+  }
+
+  // ---- Manual subjects (Batch 8 fix 10) ----
+  // The adviser creates the subject when its teacher has no AcadSync
+  // account, then uploads the term grades as a CSV. Grades are sent as
+  // JSON parsed from the file; the backend re-validates every row.
+
+  listManualSubjects(): Observable<{ manual_subjects: ManualSubject[] }> {
+    return this.http.get<{ manual_subjects: ManualSubject[] }>(`${this.api}/consolidation/manual-subjects`);
+  }
+
+  createManualSubject(
+    subjectName: string,
+    teacherName: string,
+  ): Observable<{ manual_subject: ManualSubject }> {
+    return this.http.post<{ manual_subject: ManualSubject }>(`${this.api}/consolidation/manual-subjects`, {
+      subject_name: subjectName,
+      teacher_name: teacherName,
+    });
+  }
+
+  updateManualSubject(
+    id: number,
+    changes: { subject_name?: string; teacher_name?: string },
+  ): Observable<{ manual_subject: ManualSubject }> {
+    return this.http.patch<{ manual_subject: ManualSubject }>(
+      `${this.api}/consolidation/manual-subjects/${id}`,
+      changes,
+    );
+  }
+
+  deleteManualSubject(id: number): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(`${this.api}/consolidation/manual-subjects/${id}`);
+  }
+
+  // The CSV template, prefilled with one row per roster learner.
+  downloadManualTemplate(id: number, filename: string): void {
+    this.http
+      .get(`${this.api}/consolidation/manual-subjects/${id}/template`, { responseType: 'blob' })
+      .subscribe({
+        next: (blob) => downloadBlob(blob, filename),
+      });
+  }
+
+  fileManualGrades(
+    id: number,
+    grades: { learner_id: string; quarter: number; grade: number }[],
+  ): Observable<ManualGradesFileResponse> {
+    return this.http.post<ManualGradesFileResponse>(
+      `${this.api}/consolidation/manual-subjects/${id}/grades`,
+      { grades },
+    );
   }
 }

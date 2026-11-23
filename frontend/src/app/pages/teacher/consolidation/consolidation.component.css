@@ -63,6 +63,87 @@
   font-size: 18px;
 }
 
+.subject-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  flex: none;
+}
+
+.subject-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ---------- Manual subject modals ---------- */
+
+.field + .field {
+  margin-top: 12px;
+}
+
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.modal-actions .btn-primary {
+  flex: none;
+}
+
+.modal-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 18px 0 0;
+}
+
+.file-label {
+  cursor: pointer;
+}
+
+.issue-list {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.issue-list li + li {
+  margin-top: 4px;
+}
+
+.preview-wrap {
+  margin-top: 12px;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.preview-table {
+  min-width: 0;
+}
+
+.preview-table .num {
+  font-family: var(--font-mono);
+}
+
+.preview-table tr.row-error td {
+  background: color-mix(in srgb, var(--red-tint) 45%, transparent);
+}
+
+.preview-table tr.row-skipped td {
+  color: var(--muted);
+}
+
+.danger-zone {
+  justify-content: flex-start;
+}
+
 .subject-foot {
   display: flex;
   align-items: center;
