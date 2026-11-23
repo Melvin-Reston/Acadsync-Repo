@@ -48,10 +48,11 @@ router.get('/plans/active', plans.listActivePlans); // for the Choose Plan scree
 const teacher = express.Router();
 teacher.use(requireTeacher);
 teacher.get('/me', teacherPortal.getMe);
+teacher.get('/academic-years', teacherPortal.listAcademicYears);
 teacher.patch('/me', validate(s.teacherProfileSchema), teacherPortal.updateMe);
 teacher.patch('/me/adviser', validate(s.teacherAdviserSchema), teacherPortal.updateAdviser);
 teacher.post('/change-password', validate(s.changePasswordSchema), teacherPortal.changePassword);
-teacher.get('/dashboard', teacherPortal.getDashboard);
+teacher.get('/dashboard', validate(s.viewingYearQuerySchema, 'query'), teacherPortal.getDashboard);
 teacher.get('/holidays', teacherPortal.listHolidays);
 teacher.post('/holidays', validate(s.holidaySchema), teacherPortal.addHoliday);
 teacher.delete('/holidays/:id', idParam, teacherPortal.deleteHoliday);
@@ -117,7 +118,7 @@ teacher.post('/consolidation/remind', validate(s.remindSchema), grades.remindTea
 // the subject when its teacher has no AcadSync account, then uploads the
 // term grades as a CSV. Grades arrive as JSON parsed by the frontend; the
 // backend re-validates every row against the section roster.
-teacher.get('/consolidation/manual-subjects', grades.listManualSubjects);
+teacher.get('/consolidation/manual-subjects', validate(s.viewingYearQuerySchema, 'query'), grades.listManualSubjects);
 teacher.post('/consolidation/manual-subjects', validate(s.manualSubjectCreateSchema), grades.createManualSubject);
 teacher.patch(
   '/consolidation/manual-subjects/:id',
@@ -136,7 +137,7 @@ teacher.post(
 
 // Report Card (Batch 5): the adviser's section, one card per learner, filled
 // from the consolidated grades and the attendance records.
-teacher.get('/report-card', reportCard.getReportCards);
+teacher.get('/report-card', validate(s.reportCardQuerySchema, 'query'), reportCard.getReportCards);
 teacher.put('/report-card/comments', validate(s.reportCardCommentSchema), reportCard.saveComment);
 router.use('/teacher', teacher);
 

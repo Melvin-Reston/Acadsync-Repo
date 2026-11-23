@@ -2,12 +2,12 @@
 // Grouped by subject, like the earlier Classes & Sections design: one card per subject
 // with its sections inside. Learners live here too, so student counts are real and
 // Batch 3 (Attendance) has a roster to work from.
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { errorMessage, fieldErrors, time12 } from '../../../core/helpers';
 import { BulkUploadResult, ClassItem, ClassLearner, FieldErrors, Learner, Subject } from '../../../core/models';
 import { ClassesService, ClassForm, LearnerForm } from '../../../core/classes.service';
-import { TeacherPortalService } from '../../../core/teacher-portal.service';
+import { ViewingYearService } from '../../../core/viewing-year.service';
 import { ToastService } from '../../../core/toast.service';
 import { DropdownComponent, DropdownOption } from '../../../shared/dropdown.component';
 import { IconComponent } from '../../../shared/icon.component';
@@ -36,13 +36,12 @@ type DeleteTarget =
 })
 export class TeacherClassesComponent {
   private readonly classesService = inject(ClassesService);
-  private readonly portal = inject(TeacherPortalService);
+  protected readonly year = inject(ViewingYearService);
   private readonly toast = inject(ToastService);
 
   protected readonly classes = signal<ClassItem[]>([]);
   protected readonly subjects = signal<Subject[]>([]);
   protected readonly learners = signal<Learner[]>([]);
-  protected readonly academicYear = signal<string | null>(null);
   protected readonly loading = signal(true);
   protected readonly error = signal('');
   protected readonly saving = signal(false);
@@ -52,7 +51,6 @@ export class TeacherClassesComponent {
   protected readonly view = signal<'tiles' | 'list'>('tiles');
   protected readonly search = signal('');
   protected readonly gradeFilter = signal<number | ''>('');
-  protected readonly yearFilter = signal('');
   protected readonly learnerSearch = signal('');
 
   // The Learners tab shows the whole school directory, or the roster of one
@@ -147,7 +145,6 @@ export class TeacherClassesComponent {
     const query = this.search().trim().toLowerCase();
     return this.classes().filter((klass) => {
       if (this.gradeFilter() !== '' && klass.grade_level !== this.gradeFilter()) return false;
-      if (this.yearFilter() !== '' && klass.academic_year !== this.yearFilter()) return false;
       if (!query) return true;
       return `${klass.subject_name} ${klass.section_name} ${klass.room}`
         .toLowerCase()
@@ -173,11 +170,6 @@ export class TeacherClassesComponent {
       group.students += klass.learner_count;
     }
     return [...bySubject.values()].sort((a, b) => a.subjectName.localeCompare(b.subjectName));
-  });
-
-  protected readonly years = computed(() => {
-    const years = new Set(this.classes().map((klass) => klass.academic_year));
-    return [...years].sort().reverse();
   });
 
   protected readonly grades = computed(() => {
@@ -242,11 +234,6 @@ export class TeacherClassesComponent {
   protected readonly gradeOptions = computed<DropdownOption[]>(() => [
     { value: '', label: 'All grades' },
     ...this.grades().map((grade) => ({ value: grade, label: `Grade ${grade}` })),
-  ]);
-
-  protected readonly yearOptions = computed<DropdownOption[]>(() => [
-    { value: '', label: 'All years' },
-    ...this.years().map((year) => ({ value: year, label: `AY ${year}` })),
   ]);
 
   protected readonly gradeLevelOptions: DropdownOption[] = [7, 8, 9, 10, 11, 12].map((grade) => ({
@@ -373,16 +360,15 @@ export class TeacherClassesComponent {
   }
 
   constructor() {
-    this.portal.me().subscribe({
-      next: (response) => this.academicYear.set(response.academic_year),
-      error: () => undefined,
+    // The list follows the year in the top bar; the server filters it.
+    effect(() => {
+      if (this.year.selectedYear() || this.year.loaded()) this.load();
     });
-    this.load();
   }
 
   protected load(): void {
     this.loading.set(true);
-    this.classesService.classes({}).subscribe({
+    this.classesService.classes({ academic_year: this.year.selectedYear() ?? '' }).subscribe({
       next: (response) => {
         this.classes.set(response.items);
         this.loading.set(false);
@@ -437,7 +423,8 @@ export class TeacherClassesComponent {
     this.formGrade = 10;
     this.formSection = '';
     this.formRoom = '';
-    this.formYear = this.academicYear() ?? '';
+    // A new class is filed under the current year, not the year being viewed.
+    this.formYear = this.year.currentYear() ?? '';
     this.formErrors.set({});
     this.classFormOpen.set(true);
   }

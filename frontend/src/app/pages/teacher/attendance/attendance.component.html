@@ -4,8 +4,8 @@
     <h1 class="page-title">Attendance</h1>
     <p class="muted">
       Take the roll, then save the day sheet
-      @if (academicYear()) {
-        · AY {{ academicYear() }}
+      @if (year.selectedYear()) {
+        · AY {{ year.selectedYear() }}
       }
     </p>
   </div>
@@ -268,7 +268,7 @@
                       <td class="sf2-no"></td>
                       <td class="sf2-name">{{ genderTotalLabel(learner.sex) }}</td>
                       @for (day of sf2()!.days; track day.date) {
-                        <td>{{ genderTotal(learner.sex)?.present_by_day[day.date] ?? 0 }}</td>
+                        <td>{{ totalCell(genderTotal(learner.sex)?.present_by_day[day.date]) }}</td>
                       }
                       <td>{{ genderTotal(learner.sex)?.totals.absent ?? 0 }}</td>
                       <td>{{ genderTotal(learner.sex)?.totals.present ?? 0 }}</td>
@@ -280,7 +280,7 @@
                   <td class="sf2-no">{{ sf2()!.learners.length + 1 }}.</td>
                   <td class="sf2-name">Combined TOTAL Per Day</td>
                   @for (day of sf2()!.days; track day.date) {
-                    <td>{{ sf2()!.combined.present_by_day[day.date] ?? 0 }}</td>
+                    <td>{{ totalCell(sf2()!.combined.present_by_day[day.date]) }}</td>
                   }
                   <td>{{ sf2()!.combined.totals.absent }}</td>
                   <td>{{ sf2()!.combined.totals.present }}</td>
@@ -352,7 +352,7 @@
               <td class="dp-no"></td>
               <td class="dp-name">{{ genderTotalLabel(learner.sex) }}</td>
               @for (day of sf2()!.days; track day.date) {
-                <td>{{ genderTotal(learner.sex)?.present_by_day[day.date] ?? 0 }}</td>
+                <td>{{ totalCell(genderTotal(learner.sex)?.present_by_day[day.date]) }}</td>
               }
               <td>{{ genderTotal(learner.sex)?.totals.absent ?? 0 }}</td>
               <td>{{ genderTotal(learner.sex)?.totals.present ?? 0 }}</td>
@@ -364,7 +364,7 @@
           <td class="dp-no">{{ sf2()!.learners.length + 1 }}.</td>
           <td class="dp-name">Combined TOTAL Per Day</td>
           @for (day of sf2()!.days; track day.date) {
-            <td>{{ sf2()!.combined.present_by_day[day.date] ?? 0 }}</td>
+            <td>{{ totalCell(sf2()!.combined.present_by_day[day.date]) }}</td>
           }
           <td>{{ sf2()!.combined.totals.absent }}</td>
           <td>{{ sf2()!.combined.totals.present }}</td>

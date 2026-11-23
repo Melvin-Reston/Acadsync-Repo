@@ -8,6 +8,7 @@
 import {
   Component,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
@@ -17,6 +18,7 @@ import { GradesService, ScoreCell } from '../../../core/grades.service';
 import { ClassesService } from '../../../core/classes.service';
 import { TeacherPortalService } from '../../../core/teacher-portal.service';
 import { ToastService } from '../../../core/toast.service';
+import { ViewingYearService } from '../../../core/viewing-year.service';
 import { errorMessage } from '../../../core/helpers';
 import {
   ClassItem,
@@ -46,7 +48,7 @@ export class TeacherGradesComponent {
   private readonly toast = inject(ToastService);
 
   protected readonly classes = signal<ClassItem[]>([]);
-  protected readonly academicYear = signal<string | null>(null);
+  protected readonly year = inject(ViewingYearService);
   protected readonly teacher = signal<TeacherSelf | null>(null);
   protected readonly sheet = signal<GradeSheet | null>(null);
   protected readonly loading = signal(true);
@@ -329,13 +331,12 @@ export class TeacherGradesComponent {
 
   constructor() {
     this.portal.me().subscribe({
-      next: (response) => {
-        this.academicYear.set(response.academic_year);
-        this.teacher.set(response.teacher);
-      },
+      next: (response) => this.teacher.set(response.teacher),
       error: () => undefined,
     });
-    this.loadClasses();
+    effect(() => {
+      if (this.year.selectedYear() || this.year.loaded()) this.loadClasses();
+    });
     // A print section renders only for the form being printed; clear it
     // once the print dialog closes so the next print starts clean.
     window.addEventListener('afterprint', () => this.printTarget.set(null));
@@ -344,7 +345,7 @@ export class TeacherGradesComponent {
   // ---------- Loading ----------
 
   private loadClasses(): void {
-    this.classesService.classes({}).subscribe({
+    this.classesService.classes({ academic_year: this.year.selectedYear() ?? '' }).subscribe({
       next: (response) => {
         this.classes.set(response.items);
         if (response.items.length === 0) {

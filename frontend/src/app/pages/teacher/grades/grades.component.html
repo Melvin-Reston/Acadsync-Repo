@@ -2,7 +2,7 @@
   <div>
     <h1>Grades / Class Record</h1>
     <div class="sub">
-      Academic Year {{ academicYear() }}
+      Academic Year {{ year.selectedYear() }}
       @if (sheet()) {
         · {{ sheet()!.grading.label }}
       }
@@ -47,7 +47,7 @@
        DepEd print section below ever prints. -->
   <div class="no-print">
   <div class="trail">
-    Academic Year {{ academicYear() }} &nbsp;›&nbsp; Class Records &amp; Grading &nbsp;›&nbsp;
+    Academic Year {{ year.selectedYear() }} &nbsp;›&nbsp; Class Records &amp; Grading &nbsp;›&nbsp;
     <b>{{ sheet()!.class.subject_name }} · {{ sheet()!.class.section_name }}</b>
   </div>
 

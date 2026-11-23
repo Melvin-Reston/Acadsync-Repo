@@ -306,7 +306,9 @@
             {{ data()?.learner_count ?? 0 }} {{ (data()?.learner_count ?? 0) === 1 ? 'learner' : 'learners' }}
           </span>
         </div>
-        @if (todayClasses().length === 0) {
+        @if (data()?.academic_year && data()?.current_academic_year && data()!.academic_year !== data()!.current_academic_year) {
+          <p class="muted">Showing AY {{ data()!.academic_year }}. Classes today are for the current year — switch back to AY {{ data()!.current_academic_year }} in the top bar to see them.</p>
+        } @else if (todayClasses().length === 0) {
           <p class="muted">No classes today.</p>
         } @else {
           <ul class="plain-list">

@@ -211,17 +211,17 @@ export class ClassesService {
     return this.http.delete<{ deleted: boolean }>(`${this.api}/meetings/${id}`);
   }
 
-  schedule(weekStart: string): Observable<ScheduleResponse> {
+  schedule(weekStart: string, academicYear?: string): Observable<ScheduleResponse> {
     return this.http.get<ScheduleResponse>(`${this.api}/schedules`, {
-      params: toParams({ week_start: weekStart }),
+      params: toParams({ week_start: weekStart, academic_year: academicYear ?? '' }),
     });
   }
 
   // Downloads the week's timetable as a CSV file.
-  exportScheduleCsv(weekStart: string): void {
+  exportScheduleCsv(weekStart: string, academicYear?: string): void {
     this.http
       .get(`${this.api}/schedules`, {
-        params: toParams({ week_start: weekStart, format: 'csv' }),
+        params: toParams({ week_start: weekStart, academic_year: academicYear ?? '', format: 'csv' }),
         responseType: 'blob',
       })
       .subscribe({

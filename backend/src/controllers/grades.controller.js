@@ -27,6 +27,14 @@ async function academicYear(client = db) {
   return result.rows[0] ? result.rows[0].value : null;
 }
 
+// The year a teacher is viewing (Batch 8 fix 13): the validated
+// ?academic_year= value when one was sent, else the admin's current year.
+// Viewing a past year never changes the stored setting.
+async function resolveViewingYear(req, client = db) {
+  const requested = req.valid && req.valid.query ? req.valid.query.academic_year : undefined;
+  return requested || (await academicYear(client));
+}
+
 function columnName(column, profileCode) {
   return deped.columnName(column, profileCode);
 }
@@ -719,6 +727,26 @@ async function sectionClasses(client, adviser, year) {
   return result.rows;
 }
 
+// One class taught to the adviser's section, in any year: a reminder for a
+// past-year class must carry that class's own year, or the subject teacher
+// (whose Grades page reads the class's year) never sees the banner.
+async function sectionClassById(client, adviser, classId) {
+  const result = await client.query(
+    `SELECT c.id, c.subject_id, s.name AS subject_name, c.grade_level, c.section_name,
+            c.room, c.academic_year, c.teacher_id,
+            t.first_name AS teacher_first_name, t.last_name AS teacher_last_name
+       FROM classes c
+       JOIN subjects s ON s.id = c.subject_id
+       JOIN teachers t ON t.id = c.teacher_id
+      WHERE c.id = $1
+        AND c.grade_level = $2
+        AND LOWER(TRIM(c.section_name)) = LOWER(TRIM($3))
+        AND t.school_id = $4`,
+    [classId, adviser.advisory_grade, adviser.advisory_section, adviser.school_id]
+  );
+  return result.rows[0] || null;
+}
+
 // The period to show when none is asked for: the highest period with a
 // submission for this section, otherwise the first period. A period from
 // before a switch (Quarter 4) is clamped to the highest period the profile
@@ -1048,8 +1076,8 @@ async function computeClassFinals(client, classId, year, profile) {
 // The whole consolidation view for one advisory section and period. Built from
 // submitted grades only: a subject that has not been filed shows —, never a
 // number the teacher did not file.
-async function buildConsolidation(client, adviser, quarter) {
-  const year = await academicYear(client);
+async function buildConsolidation(client, adviser, quarter, requestedYear) {
+  const year = requestedYear || (await academicYear(client));
   const profile = await grading.getGradingProfile(client, year);
   const classes = await sectionClasses(client, adviser, year);
   const classIds = classes.map((klass) => klass.id);
@@ -1231,8 +1259,8 @@ async function buildConsolidation(client, adviser, quarter) {
 // final GWA is the mean of the final grades across subjects, and it only
 // appears once every subject has a final grade. This is the same final grade
 // the Report Card (Batch 5) will print.
-async function buildFinals(client, adviser) {
-  const year = await academicYear(client);
+async function buildFinals(client, adviser, requestedYear) {
+  const year = requestedYear || (await academicYear(client));
   const profile = await grading.getGradingProfile(client, year);
   const classes = await sectionClasses(client, adviser, year);
   const classIds = classes.map((klass) => klass.id);
@@ -1410,12 +1438,12 @@ async function getConsolidation(req, res) {
       errors: { advisory_section: 'Choose an advisory grade and section on the Dashboard.' },
     });
   }
-  const year = await academicYear();
+  const year = await resolveViewingYear(req);
   const profile = await grading.getGradingProfile(db, year);
   if (requestedQuarter) checkPeriod(profile, requestedQuarter);
 
   if (scope === 'final') {
-    const finals = await buildFinals(db, adviser);
+    const finals = await buildFinals(db, adviser, year);
     if (format === 'csv') {
       const headers = [
         { header: 'Learner', value: (row) => `${row.last_name}, ${row.first_name}` },
@@ -1451,7 +1479,7 @@ async function getConsolidation(req, res) {
   const quarter = await resolveConsolidationQuarter(
     db, classes.map((klass) => klass.id), requestedQuarter, profile, manualMax
   );
-  const view = await buildConsolidation(db, adviser, quarter);
+  const view = await buildConsolidation(db, adviser, quarter, year);
 
   if (format === 'csv') {
     const headers = [
@@ -1492,12 +1520,12 @@ async function remindTeacher(req, res) {
   if (!adviser) {
     throw badRequest('Set your advisory assignment on the Dashboard first.', { code: 'NO_ADVISORY' });
   }
-  const year = await academicYear();
+  const klass = await sectionClassById(db, adviser, class_id);
+  if (!klass) throw notFound('That class is not part of your advisory section.');
+  // The reminder belongs to the class's own year, not the current year.
+  const year = klass.academic_year;
   const profile = await grading.getGradingProfile(db, year);
   checkPeriod(profile, quarter);
-  const classes = await sectionClasses(db, adviser, year);
-  const klass = classes.find((row) => row.id === class_id);
-  if (!klass) throw notFound('That class is not part of your advisory section.');
   // A direct-add needs no reminder: the teacher of this class is the adviser
   // themself, so reminding would only be reminding yourself.
   if (klass.teacher_id === req.teacher.id) {
@@ -1521,9 +1549,9 @@ async function remindTeacher(req, res) {
 // ---------- Manual subjects: endpoints (Batch 8 fix 10) ----------
 
 // The one manual subject a signed-in adviser may touch: same adviser,
-// same school, same grade/section and year. Anything else is a 404, the
-// same as for another teacher's class.
-async function loadOwnedManualSubject(client, adviser, year, id) {
+// same school, same grade/section. The year comes from the subject's own
+// row, so a past-year subject stays editable while viewing that year.
+async function loadOwnedManualSubject(client, adviser, id) {
   const result = await client.query(
     `SELECT id, adviser_id, school_id, subject_name, teacher_name, grade_level,
             section_name, academic_year, profile_code, created_at, updated_at
@@ -1536,8 +1564,7 @@ async function loadOwnedManualSubject(client, adviser, year, id) {
     row.adviser_id !== adviser.id ||
     row.school_id !== adviser.school_id ||
     row.grade_level !== adviser.advisory_grade ||
-    row.section_name.trim().toLowerCase() !== adviser.advisory_section.trim().toLowerCase() ||
-    row.academic_year !== year
+    row.section_name.trim().toLowerCase() !== adviser.advisory_section.trim().toLowerCase()
   ) {
     throw notFound('That manual subject was not found.');
   }
@@ -1591,7 +1618,7 @@ async function listManualSubjects(req, res) {
       errors: { advisory_section: 'Choose an advisory grade and section on the Dashboard.' },
     });
   }
-  const year = await academicYear();
+  const year = await resolveViewingYear(req);
   const manualSubjects = await loadManualSubjects(db, adviser, year);
   const subjects = manualSubjects.map((manual) => {
     const periodsWithGrades = [...manual.grades.keys()]
@@ -1612,7 +1639,7 @@ async function createManualSubject(req, res) {
       errors: { advisory_section: 'Choose an advisory grade and section on the Dashboard.' },
     });
   }
-  const year = await academicYear();
+  const year = req.valid.body.academic_year || (await academicYear());
   const profile = await grading.getGradingProfile(db, year);
   const { subject_name, teacher_name } = req.valid.body;
   if (await realClassWithSubject(db, adviser, year, subject_name)) {
@@ -1657,8 +1684,8 @@ async function updateManualSubject(req, res) {
       errors: { advisory_section: 'Choose an advisory grade and section on the Dashboard.' },
     });
   }
-  const year = await academicYear();
-  const manual = await loadOwnedManualSubject(db, adviser, year, req.valid.params.id);
+  const manual = await loadOwnedManualSubject(db, adviser, req.valid.params.id);
+  const year = manual.academic_year;
   const { subject_name, teacher_name } = req.valid.body;
   const nextName = subject_name !== undefined ? subject_name : manual.subject_name;
   if (nextName.trim().toLowerCase() !== manual.subject_name.trim().toLowerCase()) {
@@ -1702,8 +1729,7 @@ async function deleteManualSubject(req, res) {
       errors: { advisory_section: 'Choose an advisory grade and section on the Dashboard.' },
     });
   }
-  const year = await academicYear();
-  const manual = await loadOwnedManualSubject(db, adviser, year, req.valid.params.id);
+  const manual = await loadOwnedManualSubject(db, adviser, req.valid.params.id);
   // Grades go with the subject (ON DELETE CASCADE).
   await db.query('DELETE FROM manual_subjects WHERE id = $1', [manual.id]);
   res.json({ message: `Manual subject "${manual.subject_name}" was deleted.` });
@@ -1721,9 +1747,9 @@ async function downloadManualTemplate(req, res) {
       errors: { advisory_section: 'Choose an advisory grade and section on the Dashboard.' },
     });
   }
-  const year = await academicYear();
+  const manual = await loadOwnedManualSubject(db, adviser, req.valid.params.id);
+  const year = manual.academic_year;
   const profile = await grading.getGradingProfile(db, year);
-  const manual = await loadOwnedManualSubject(db, adviser, year, req.valid.params.id);
   const classes = await sectionClasses(db, adviser, year);
   const roster = await sectionRoster(db, adviser, classes.map((klass) => klass.id));
   const headers = [
@@ -1754,9 +1780,9 @@ async function fileManualGrades(req, res) {
       errors: { advisory_section: 'Choose an advisory grade and section on the Dashboard.' },
     });
   }
-  const year = await academicYear();
+  const manual = await loadOwnedManualSubject(db, adviser, req.valid.params.id);
+  const year = manual.academic_year;
   const profile = await grading.getGradingProfile(db, year);
-  const manual = await loadOwnedManualSubject(db, adviser, year, req.valid.params.id);
   const classes = await sectionClasses(db, adviser, year);
   const roster = await sectionRoster(db, adviser, classes.map((klass) => klass.id));
   if (roster.size === 0) {
@@ -1820,17 +1846,17 @@ async function fileManualGrades(req, res) {
 // The Dashboard's consolidation card: real readiness for the adviser's section
 // (submitted / total subjects for the current period), or null when the teacher
 // is not an adviser.
-async function fetchConsolidationReadiness(teacherId) {
+async function fetchConsolidationReadiness(teacherId, requestedYear) {
   const adviser = await adviserOf(db, teacherId);
   if (!adviser) return null;
-  const year = await academicYear();
+  const year = requestedYear || (await academicYear());
   const profile = await grading.getGradingProfile(db, year);
   const classes = await sectionClasses(db, adviser, year);
   const manualMax = await maxManualQuarter(db, adviser, year);
   const quarter = await resolveConsolidationQuarter(
     db, classes.map((klass) => klass.id), null, profile, manualMax
   );
-  const view = await buildConsolidation(db, adviser, quarter);
+  const view = await buildConsolidation(db, adviser, quarter, year);
   return {
     grade: view.adviser.grade,
     section: view.adviser.section,
@@ -1870,6 +1896,7 @@ module.exports = {
   sectionRoster,
   computeSubjectPeriodGrades,
   academicYear,
+  resolveViewingYear,
   buildConsolidation,
   buildFinals,
   // Shared by the Report Card (Batch 8 fix 10): manual grades are read

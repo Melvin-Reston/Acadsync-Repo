@@ -1972,6 +1972,18 @@ form > .form-grid + .alert {
   letter-spacing: 0.01em;
 }
 
+/* The first column's values start at the same x in every row (Name, LRN,
+   Grade): those labels share one fixed width, and the colon separates
+   each label from its value at a steady position. */
+.report-card .info-row.name-row {
+  gap: 5px;
+}
+
+.report-card .info-row.name-row label,
+.report-card .info-row.col-a label {
+  flex: 0 0 40px;
+}
+
 .report-card .letter {
   font-size: 7.8px;
   line-height: 1.45;
@@ -1989,9 +2001,24 @@ form > .form-grid + .alert {
   text-align: center;
 }
 
+/* The printed name sits above the signature line, uppercase; the role
+   and "Signature over printed name" caption sit below it. The min-height
+   keeps the line level across the two blocks when one name is blank. */
+.report-card .sig .sig-name {
+  display: block;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-height: 11px;
+}
+
 .report-card .sig-line {
   border-bottom: 1px solid #000;
-  height: 14px;
+  height: 5px;
 }
 
 .report-card .sig span {
@@ -2409,7 +2436,7 @@ form > .form-grid + .alert {
 }
 
 .report-card .cert-sigs .sig-line {
-  height: 18px;
+  height: 6px;
 }
 
 .report-card .cert-sigs.single {

@@ -61,6 +61,34 @@ function subscriptionOf(self) {
   };
 }
 
+// GET /api/teacher/academic-years  (the years this teacher can view:
+// the admin's current year, every year they taught a class in, every year
+// with a class in their advisory section, and every year with a manual
+// subject or a grading profile. Newest first. The top bar's AY filter
+// offers exactly these; choosing one never changes the stored setting.)
+async function listAcademicYears(req, res) {
+  const current = await db.query("SELECT value FROM settings WHERE key = 'academic_year'");
+  const currentYear = current.rows[0] ? current.rows[0].value : null;
+  const self = await findSelf(req.teacher.id);
+  const years = new Set();
+  if (currentYear) years.add(currentYear);
+  const classes = await db.query(
+    `SELECT DISTINCT c.academic_year FROM classes c
+      JOIN teachers t ON t.id = c.teacher_id
+      WHERE c.teacher_id = $1
+         OR (t.school_id = $2 AND c.grade_level = $3 AND LOWER(TRIM(c.section_name)) = LOWER(TRIM($4)))`,
+    [req.teacher.id, self.school_id, self.advisory_grade, self.advisory_section || '']
+  );
+  for (const row of classes.rows) if (row.academic_year) years.add(row.academic_year);
+  const manual = await db.query('SELECT DISTINCT academic_year FROM manual_subjects WHERE adviser_id = $1', [
+    req.teacher.id,
+  ]);
+  for (const row of manual.rows) if (row.academic_year) years.add(row.academic_year);
+  const profiles = await db.query('SELECT DISTINCT academic_year FROM grading_profiles');
+  for (const row of profiles.rows) if (row.academic_year) years.add(row.academic_year);
+  res.json({ current_academic_year: currentYear, academic_years: [...years].sort().reverse() });
+}
+
 // GET /api/teacher/me  (the signed-in teacher, their school and their subscription)
 async function getMe(req, res) {
   await billing.ensureBillingUpToDate();
@@ -241,12 +269,18 @@ async function deleteHoliday(req, res) {
   res.json({ deleted: true });
 }
 
-// GET /api/teacher/dashboard  (everything the dashboard shows: teacher, plan, next invoice, announcements,
-// the teacher's classes today and how many classes and learners they have)
+// GET /api/teacher/dashboard?academic_year=  (everything the dashboard shows: teacher, plan, next invoice, announcements,
+// the teacher's classes today and how many classes and learners they have.
+// With a past year, the counts and the consolidation card are that year's,
+// and there are no classes today — a past year's Monday meeting is not a
+// class today. The subscription, announcements and assignment form are
+// the teacher's current ones either way.)
 async function getDashboard(req, res) {
   await billing.ensureBillingUpToDate();
   const self = await findSelf(req.teacher.id);
-  const year = await db.query("SELECT value FROM settings WHERE key = 'academic_year'");
+  const currentResult = await db.query("SELECT value FROM settings WHERE key = 'academic_year'");
+  const currentYear = currentResult.rows[0] ? currentResult.rows[0].value : null;
+  const year = (req.valid && req.valid.query && req.valid.query.academic_year) || currentYear;
 
   // The earliest invoice the teacher still has to pay, if any.
   const invoice = await db.query(
@@ -260,9 +294,9 @@ async function getDashboard(req, res) {
   );
 
   const counts = await db.query(
-    `SELECT (SELECT COUNT(*)::int FROM classes WHERE teacher_id = $1) AS class_count,
+    `SELECT (SELECT COUNT(*)::int FROM classes WHERE teacher_id = $1 AND academic_year = $2) AS class_count,
             (SELECT COUNT(*)::int FROM learners WHERE teacher_id = $1) AS learner_count`,
-    [req.teacher.id]
+    [req.teacher.id, year]
   );
 
   res.json({
@@ -270,11 +304,12 @@ async function getDashboard(req, res) {
     subscription: subscriptionOf(self),
     next_invoice: invoice.rows[0] || null,
     announcements: await fetchAnnouncements(req.teacher.id),
-    academic_year: year.rows[0] ? year.rows[0].value : null,
+    academic_year: year,
+    current_academic_year: currentYear,
     class_count: counts.rows[0].class_count,
     learner_count: counts.rows[0].learner_count,
-    today_classes: await fetchTodayClasses(req.teacher.id),
-    consolidation: await fetchConsolidationReadiness(req.teacher.id),
+    today_classes: year === currentYear ? await fetchTodayClasses(req.teacher.id) : [],
+    consolidation: await fetchConsolidationReadiness(req.teacher.id, year),
     holidays: await fetchHolidays(req.teacher.id),
   });
 }
@@ -487,6 +522,7 @@ async function submitPayment(req, res) {
 
 module.exports = {
   teacherTier,
+  listAcademicYears,
   listMyAnnouncements,
   getPaymentInfo,
   getPaymentQr,

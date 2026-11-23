@@ -8,8 +8,8 @@ import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } fro
 import { filter } from 'rxjs';
 import { initials } from '../core/helpers';
 import { TeacherAuthService } from '../core/teacher-auth.service';
-import { TeacherPortalService } from '../core/teacher-portal.service';
 import { ThemeService } from '../core/theme.service';
+import { ViewingYearService } from '../core/viewing-year.service';
 import { IconComponent } from '../shared/icon.component';
 
 interface NavItem {
@@ -40,13 +40,13 @@ const TITLES: Record<string, string> = {
 export class TeacherLayoutComponent {
   protected readonly auth = inject(TeacherAuthService);
   protected readonly theme = inject(ThemeService);
-  private readonly portal = inject(TeacherPortalService);
+  protected readonly year = inject(ViewingYearService);
   private readonly router = inject(Router);
 
   protected readonly today = new Date();
   protected readonly drawerOpen = signal(false);
   protected readonly pageTitle = signal('Dashboard · Teacher Portal');
-  protected readonly academicYear = signal<string | null>(null);
+  protected readonly currentRoute = signal('/teacher/dashboard');
 
   protected readonly navGroups: { label: string; items: NavItem[] }[] = [
     {
@@ -79,14 +79,24 @@ export class TeacherLayoutComponent {
 
   constructor() {
     this.pageTitle.set(TITLES[this.router.url] ?? 'Dashboard · Teacher Portal');
+    this.currentRoute.set(this.router.url);
     this.router.events.pipe(filter((event) => event instanceof NavigationEnd)).subscribe((event) => {
       this.pageTitle.set(TITLES[event.urlAfterRedirects] ?? 'Teacher Portal');
+      this.currentRoute.set(event.urlAfterRedirects);
     });
-    // Loads the academic year for the top bar.
-    this.portal.me().subscribe({
-      next: (response) => this.academicYear.set(response.academic_year),
-      error: () => undefined,
-    });
+    // Loads the years for the AY filter in the top bar.
+    this.year.load();
+  }
+
+  // The AY filter only belongs on pages that show records for a year.
+  // Payments and Profile are the teacher's current account, not a year's records.
+  protected showYearFilter(): boolean {
+    return !['/teacher/payments', '/teacher/profile'].includes(this.currentRoute());
+  }
+
+  protected onYearChange(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+    if (value) this.year.select(value);
   }
 
   protected adviserLine(): string {

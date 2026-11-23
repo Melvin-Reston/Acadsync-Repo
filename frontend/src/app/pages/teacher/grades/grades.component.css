@@ -987,9 +987,11 @@
     /* Exact color adjustment keeps the header backgrounds in print. */
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
-    /* The deped-form page has no margin (so the browser adds no
-       date/title/URL/page number); the form carries its own inset. */
+    /* Same 10mm inset on all sides of every page (padding repeats
+       per fragment via box-decoration-break: clone). */
     padding: 10mm;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
   }
 
   .dp-head {

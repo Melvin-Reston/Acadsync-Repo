@@ -8,6 +8,7 @@
 import {
   Component,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
@@ -15,6 +16,7 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ConsolidationService } from '../../../core/consolidation.service';
 import { ToastService } from '../../../core/toast.service';
+import { ViewingYearService } from '../../../core/viewing-year.service';
 import { errorMessage } from '../../../core/helpers';
 import { ConsolidationFinals, ConsolidationView, ManualSubject } from '../../../core/models';
 import { IconComponent } from '../../../shared/icon.component';
@@ -214,6 +216,7 @@ type Tab = 'all' | 'honors' | 'at_risk';
 })
 export class TeacherConsolidationComponent {
   private readonly consolidation = inject(ConsolidationService);
+  protected readonly year = inject(ViewingYearService);
   private readonly toast = inject(ToastService);
 
   protected readonly view = signal<ConsolidationView | null>(null);
@@ -309,14 +312,16 @@ export class TeacherConsolidationComponent {
   });
 
   constructor() {
-    this.load();
+    effect(() => {
+      if (this.year.selectedYear() || this.year.loaded()) this.load();
+    });
   }
 
   protected load(quarter?: number): void {
     this.loading.set(true);
     // No period on the first load: the API opens the highest period that
     // already has data, else the first period, and the page follows it.
-    this.consolidation.view(quarter).subscribe({
+    this.consolidation.view(quarter, this.year.selectedYear() ?? undefined).subscribe({
       next: (view) => {
         this.view.set(view);
         this.quarter.set(view.quarter);
@@ -334,7 +339,7 @@ export class TeacherConsolidationComponent {
   // The final grades across the year's periods. Loaded alongside the period
   // view; a teacher with no advisory assignment never gets here.
   private loadFinals(): void {
-    this.consolidation.finals().subscribe({
+    this.consolidation.finals(this.year.selectedYear() ?? undefined).subscribe({
       next: (finals) => this.finals.set(finals),
       error: () => undefined,
     });
@@ -380,7 +385,7 @@ export class TeacherConsolidationComponent {
 
   protected refresh(): void {
     this.refreshing.set(true);
-    this.consolidation.view(this.quarter()).subscribe({
+    this.consolidation.view(this.quarter(), this.year.selectedYear() ?? undefined).subscribe({
       next: (view) => {
         this.view.set(view);
         this.refreshing.set(false);
@@ -418,7 +423,7 @@ export class TeacherConsolidationComponent {
       this.manualSubjects.set([]);
       return;
     }
-    this.consolidation.listManualSubjects().subscribe({
+    this.consolidation.listManualSubjects(this.year.selectedYear() ?? undefined).subscribe({
       next: (response) => this.manualSubjects.set(response.manual_subjects),
       error: () => this.manualSubjects.set([]),
     });
@@ -440,7 +445,7 @@ export class TeacherConsolidationComponent {
     }
     this.creating.set(true);
     this.createError.set('');
-    this.consolidation.createManualSubject(subjectName, teacherName).subscribe({
+    this.consolidation.createManualSubject(subjectName, teacherName, this.year.selectedYear() ?? undefined).subscribe({
       next: () => {
         this.creating.set(false);
         this.createOpen.set(false);
@@ -595,7 +600,7 @@ export class TeacherConsolidationComponent {
     const safe = (value: string) => value.replace(/[^A-Za-z0-9]+/g, '-').toLowerCase();
     const section = view.section ? safe(view.section) : 'section';
     const periodShort = view.grading.period_short.toLowerCase();
-    this.consolidation.exportCsv(this.quarter(), `consolidation-g${view.grade}-${section}-${periodShort}${this.quarter()}.csv`);
+    this.consolidation.exportCsv(this.quarter(), `consolidation-g${view.grade}-${section}-${periodShort}${this.quarter()}.csv`, this.year.selectedYear() ?? undefined);
   }
 
   protected exportFinalsCsv(): void {
@@ -603,7 +608,7 @@ export class TeacherConsolidationComponent {
     if (!view) return;
     const safe = (value: string) => value.replace(/[^A-Za-z0-9]+/g, '-').toLowerCase();
     const section = view.section ? safe(view.section) : 'section';
-    this.consolidation.exportFinalsCsv(`consolidation-final-g${view.grade}-${section}.csv`);
+    this.consolidation.exportFinalsCsv(`consolidation-final-g${view.grade}-${section}.csv`, this.year.selectedYear() ?? undefined);
   }
 
   protected fmt(value: number | null): string {

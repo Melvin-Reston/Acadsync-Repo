@@ -221,6 +221,45 @@
   white-space: nowrap;
 }
 
+/* The AY filter: the same chip, with a chevron. The select itself is
+   borderless inside it, so the chip keeps its shape in both themes. */
+.year-filter {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.year-filter app-icon {
+  position: absolute;
+  right: 10px;
+  pointer-events: none;
+  color: var(--muted);
+}
+
+.year-select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 28px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.year-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
 .top-date {
   margin-left: auto;
   font-size: 13px;

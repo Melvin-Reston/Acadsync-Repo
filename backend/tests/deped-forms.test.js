@@ -11,6 +11,9 @@
 // last day of classes on the teacher's record, and the teacher's own
 // holiday list. Weekdays outside the calendar are not school days in SF2:
 // no column, no mark, and they count in nothing.
+// Batch 8 fix 11: a TOTAL Per Day day cell after today is null — blank on
+// the form, never 0 — and the footer summary counts only school days up
+// to today, so mid-month totals are never dragged down by future dates.
 // Run with: npm test
 const { test, describe, before, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -683,11 +686,19 @@ describe('SF2 daily attendance report', () => {
     const rows = Object.fromEntries(response.body.learners.map((learner) => [learner.id, learner]));
 
     // Future days: no value anywhere, and they count in neither total.
+    // The TOTAL rows send null there, so the form shows them blank.
     for (const date of future) {
       assert.equal(rows[alex.id].marks[date], undefined);
       assert.equal(rows[isabella.id].marks[date], undefined);
-      assert.equal(response.body.combined.present_by_day[date], 0);
+      assert.equal(response.body.combined.present_by_day[date], null);
+      assert.equal(response.body.totals_by_gender.male.present_by_day[date], null);
+      assert.equal(response.body.totals_by_gender.female.present_by_day[date], null);
     }
+    // Past days have computed totals: a number, never null.
+    for (const date of past) {
+      assert.equal(typeof response.body.combined.present_by_day[date], 'number');
+    }
+    if (rolled) assert.equal(response.body.combined.present_by_day[rolled], 1);
     // Unmarked past days mark X for both learners.
     for (const date of past) {
       if (date === rolled) continue;
@@ -705,9 +716,16 @@ describe('SF2 daily attendance report', () => {
       assert.deepEqual(rows[alex.id].totals, { present: 0, absent: 0 });
       assert.deepEqual(rows[isabella.id].totals, { present: 0, absent: 0 });
     }
-    // The summary's days of classes still counts every school day of the
-    // month, future ones included — only the marks follow "today".
-    assert.equal(response.body.summary.days_of_classes, schoolDays.length);
+    // The summary counts only school days up to today: future days are
+    // never computed, so days of classes and the average cover the
+    // elapsed days only.
+    assert.equal(response.body.summary.days_of_classes, past.length);
+    if (rolled) {
+      assert.equal(
+        response.body.summary.total.average_daily_attendance,
+        Math.round((1 / past.length) * 10) / 10,
+      );
+    }
   });
 
   test('a month entirely in the future shows no marks and zero totals', async () => {
@@ -728,8 +746,9 @@ describe('SF2 daily attendance report', () => {
     const row = response.body.learners[0];
     assert.equal(Object.keys(row.marks).length, 0);
     assert.deepEqual(row.totals, { present: 0, absent: 0 });
-    assert.ok(Object.values(response.body.combined.present_by_day).every((count) => count === 0));
+    assert.ok(Object.values(response.body.combined.present_by_day).every((count) => count === null));
     assert.deepEqual(response.body.combined.totals, { present: 0, absent: 0 });
+    assert.equal(response.body.summary.days_of_classes, 0);
     assert.equal(response.body.summary.total.average_daily_attendance, 0);
     assert.equal(response.body.summary.total.percentage_of_attendance, 0);
   });

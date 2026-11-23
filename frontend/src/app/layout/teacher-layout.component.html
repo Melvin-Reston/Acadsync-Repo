@@ -73,8 +73,27 @@
 
       <span class="top-title">{{ pageTitle() }}</span>
 
-      @if (academicYear()) {
-        <span class="year-chip mono">AY {{ academicYear() }}</span>
+      @if (showYearFilter() && year.selectedYear()) {
+        @if (year.years().length > 1) {
+          <label class="year-filter">
+            <span class="sr-only">Academic year</span>
+            <select
+              class="year-chip year-select mono"
+              aria-label="Academic year"
+              [value]="year.selectedYear()"
+              (change)="onYearChange($event)"
+            >
+              @for (option of year.years(); track option) {
+                <option [value]="option">
+                  AY {{ option }}{{ option === year.currentYear() ? ' (current)' : '' }}
+                </option>
+              }
+            </select>
+            <app-icon name="chevron-down" [size]="14" />
+          </label>
+        } @else {
+          <span class="year-chip mono">AY {{ year.selectedYear() }}</span>
+        }
       }
 
       <span class="top-date">{{ today | date: 'EEEE, MMMM d, y' }}</span>

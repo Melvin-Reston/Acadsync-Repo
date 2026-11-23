@@ -509,6 +509,8 @@ export interface TeacherDashboard {
   next_invoice: TeacherInvoice | null;
   announcements: TeacherAnnouncement[];
   academic_year: string | null;
+  // The admin's current year. academic_year above is the year being viewed.
+  current_academic_year?: string | null;
   class_count: number;
   learner_count: number;
   holidays: TeacherHoliday[];
@@ -746,19 +748,21 @@ export interface Sf2Report {
   non_school_days: Sf2NonSchoolDay[];
   learners: Sf2Learner[];
   // The last table row: learners present per day, and the month's totals.
+  // A day after today is null: the total is not computed for a date that
+  // has not happened yet, and the form shows it blank, never 0.
   combined: {
-    present_by_day: Record<string, number>;
+    present_by_day: Record<string, number | null>;
     totals: { present: number; absent: number };
   };
   // One TOTAL Per Day row per gender, after that gender's learners. A
   // gender with no learners is null and gets no row.
   totals_by_gender: {
     male: {
-      present_by_day: Record<string, number>;
+      present_by_day: Record<string, number | null>;
       totals: { present: number; absent: number };
     } | null;
     female: {
-      present_by_day: Record<string, number>;
+      present_by_day: Record<string, number | null>;
       totals: { present: number; absent: number };
     } | null;
   };
@@ -1089,6 +1093,7 @@ export interface ReportCardView {
   has_advisory: boolean;
   adviser: { grade: number; section: string; name: string };
   school_name: string;
+  school_head_name: string;
   academic_year: string;
   grading: GradingInfo;
   descriptors: ReportCardDescriptor[];

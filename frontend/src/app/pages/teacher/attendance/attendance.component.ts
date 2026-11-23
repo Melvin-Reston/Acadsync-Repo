@@ -7,6 +7,7 @@
 import {
   Component,
   computed,
+  effect,
   inject,
   signal,
 } from '@angular/core';
@@ -16,6 +17,7 @@ import { AttendanceService, RollMark } from '../../../core/attendance.service';
 import { ClassesService } from '../../../core/classes.service';
 import { TeacherPortalService } from '../../../core/teacher-portal.service';
 import { ToastService } from '../../../core/toast.service';
+import { ViewingYearService } from '../../../core/viewing-year.service';
 import {
   errorMessage,
   initials,
@@ -81,7 +83,7 @@ export class TeacherAttendanceComponent {
   private readonly toast = inject(ToastService);
 
   protected readonly classes = signal<ClassItem[]>([]);
-  protected readonly academicYear = signal<string | null>(null);
+  protected readonly year = inject(ViewingYearService);
   protected readonly roll = signal<AttendanceRoll | null>(null);
   protected readonly loading = signal(true);
   protected readonly error = signal('');
@@ -134,7 +136,7 @@ export class TeacherAttendanceComponent {
   protected readonly sf2Printing = signal(false);
 
   protected readonly sf2MonthOptions = computed<DropdownOption[]>(() => {
-    const year = this.academicYear();
+    const year = this.year.selectedYear();
     if (!year) return [];
     const start = Number(year.split('-')[0]);
     return SF2_MONTHS.map((month) => ({
@@ -235,18 +237,16 @@ export class TeacherAttendanceComponent {
   });
 
   constructor() {
-    this.portal.me().subscribe({
-      next: (response) => this.academicYear.set(response.academic_year),
-      error: () => undefined,
+    effect(() => {
+      if (this.year.selectedYear() || this.year.loaded()) this.loadClasses();
     });
-    this.loadClasses();
     window.addEventListener('afterprint', () => this.sf2Printing.set(false));
   }
 
   // ---------- Loading ----------
 
   private loadClasses(): void {
-    this.classesService.classes({}).subscribe({
+    this.classesService.classes({ academic_year: this.year.selectedYear() ?? '' }).subscribe({
       next: (response) => {
         this.classes.set(response.items);
         if (response.items.length === 0) {
@@ -404,8 +404,15 @@ export class TeacherAttendanceComponent {
     return this.genderTotalLabels[sex];
   }
 
+  // A TOTAL Per Day day cell: a number for a day that has happened, blank
+  // for a day after today (the API sends null there — the total is never
+  // computed for a date that has not happened yet).
+  protected totalCell(value: number | null | undefined): string {
+    return value == null ? '' : String(value);
+  }
+
   protected genderTotal(sex: 'Male' | 'Female'): {
-    present_by_day: Record<string, number>;
+    present_by_day: Record<string, number | null>;
     totals: { present: number; absent: number };
   } | null {
     const report = this.sf2();

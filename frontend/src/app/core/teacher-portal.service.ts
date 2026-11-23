@@ -75,8 +75,17 @@ export class TeacherPortalService {
     return this.http.get<{ items: Plan[] }>(`${environment.apiUrl}/plans/active`);
   }
 
-  dashboard(): Observable<TeacherDashboard> {
-    return this.http.get<TeacherDashboard>(`${this.api}/dashboard`);
+  dashboard(academicYear?: string): Observable<TeacherDashboard> {
+    return this.http.get<TeacherDashboard>(`${this.api}/dashboard`, {
+      params: academicYear ? { academic_year: academicYear } : {},
+    });
+  }
+
+  // The years the top bar's AY filter offers, with the current year.
+  academicYears(): Observable<{ current_academic_year: string | null; academic_years: string[] }> {
+    return this.http.get<{ current_academic_year: string | null; academic_years: string[] }>(
+      `${this.api}/academic-years`,
+    );
   }
 
   // The teacher's classes today, for the sign-in panel.

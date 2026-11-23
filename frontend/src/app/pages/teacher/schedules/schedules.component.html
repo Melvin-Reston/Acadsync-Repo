@@ -4,8 +4,8 @@
     <h1 class="page-title">Schedules</h1>
     <p class="muted">
       Weekly timetable
-      @if (academicYear()) {
-        · AY {{ academicYear() }}
+      @if (year.selectedYear()) {
+        · AY {{ year.selectedYear() }}
       }
       @if (refreshedAt()) {
         · Refreshed {{ refreshedAt()!.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' }) }}

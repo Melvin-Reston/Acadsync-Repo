@@ -2,8 +2,8 @@
   <div class="hero-left">
     <span class="mono-label">
       Teacher workspace
-      @if (academicYear()) {
-        <span class="ay">Academic Year {{ academicYear() }}</span>
+      @if (year.selectedYear()) {
+        <span class="ay">Academic Year {{ year.selectedYear() }}</span>
       }
     </span>
     <h1>Classes <em>&amp;</em> Sections</h1>
@@ -83,17 +83,6 @@
             countSingular="grade"
             countPlural="grades"
             aria-label="Filter by grade"
-          />
-          <app-dropdown
-            class="filter"
-            [ngModel]="yearFilter()"
-            (ngModelChange)="yearFilter.set($event)"
-            [options]="yearOptions()"
-            placeholder="All years"
-            searchPlaceholder="Search years"
-            countSingular="year"
-            countPlural="years"
-            aria-label="Filter by school year"
           />
           <button type="button" class="btn btn-secondary" (click)="openSubjects()">Manage Subjects</button>
         </div>

@@ -421,13 +421,19 @@
     font-size: 10px;
     line-height: 1.35;
     /* The deped-form page has no margin (so the browser adds no
-       date/title/URL/page number); the form carries its own inset. */
+       date/title/URL/page number); the form carries its own inset. The
+       inset is the same 10mm on every side of every page: the padding
+       repeats on each fragment (box-decoration-break: clone), so the
+       bottom of one page and the top of the next keep the same margin
+       as the sides instead of touching the page edges. */
     padding: 10mm;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
   }
 
   .dp-title-center {
     text-align: center;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
   }
 
   .dp-title-center h2 {
@@ -445,7 +451,7 @@
     grid-template-columns: repeat(12, 1fr);
     column-gap: 16px;
     row-gap: 2px;
-    margin-bottom: 8px;
+    margin-bottom: 4px;
   }
 
   .dp-field {
@@ -490,12 +496,21 @@
     width: 100%;
     border-collapse: collapse;
     table-layout: fixed;
+    /* Tighter row leading in print only: the day cells hold single
+       marks, so the rows stay readable while the form keeps its 10mm
+       inset on every page and the footer stays on the second page for
+       a full class. */
+    line-height: 1.2;
   }
 
   .dp-table th,
   .dp-table td {
     border: 1px solid #000;
-    padding: 2px 3px;
+    /* 1px vertical padding (print only; the on-screen preview keeps its
+       own spacing): the day cells hold single marks, so the rows stay
+       readable while the form keeps its 10mm inset on every page and
+       the footer stays on the second page for a full class. */
+    padding: 1px 3px;
     text-align: center;
     overflow: hidden;
     white-space: nowrap;

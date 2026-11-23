@@ -13,20 +13,21 @@ export class ConsolidationService {
   private readonly http = inject(HttpClient);
   private readonly api = `${environment.apiUrl}/teacher`;
 
-  // The consolidated sheet for the teacher's advisory section and period.
-  // No period means the highest period that already has data, else the first period.
-  view(quarter?: number): Observable<ConsolidationView> {
+  // The consolidated sheet for the teacher's advisory section and period,
+  // for the year being viewed. No period means the highest period that
+  // already has data, else the first period.
+  view(quarter?: number, academicYear?: string): Observable<ConsolidationView> {
     return this.http.get<ConsolidationView>(`${this.api}/consolidation`, {
-      params: toParams({ quarter }),
+      params: toParams({ quarter, academic_year: academicYear ?? '' }),
     });
   }
 
   // The final grades across the year's periods: each subject's final grade
   // is the mean of its period grades, and the final GWA is the mean of the
   // final grades.
-  finals(): Observable<ConsolidationFinals & { scope: string }> {
+  finals(academicYear?: string): Observable<ConsolidationFinals & { scope: string }> {
     return this.http.get<ConsolidationFinals & { scope: string }>(`${this.api}/consolidation`, {
-      params: toParams({ scope: 'final' }),
+      params: toParams({ scope: 'final', academic_year: academicYear ?? '' }),
     });
   }
 
@@ -39,10 +40,10 @@ export class ConsolidationService {
   }
 
   // Downloads the consolidated sheet as a CSV file.
-  exportCsv(quarter: number, filename: string): void {
+  exportCsv(quarter: number, filename: string, academicYear?: string): void {
     this.http
       .get(`${this.api}/consolidation`, {
-        params: toParams({ quarter, format: 'csv' }),
+        params: toParams({ quarter, academic_year: academicYear ?? '', format: 'csv' }),
         responseType: 'blob',
       })
       .subscribe({
@@ -51,10 +52,10 @@ export class ConsolidationService {
   }
 
   // Downloads the final grades across the year's periods as a CSV file.
-  exportFinalsCsv(filename: string): void {
+  exportFinalsCsv(filename: string, academicYear?: string): void {
     this.http
       .get(`${this.api}/consolidation`, {
-        params: toParams({ scope: 'final', format: 'csv' }),
+        params: toParams({ scope: 'final', academic_year: academicYear ?? '', format: 'csv' }),
         responseType: 'blob',
       })
       .subscribe({
@@ -67,17 +68,21 @@ export class ConsolidationService {
   // account, then uploads the term grades as a CSV. Grades are sent as
   // JSON parsed from the file; the backend re-validates every row.
 
-  listManualSubjects(): Observable<{ manual_subjects: ManualSubject[] }> {
-    return this.http.get<{ manual_subjects: ManualSubject[] }>(`${this.api}/consolidation/manual-subjects`);
+  listManualSubjects(academicYear?: string): Observable<{ manual_subjects: ManualSubject[] }> {
+    return this.http.get<{ manual_subjects: ManualSubject[] }>(`${this.api}/consolidation/manual-subjects`, {
+      params: toParams({ academic_year: academicYear ?? '' }),
+    });
   }
 
   createManualSubject(
     subjectName: string,
     teacherName: string,
+    academicYear?: string,
   ): Observable<{ manual_subject: ManualSubject }> {
     return this.http.post<{ manual_subject: ManualSubject }>(`${this.api}/consolidation/manual-subjects`, {
       subject_name: subjectName,
       teacher_name: teacherName,
+      academic_year: academicYear ?? '',
     });
   }
 

@@ -876,10 +876,17 @@ async function deleteMeeting(req, res) {
 
 // One week of the teacher's meetings, with a date on each meeting so the grid can
 // show it. Meetings repeat every week; only the dates change from week to week.
-async function weekMeetings(teacherId, weekStart) {
+// With a year, only that year's classes show — the timetable for a past year.
+async function weekMeetings(teacherId, weekStart, academicYear) {
+  const where = ['c.teacher_id = $1'];
+  const params = [teacherId];
+  if (academicYear) {
+    params.push(academicYear);
+    where.push(`c.academic_year = $${params.length}`);
+  }
   const result = await db.query(
-    `${MEETING_SELECT} WHERE c.teacher_id = $1 ORDER BY m.day_of_week, m.start_time, s.name, c.section_name, m.id`,
-    [teacherId]
+    `${MEETING_SELECT} WHERE ${where.join(' AND ')} ORDER BY m.day_of_week, m.start_time, s.name, c.section_name, m.id`,
+    params
   );
   return result.rows.map((meeting) => ({
     ...meeting,
@@ -890,11 +897,11 @@ async function weekMeetings(teacherId, weekStart) {
 
 // GET /api/teacher/schedules?week_start=&format=  (JSON, or format=csv to download)
 async function getSchedules(req, res) {
-  const { week_start, format } = req.valid.query;
+  const { week_start, academic_year, format } = req.valid.query;
   const today = manilaParts().date;
   const weekStart = mondayOf(week_start || today);
   const weekEnd = addDays(weekStart, 4);
-  const meetings = await weekMeetings(req.teacher.id, weekStart);
+  const meetings = await weekMeetings(req.teacher.id, weekStart, academic_year);
 
   if (format === 'csv') {
     sendCsv(
@@ -936,10 +943,14 @@ async function fetchTodayClasses(teacherId) {
   const weekday = new Date(`${date}T00:00:00Z`).getUTCDay(); // 0 is Sunday
   if (weekday === 0 || weekday === 6) return [];
 
+  // Today means the current year only: a past year's class that met on
+  // this weekday is not a class today.
+  const year = await db.query("SELECT value FROM settings WHERE key = 'academic_year'");
+  const currentYear = year.rows[0] ? year.rows[0].value : null;
   const result = await db.query(
-    `${MEETING_SELECT} WHERE c.teacher_id = $1 AND m.day_of_week = $2 AND m.end_time > $3::time
+    `${MEETING_SELECT} WHERE c.teacher_id = $1 AND c.academic_year = $2 AND m.day_of_week = $3 AND m.end_time > $4::time
      ORDER BY m.start_time, m.id`,
-    [teacherId, weekday, time]
+    [teacherId, currentYear, weekday, time]
   );
 
   const items = [];

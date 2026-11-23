@@ -122,7 +122,9 @@ const SF2_MONTHS = [
 // column per school day (a Monday–Friday day inside the teacher's first
 // and last day of classes that is not a holiday they entered), X = Absent,
 // L = Late, E = Excused, blank = Present. Marks come only from the saved
-// daily roll — never invented.
+// daily roll — never invented. A TOTAL row's day cell is null (blank) for
+// a day after today, and the footer summary counts only school days up to
+// today: totals are never computed for dates that have not happened yet.
 // "Today" is the current date in the school timezone (APP_TIMEZONE,
 // Asia/Manila by default), worked out here on the server. A day after today
 // has no value and counts in neither total. A day today or earlier with no
@@ -177,8 +179,29 @@ async function getSf2(req, res) {
     }
   }
   const isSchoolDay = (day) => {
-    if (calendar.classes_start_date && day.date < calendar.classes_start_date) return false;
-    if (calendar.classes_end_date && day.date > calendar.classes_end_date) return false;
+    // The stored first/last day belong to the current school year. They
+    // only narrow a month of that same year: a past year's SF2 month must
+    // not be emptied by this year's opening date (fix 13). A holiday is a
+    // date, so it narrows any year it falls in.
+    const monthSchoolYear = monthNumber >= 6 ? year : year - 1;
+    const schoolYearOf = (dateText) => {
+      const [y, m] = dateText.split('-').map(Number);
+      return m >= 6 ? y : y - 1;
+    };
+    if (
+      calendar.classes_start_date &&
+      schoolYearOf(calendar.classes_start_date) === monthSchoolYear &&
+      day.date < calendar.classes_start_date
+    ) {
+      return false;
+    }
+    if (
+      calendar.classes_end_date &&
+      schoolYearOf(calendar.classes_end_date) === monthSchoolYear &&
+      day.date > calendar.classes_end_date
+    ) {
+      return false;
+    }
     if (holidayByDate.has(day.date)) return false;
     return true;
   };
@@ -264,19 +287,22 @@ async function getSf2(req, res) {
   });
 
   // A TOTAL row for a list of learners: a day cell counts the learners
-  // with a saved Present or Late mark that day (a day after today has no
-  // mark and counts nobody; an unmarked past day is X and counts nobody).
-  // The month totals sum the learners' own totals. The Combined TOTAL Per
-  // Day row covers all learners; each gender row covers only its own group.
+  // with a saved Present or Late mark that day; an unmarked past day is X
+  // and counts nobody. A day after today is not computed at all: its cell
+  // is null so the form shows it blank, never 0. The month totals sum
+  // only the computed days. The Combined TOTAL Per Day row covers all
+  // learners; each gender row covers only its own group.
   const totalsFor = (list) => {
     const presentByDay = {};
     for (const day of days) {
-      presentByDay[day.date] = list.filter((row) => row.marks[day.date] === 'present' || row.marks[day.date] === 'late').length;
+      presentByDay[day.date] = day.date > today
+        ? null
+        : list.filter((row) => row.marks[day.date] === 'present' || row.marks[day.date] === 'late').length;
     }
     return {
       present_by_day: presentByDay,
       totals: {
-        present: Object.values(presentByDay).reduce((sum, count) => sum + count, 0),
+        present: Object.values(presentByDay).reduce((sum, count) => sum + (count ?? 0), 0),
         absent: list.reduce((sum, row) => sum + row.totals.absent, 0),
       },
     };
@@ -292,22 +318,25 @@ async function getSf2(req, res) {
 
   // The footer summary table, per the form's Guidelines formulas.
   // Average Daily Attendance = total present-days / number of school days
-  // in the month; Percentage of Attendance = Average Daily Attendance /
-  // Registered Learners x 100. Both to one decimal. A learner counts toward
-  // the 5-consecutive-days figure once when 5 or more school-day columns in
+  // so far in the month: days after today are never counted, so a
+  // mid-month form is not dragged down by dates that have not happened.
+  // Percentage of Attendance = Average Daily Attendance / Registered
+  // Learners x 100. Both to one decimal. A learner counts toward the
+  // 5-consecutive-days figure once when 5 or more school-day columns in
   // a row are X in a row (weekends are not columns, so Friday-to-Monday
   // runs are consecutive). A null percentage means there is nothing to
   // divide by, and the form leaves it blank.
+  const elapsedDays = days.filter((day) => day.date <= today);
   const round1 = (value) => Math.round(value * 10) / 10;
   const summarize = (list) => {
     const registered = list.length;
     const totalPresent = list.reduce((sum, row) => sum + row.totals.present, 0);
-    const average = days.length === 0 ? 0 : totalPresent / days.length;
+    const average = elapsedDays.length === 0 ? 0 : totalPresent / elapsedDays.length;
     let absentFiveDays = 0;
     for (const row of list) {
       let run = 0;
       let hit = false;
-      for (const day of days) {
+      for (const day of elapsedDays) {
         if (row.marks[day.date] === 'absent') {
           run += 1;
           if (run >= 5) hit = true;
@@ -325,7 +354,7 @@ async function getSf2(req, res) {
     };
   };
   const summary = {
-    days_of_classes: days.length,
+    days_of_classes: elapsedDays.length,
     male: summarize(males),
     female: summarize(females),
     total: summarize(rows),

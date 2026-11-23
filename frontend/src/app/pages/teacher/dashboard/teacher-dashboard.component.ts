@@ -1,7 +1,7 @@
 // Teacher Dashboard: subscription, adviser assignment, announcements, and the
 // teacher's classes today (Batch 2). Grades and attendance arrive in later batches.
 import { DatePipe } from '@angular/common';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
@@ -17,6 +17,7 @@ import { FieldErrors, Plan, TeacherDashboard, TeacherHoliday } from '../../../co
 import { TeacherPortalService } from '../../../core/teacher-portal.service';
 import { TeacherAuthService } from '../../../core/teacher-auth.service';
 import { ToastService } from '../../../core/toast.service';
+import { ViewingYearService } from '../../../core/viewing-year.service';
 import { DropdownComponent, DropdownOption } from '../../../shared/dropdown.component';
 import { IconComponent } from '../../../shared/icon.component';
 
@@ -30,6 +31,7 @@ export class TeacherDashboardComponent {
   private readonly portal = inject(TeacherPortalService);
   private readonly auth = inject(TeacherAuthService);
   private readonly toast = inject(ToastService);
+  protected readonly year = inject(ViewingYearService);
 
   protected readonly data = signal<TeacherDashboard | null>(null);
   protected readonly loading = signal(true);
@@ -85,12 +87,18 @@ export class TeacherDashboardComponent {
   protected readonly consolidation = computed(() => this.data()?.consolidation ?? null);
 
   constructor() {
-    this.load();
+    // Reload the counts, today's classes and consolidation card whenever
+    // the year in the top bar changes.
+    effect(() => {
+      const viewing = this.year.selectedYear();
+      if (viewing) this.load(viewing);
+      else if (this.year.loaded()) this.load();
+    });
   }
 
-  protected load(): void {
+  protected load(academicYear?: string): void {
     this.loading.set(true);
-    this.portal.dashboard().subscribe({
+    this.portal.dashboard(academicYear ?? this.year.selectedYear() ?? undefined).subscribe({
       next: (dashboard) => {
         this.loading.set(false);
         this.data.set(dashboard);

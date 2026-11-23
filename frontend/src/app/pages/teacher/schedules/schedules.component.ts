@@ -2,13 +2,13 @@
 // room occupancy — all from the teacher's real meetings. Other teachers are never shown.
 // A meeting can be added for one day, or repeated for the whole week (Monday–Friday);
 // a day that would conflict is skipped and reported, never blocking the rest.
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Observable } from 'rxjs';
 import { errorMessage, fieldErrors, manilaNow, time12 } from '../../../core/helpers';
 import { ClassItem, FieldErrors, Meeting, ScheduleMeeting, ScheduleResponse } from '../../../core/models';
 import { ClassesService, MeetingCreateResult, MeetingForm } from '../../../core/classes.service';
-import { TeacherPortalService } from '../../../core/teacher-portal.service';
+import { ViewingYearService } from '../../../core/viewing-year.service';
 import { ToastService } from '../../../core/toast.service';
 import { IconComponent } from '../../../shared/icon.component';
 import { DropdownComponent, DropdownOption } from '../../../shared/dropdown.component';
@@ -42,12 +42,11 @@ function parseIso(value: string): Date {
 })
 export class TeacherSchedulesComponent {
   private readonly classesService = inject(ClassesService);
-  private readonly portal = inject(TeacherPortalService);
+  protected readonly year = inject(ViewingYearService);
   private readonly toast = inject(ToastService);
 
   protected readonly schedule = signal<ScheduleResponse | null>(null);
   protected readonly classes = signal<ClassItem[]>([]);
-  protected readonly academicYear = signal<string | null>(null);
   protected readonly loading = signal(true);
   protected readonly error = signal('');
   protected readonly saving = signal(false);
@@ -153,16 +152,14 @@ export class TeacherSchedulesComponent {
   });
 
   constructor() {
-    this.portal.me().subscribe({
-      next: (response) => this.academicYear.set(response.academic_year),
-      error: () => undefined,
+    effect(() => {
+      if (this.year.selectedYear() || this.year.loaded()) this.load();
     });
-    this.load();
   }
 
   protected load(): void {
     this.loading.set(true);
-    this.classesService.schedule(this.weekStart()).subscribe({
+    this.classesService.schedule(this.weekStart(), this.year.selectedYear() ?? undefined).subscribe({
       next: (response) => {
         this.schedule.set(response);
         this.loading.set(false);
@@ -175,7 +172,7 @@ export class TeacherSchedulesComponent {
         this.error.set(errorMessage(error));
       },
     });
-    this.classesService.classes({}).subscribe({
+    this.classesService.classes({ academic_year: this.year.selectedYear() ?? '' }).subscribe({
       next: (response) => this.classes.set(response.items),
       error: () => undefined,
     });
@@ -207,7 +204,7 @@ export class TeacherSchedulesComponent {
   }
 
   protected exportCsv(): void {
-    this.classesService.exportScheduleCsv(this.weekStart());
+    this.classesService.exportScheduleCsv(this.weekStart(), this.year.selectedYear() ?? undefined);
   }
 
   protected meetingsAt(day: string, hour: number): ScheduleMeeting[] {

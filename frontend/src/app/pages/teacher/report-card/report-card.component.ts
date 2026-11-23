@@ -5,11 +5,12 @@
 // only thing typed on the card, and the only thing saved from this page.
 // The card itself is strictly black and white, on plain white paper, in any
 // mode; the controls around it follow the warm paper system.
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ReportCardService } from '../../../core/report-card.service';
 import { ToastService } from '../../../core/toast.service';
+import { ViewingYearService } from '../../../core/viewing-year.service';
 import { errorMessage } from '../../../core/helpers';
 import { ReportCardLearner, ReportCardView } from '../../../core/models';
 import { DropdownComponent, DropdownOption } from '../../../shared/dropdown.component';
@@ -26,6 +27,7 @@ type CardView = 'front' | 'back' | 'both';
 })
 export class TeacherReportCardComponent {
   private readonly reportCard = inject(ReportCardService);
+  protected readonly year = inject(ViewingYearService);
   private readonly toast = inject(ToastService);
 
   protected readonly view = signal<ReportCardView | null>(null);
@@ -81,12 +83,18 @@ export class TeacherReportCardComponent {
   });
 
   constructor() {
-    this.load();
+    effect(() => {
+      if (this.year.selectedYear() || this.year.loaded()) {
+        // A new year has its own roster: start from its first learner.
+        this.selectedLearnerId.set('');
+        this.load();
+      }
+    });
   }
 
   protected load(): void {
     this.loading.set(true);
-    this.reportCard.view().subscribe({
+    this.reportCard.view(this.year.selectedYear() ?? undefined).subscribe({
       next: (view) => {
         this.view.set(view);
         if (view.learners.length > 0 && !this.selectedLearnerId()) {
@@ -118,6 +126,7 @@ export class TeacherReportCardComponent {
         has_advisory: false,
         adviser: { grade: 0, section: '', name: '' },
         school_name: '',
+        school_head_name: '',
         academic_year: '',
         grading: {
           code: 'do015_adjusted',
@@ -199,7 +208,7 @@ export class TeacherReportCardComponent {
     const key = `${learner.learner_id}:${period}`;
     this.saving.set(key);
     const text = this.draft(learner.learner_id, period);
-    this.reportCard.saveComment(learner.learner_id, period, text).subscribe({
+    this.reportCard.saveComment(learner.learner_id, period, text, this.year.selectedYear() ?? undefined).subscribe({
       next: (response) => {
         this.saving.set('');
         // The saved comment is what the card prints from here on.

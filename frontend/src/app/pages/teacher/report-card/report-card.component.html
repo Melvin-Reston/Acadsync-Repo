@@ -122,20 +122,20 @@
             </div>
 
             <div class="info" aria-label="Learner information">
-              <div class="info-row full name-row"><label>Name</label><span>{{ learnerDisplayName(learner) }}</span></div>
-              <div class="info-row"><label>LRN</label><span>{{ learner.learner_id }}</span></div>
-              <div class="info-row"><label>Age</label><span class="blank">&nbsp;</span></div>
-              <div class="info-row"><label>Sex</label><span>{{ learner.sex }}</span></div>
-              <div class="info-row"><label>Grade</label><span>{{ view()!.adviser.grade }}</span></div>
-              <div class="info-row"><label>Section</label><span>{{ view()!.adviser.section }}</span></div>
-              <div class="info-row"><label>Track (SHS only)</label><span class="blank">&nbsp;</span></div>
+              <div class="info-row full name-row"><label>Name:</label><span>{{ learnerDisplayName(learner) }}</span></div>
+              <div class="info-row col-a"><label>LRN:</label><span>{{ learner.learner_id }}</span></div>
+              <div class="info-row"><label>Age:</label><span class="blank">&nbsp;</span></div>
+              <div class="info-row"><label>Sex:</label><span>{{ learner.sex }}</span></div>
+              <div class="info-row col-a"><label>Grade:</label><span>{{ view()!.adviser.grade }}</span></div>
+              <div class="info-row"><label>Section:</label><span>{{ view()!.adviser.section }}</span></div>
+              <div class="info-row"><label>Track (SHS only):</label><span class="blank">&nbsp;</span></div>
             </div>
 
             <p class="letter"><b>Dear Parents,</b> This Performance Report presents your child’s progress and achievement in the different learning areas. The school welcomes you to reach out should you wish to know more about your child’s learning and performance.</p>
 
             <div class="sigs">
-              <div class="sig"><div class="sig-line"></div><span>School Head</span><strong>Signature over printed name</strong></div>
-              <div class="sig"><div class="sig-line"></div><span>Adviser</span><strong>{{ view()!.adviser.name }}</strong></div>
+              <div class="sig"><strong class="sig-name">{{ view()!.school_head_name }}</strong><div class="sig-line"></div><span>School Head</span><strong>Signature over printed name</strong></div>
+              <div class="sig"><strong class="sig-name">{{ view()!.adviser.name }}</strong><div class="sig-line"></div><span>Adviser</span><strong>Signature over printed name</strong></div>
             </div>
 
             <div class="section-head"><h3>Learning Progress &amp; Achievement</h3><span>Final grade per {{ view()!.grading.period_label.toLowerCase() }}</span></div>
@@ -298,8 +298,8 @@
               </div>
               <p class="cert-approved">Approved:</p>
               <div class="cert-sigs">
-                <div class="sig"><div class="sig-line"></div><span>Adviser</span><strong>Signature over printed name</strong></div>
-                <div class="sig"><div class="sig-line"></div><span>School Head</span><strong>Signature over printed name</strong></div>
+                <div class="sig"><strong class="sig-name">{{ view()!.adviser.name }}</strong><div class="sig-line"></div><span>Adviser</span><strong>Signature over printed name</strong></div>
+                <div class="sig"><strong class="sig-name">{{ view()!.school_head_name }}</strong><div class="sig-line"></div><span>School Head</span><strong>Signature over printed name</strong></div>
               </div>
             </div>
 
@@ -310,7 +310,7 @@
                 <div class="cert-field"><label>Date</label><span></span></div>
               </div>
               <div class="cert-sigs single">
-                <div class="sig"><div class="sig-line"></div><span>School Head</span></div>
+                <div class="sig"><strong class="sig-name">{{ view()!.school_head_name }}</strong><div class="sig-line"></div><span>School Head</span></div>
               </div>
             </div>
 

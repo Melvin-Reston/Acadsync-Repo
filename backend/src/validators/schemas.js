@@ -387,6 +387,14 @@ const academicYear = z
   .regex(/^\d{4}-\d{4}$/, 'Use the format 2026-2027.')
   .refine((value) => Number(value.slice(5)) === Number(value.slice(0, 4)) + 1, 'The second year must be the year after the first.');
 
+// The year a teacher is viewing (Batch 8 fix 13): an optional query or body
+// value in the same format. Empty means the current year, set by the admin;
+// a bad value is refused instead of silently showing the current year.
+const optionalAcademicYear = z.preprocess(
+  (value) => (value === '' ? undefined : value),
+  academicYear.optional()
+);
+
 // The teacher's own subject library. A subject is tied to one grade level.
 // The group decides the default weights under DO 015: core 20/50/30,
 // MAPEH and EPP/TLE 20/60/20. Under DO 8 the group does not change the weights.
@@ -493,6 +501,7 @@ const meetingListSchema = z.object({
 // back to the Monday. format=csv downloads the week's timetable.
 const scheduleQuerySchema = z.object({
   week_start: optionalDate,
+  academic_year: optionalAcademicYear,
   format: z.enum(['', 'json', 'csv']).optional().default(''),
 });
 
@@ -636,6 +645,7 @@ const gradeSubmitSchema = z.object({
 
 const consolidationQuerySchema = z.object({
   quarter: quarterParam,
+  academic_year: optionalAcademicYear,
   format: z.enum(['', 'json', 'csv']).optional().default(''),
   // The quarter view, or the final grades across the year's periods.
   scope: z.enum(['', 'quarter', 'final']).optional().default(''),
@@ -653,6 +663,8 @@ const remindSchema = z.object({
 const manualSubjectCreateSchema = z.object({
   subject_name: text('Subject name', 120),
   teacher_name: text('Subject teacher name', 120),
+  // The year the manual subject belongs to. Empty means the current year.
+  academic_year: optionalAcademicYear,
 });
 
 const manualSubjectUpdateSchema = z
@@ -691,7 +703,18 @@ const reportCardCommentSchema = z.object({
   learner_id: text('Learner', 50),
   period: wholeNumber('Period', 1, 4),
   comment: z.string({ error: 'Comment is required.' }).trim().max(1000, 'A comment must be 1000 characters or fewer.'),
+  // The year the comment belongs to. Empty means the current year, so a
+  // comment typed while viewing a past year stays on that year's card.
+  academic_year: optionalAcademicYear,
 });
+
+// The year a teacher is viewing, as a query value (dashboard, report card,
+// manual-subject list). Empty means the current year.
+const viewingYearQuerySchema = z.object({
+  academic_year: optionalAcademicYear,
+});
+
+const reportCardQuerySchema = viewingYearQuerySchema;
 
 module.exports = {
   loginSchema,
@@ -763,4 +786,6 @@ module.exports = {
   manualSubjectUpdateSchema,
   manualGradesSchema,
   reportCardCommentSchema,
+  viewingYearQuerySchema,
+  reportCardQuerySchema,
 };

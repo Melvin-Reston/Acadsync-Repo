@@ -297,6 +297,7 @@ describe('Report card data', () => {
     assert.equal(cards.adviser.section, 'Luke');
     assert.equal(cards.adviser.name, 'Reston, Melvin');
     assert.equal(cards.school_name, 'Report Card Test School');
+    assert.equal(cards.school_head_name, 'Test Principal');
     assert.equal(cards.academic_year, '2026-2027');
     assert.equal(cards.grading.code, 'do015_adjusted');
     assert.deepEqual(cards.grading.periods, [1, 2, 3]);

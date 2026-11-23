@@ -14,8 +14,10 @@ export class ReportCardService {
   private readonly api = `${environment.apiUrl}/teacher`;
 
   // The cards for the teacher's advisory section: every learner, in roster order.
-  view(): Observable<ReportCardView> {
-    return this.http.get<ReportCardView>(`${this.api}/report-card`);
+  view(academicYear?: string): Observable<ReportCardView> {
+    return this.http.get<ReportCardView>(`${this.api}/report-card`, {
+      params: academicYear ? { academic_year: academicYear } : {},
+    });
   }
 
   // Saves one comment. A blank comment clears the saved one.
@@ -23,10 +25,11 @@ export class ReportCardService {
     learnerId: string,
     period: number,
     comment: string,
+    academicYear?: string,
   ): Observable<{ message: string; learner_id: string; period: number; comment: string | null }> {
     return this.http.put<{ message: string; learner_id: string; period: number; comment: string | null }>(
       `${this.api}/report-card/comments`,
-      { learner_id: learnerId, period, comment },
+      { learner_id: learnerId, period, comment, academic_year: academicYear ?? '' },
     );
   }
 }

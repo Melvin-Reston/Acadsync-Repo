@@ -20,6 +20,7 @@ const {
   sectionRoster,
   computeSubjectPeriodGrades,
   academicYear,
+  resolveViewingYear,
   loadManualSubjects,
   attachManualSubjects,
   manualPeriodGrades,
@@ -55,16 +56,19 @@ function dayStatus(statuses) {
 // printed card, the subjects with filed grades, each learner's period
 // grades, final grades and general average, the attendance months, and the
 // saved teacher's comments.
-async function buildReportCards(client, adviser) {
-  const year = await academicYear(client);
+async function buildReportCards(client, adviser, requestedYear) {
+  const year = requestedYear || (await academicYear(client));
   const profile = await grading.getGradingProfile(client, year);
   const classes = await sectionClasses(client, adviser, year);
   const classIds = classes.map((klass) => klass.id);
   const roster = await sectionRoster(client, adviser, classIds);
   const months = schoolYearMonths(year);
 
-  const school = await client.query('SELECT name FROM schools WHERE id = $1', [adviser.school_id]);
+  const school = await client.query('SELECT name, principal_contact FROM schools WHERE id = $1', [adviser.school_id]);
   const schoolName = school.rows[0] ? school.rows[0].name : '';
+  // The School Head's printed name comes from the school's own record
+  // (its Principal / contact field), not from the teacher's profile.
+  const schoolHeadName = school.rows[0] ? school.rows[0].principal_contact || '' : '';
 
   // Every filing for the section's classes this year, by class and period.
   const submissions = new Map(); // class id -> Map(period -> { submitted_at, profile })
@@ -266,6 +270,7 @@ async function buildReportCards(client, adviser) {
       name: `${adviser.last_name}, ${adviser.first_name}`,
     },
     school_name: schoolName,
+    school_head_name: schoolHeadName,
     academic_year: year,
     grading: grading.gradingInfo(profile, year),
     descriptors: deped.descriptorTable(profile.code),
@@ -278,7 +283,7 @@ async function buildReportCards(client, adviser) {
   };
 }
 
-// GET /api/teacher/report-card — the cards for the adviser's section.
+// GET /api/teacher/report-card?academic_year= — the cards for the adviser's section, for the year viewed.
 async function getReportCards(req, res) {
   const adviser = await adviserOf(db, req.teacher.id);
   if (!adviser) {
@@ -287,7 +292,7 @@ async function getReportCards(req, res) {
       errors: { advisory_section: 'Choose an advisory grade and section on the Dashboard.' },
     });
   }
-  res.json(await buildReportCards(db, adviser));
+  res.json(await buildReportCards(db, adviser, await resolveViewingYear(req)));
 }
 
 // PUT /api/teacher/report-card/comments  { learner_id, period, comment }
@@ -303,7 +308,9 @@ async function saveComment(req, res) {
       errors: { advisory_section: 'Choose an advisory grade and section on the Dashboard.' },
     });
   }
-  const year = await academicYear();
+  // The comment belongs to the year being viewed, sent in the body, so a
+  // past year's comment never overwrites this year's.
+  const year = req.valid.body.academic_year || (await academicYear());
   const profile = await grading.getGradingProfile(db, year);
   if (!profile.periods.includes(period)) {
     throw badRequest(

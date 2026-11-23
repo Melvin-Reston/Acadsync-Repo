@@ -240,4 +240,41 @@
   .sig-block {
     break-inside: avoid;
   }
+
+  /* Print-only tightening (the preview keeps the roomier spacing): the
+     footer follows the table on the same page, so its gaps are trimmed
+     just enough that the certification block stays on the second page
+     for a full class even with the 10mm inset on every page. */
+  .sf2-footer {
+    margin-top: 8px;
+  }
+
+  .sf2-cert {
+    margin-top: 8px;
+  }
+
+  .sf2-cert p {
+    margin-bottom: 6px;
+  }
+
+  .sig-block {
+    margin-bottom: 6px;
+  }
+
+  .sf2-summary-table th,
+  .sf2-summary-table td {
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+
+  .sf2-guidelines li {
+    margin-bottom: 3px;
+  }
+
+  /* No trailing space after the last signature block: it is the last
+     thing on the form, and any height after it spills onto a blank
+     extra page when the form fills its pages exactly. */
+  .sf2-cert > :last-child {
+    margin-bottom: 0;
+  }
 }
