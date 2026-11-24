@@ -33,6 +33,11 @@ export class TeacherReportCardComponent {
   protected readonly view = signal<ReportCardView | null>(null);
   protected readonly loading = signal(true);
   protected readonly error = signal('');
+  // The academic year a load is already in flight for: the viewing-year
+  // effect can fire twice for the same year on first render, and loading
+  // the whole advisory section twice is wasted work. The guard clears
+  // when the load settles.
+  private loadingYear: string | null = null;
 
   protected readonly scope = signal<Scope>('single');
   protected readonly selectedLearnerId = signal<string>('');
@@ -93,9 +98,13 @@ export class TeacherReportCardComponent {
   }
 
   protected load(): void {
+    const yearKey = this.year.selectedYear() ?? '';
+    if (yearKey === this.loadingYear) return;
+    this.loadingYear = yearKey;
     this.loading.set(true);
     this.reportCard.view(this.year.selectedYear() ?? undefined).subscribe({
       next: (view) => {
+        this.loadingYear = null;
         this.view.set(view);
         if (view.learners.length > 0 && !this.selectedLearnerId()) {
           this.selectedLearnerId.set(view.learners[0].learner_id);
@@ -111,6 +120,7 @@ export class TeacherReportCardComponent {
         this.loading.set(false);
       },
       error: (error) => {
+        this.loadingYear = null;
         this.loading.set(false);
         this.handleLoadError(error);
       },

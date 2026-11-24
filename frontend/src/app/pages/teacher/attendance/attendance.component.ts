@@ -7,6 +7,7 @@
 import {
   Component,
   computed,
+  DestroyRef,
   effect,
   inject,
   signal,
@@ -87,6 +88,11 @@ export class TeacherAttendanceComponent {
   protected readonly year = inject(ViewingYearService);
   protected readonly roll = signal<AttendanceRoll | null>(null);
   protected readonly loading = signal(true);
+  // The academic year a class-list load is already in flight for: the
+  // viewing-year effect can fire twice for the same year on first render,
+  // and loading the classes (and the roll) twice is wasted work. The guard
+  // clears when the load settles.
+  private loadingClassesYear: string | null = null;
   protected readonly error = signal('');
   protected readonly saving = signal(false);
 
@@ -244,14 +250,20 @@ export class TeacherAttendanceComponent {
     effect(() => {
       if (this.year.selectedYear() || this.year.loaded()) this.loadClasses();
     });
-    window.addEventListener('afterprint', () => this.sf2Printing.set(false));
+    const afterPrint = () => this.sf2Printing.set(false);
+    window.addEventListener('afterprint', afterPrint);
+    inject(DestroyRef).onDestroy(() => window.removeEventListener('afterprint', afterPrint));
   }
 
   // ---------- Loading ----------
 
   private loadClasses(): void {
+    const yearKey = this.year.selectedYear() ?? '';
+    if (yearKey === this.loadingClassesYear) return;
+    this.loadingClassesYear = yearKey;
     this.classesService.classes({ academic_year: this.year.selectedYear() ?? '' }).subscribe({
       next: (response) => {
+        this.loadingClassesYear = null;
         this.classes.set(response.items);
         if (response.items.length === 0) {
           this.loading.set(false);
@@ -273,6 +285,7 @@ export class TeacherAttendanceComponent {
         });
       },
       error: (error) => {
+        this.loadingClassesYear = null;
         this.loading.set(false);
         this.error.set(errorMessage(error));
       },
@@ -359,11 +372,50 @@ export class TeacherAttendanceComponent {
     window.setTimeout(() => window.print(), 60);
   }
 
+  // The SF2 rows, ready for the table: the display name, one mark letter
+  // per day (X = Absent, L = Late, E = Excused, blank = Present), and
+  // whether the row ends its gender group (the TOTAL Per Day row follows).
+  // Built once per report instead of re-deriving the name and every
+  // letter from the template for every cell on every change-detection run.
+  protected readonly sf2Rows = computed(() => {
+    const report = this.sf2();
+    if (!report) return [];
+    return report.learners.map((learner, index) => ({
+      learner,
+      displayName: `${learner.last_name}, ${learner.first_name}`.toUpperCase(),
+      letters: report.days.map((day) => {
+        const status = learner.marks[day.date];
+        if (status === 'absent') return 'X';
+        if (status === 'late') return 'L';
+        if (status === 'excused') return 'E';
+        return '';
+      }),
+      isLastOfGender:
+        index + 1 === report.learners.length || report.learners[index + 1].sex !== learner.sex,
+    }));
+  });
+
+  protected readonly savedNote = computed(() => {
+    const savedAt = this.savedAt();
+    const time = savedAt
+      ? new Date(savedAt).toLocaleTimeString('en-PH', {
+          timeZone: 'Asia/Manila',
+          hour: 'numeric',
+          minute: '2-digit',
+        })
+      : '';
+    if (this.dirty()) {
+      return savedAt ? `Unsaved changes · last saved ${time}` : 'Unsaved changes';
+    }
+    return savedAt ? `Saved ${time}` : 'Not saved yet';
+  });
+
   // The weekdays in the SF2 month that are not school days, as one line
   // for the preview only (the note carries .no-print, so the printed form
   // is unchanged): the ranges before the first day of classes and after
-  // the last day, and each holiday by name.
-  protected nonSchoolNote(): string {
+  // the last day, and each holiday by name. A computed, so the ranges are
+  // not rebuilt on every change-detection run.
+  protected readonly nonSchoolNote = computed(() => {
     const report = this.sf2();
     const days = report?.non_school_days ?? [];
     if (days.length === 0) return '';
@@ -383,18 +435,7 @@ export class TeacherAttendanceComponent {
     const after = days.filter((day) => day.reason === 'after_last_day');
     if (after.length > 0) parts.push(`${range(after)} — after last day of classes`);
     return `No classes: ${parts.join('; ')}.`;
-  }
-
-  // The mark letter on the SF2 form: X = Absent, L = Late, E = Excused,
-  // blank = Present. The API sends marks only for days today or earlier:
-  // a past day with no saved roll arrives as 'absent', and a future day
-  // arrives with no mark at all and stays blank.
-  protected markLetter(status: string | null | undefined): string {
-    if (status === 'absent') return 'X';
-    if (status === 'late') return 'L';
-    if (status === 'excused') return 'E';
-    return '';
-  }
+  });
 
   // The gender TOTAL Per Day row after a gender's last learner: the label
   // is verbatim from the DepEd form, and the row carries that gender's
@@ -422,17 +463,6 @@ export class TeacherAttendanceComponent {
     const report = this.sf2();
     if (!report) return null;
     return sex === 'Male' ? report.totals_by_gender.male : report.totals_by_gender.female;
-  }
-
-  protected isLastOfGender(index: number): boolean {
-    const learners = this.sf2()?.learners ?? [];
-    const learner = learners[index];
-    if (!learner) return false;
-    return index + 1 === learners.length || learners[index + 1].sex !== learner.sex;
-  }
-
-  protected sf2Name(learner: { first_name: string; last_name: string }): string {
-    return `${learner.last_name}, ${learner.first_name}`.toUpperCase();
   }
 
   // ---------- Marking ----------
@@ -507,23 +537,6 @@ export class TeacherAttendanceComponent {
     if (!klass || classId === '') return;
     const safe = (value: string) => value.replace(/[^A-Za-z0-9]+/g, '-').toLowerCase();
     this.attendance.exportCsv(classId, this.date(), `attendance-${safe(klass.subject_name)}-${safe(klass.section_name)}-${this.date()}.csv`);
-  }
-
-  protected savedNote(): string {
-    if (this.dirty()) {
-      return this.savedAt() ? `Unsaved changes · last saved ${this.savedTime()}` : 'Unsaved changes';
-    }
-    return this.savedAt() ? `Saved ${this.savedTime()}` : 'Not saved yet';
-  }
-
-  private savedTime(): string {
-    const savedAt = this.savedAt();
-    if (!savedAt) return '';
-    return new Date(savedAt).toLocaleTimeString('en-PH', {
-      timeZone: 'Asia/Manila',
-      hour: 'numeric',
-      minute: '2-digit',
-    });
   }
 
   protected resetFilter(): void {

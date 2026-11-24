@@ -75,6 +75,14 @@ export class TeacherGradesComponent {
   protected readonly highlightBelow = signal(false);
   protected readonly sortByRank = signal(false);
 
+  // Phones show per-learner cards and desktops show the encoding table;
+  // the stylesheet switches at 760px. Rendering only the layout in use
+  // halves the inputs on the page (a 50-learner class has ~450 score
+  // boxes in each layout), instead of building both and hiding one.
+  protected readonly isNarrow = signal(
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches,
+  );
+
   // Weights editing (three numbers that must add up to 100).
   protected readonly weightsEditing = signal(false);
   protected readonly weightsDraft = signal({ ww: 20, pt: 50, ex: 30 });
@@ -396,7 +404,15 @@ export class TeacherGradesComponent {
     inject(DestroyRef).onDestroy(() => window.removeEventListener('beforeunload', beforeUnload));
     // A print section renders only for the form being printed; clear it
     // once the print dialog closes so the next print starts clean.
-    window.addEventListener('afterprint', () => this.printTarget.set(null));
+    const afterPrint = () => this.printTarget.set(null);
+    window.addEventListener('afterprint', afterPrint);
+    inject(DestroyRef).onDestroy(() => window.removeEventListener('afterprint', afterPrint));
+    // Follow the same 760px breakpoint the stylesheet uses, so resizing
+    // across it swaps the table for the cards (and back) without a reload.
+    const narrowQuery = window.matchMedia('(max-width: 760px)');
+    const onNarrowChange = (event: MediaQueryListEvent) => this.isNarrow.set(event.matches);
+    narrowQuery.addEventListener('change', onNarrowChange);
+    inject(DestroyRef).onDestroy(() => narrowQuery.removeEventListener('change', onNarrowChange));
   }
 
   // ---------- Loading ----------

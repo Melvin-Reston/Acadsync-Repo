@@ -36,6 +36,34 @@
   font-weight: 600;
 }
 
+/* The Now/Next pill and the 3-dots actions at the right end of an agenda row. */
+.agenda-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The 3-dots actions at the top-right of a meeting block in the grid,
+   faculty matrix and room occupancy tables. The button is a touch
+   smaller than the row menus so the blocks stay compact. */
+.meeting-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.meeting-top > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.meeting-block .menu-btn {
+  width: 30px;
+  height: 30px;
+  flex: none;
+}
+
 .meeting-block {
   display: flex;
   flex-direction: column;

@@ -222,6 +222,12 @@ export class TeacherConsolidationComponent {
   protected readonly view = signal<ConsolidationView | null>(null);
   protected readonly finals = signal<ConsolidationFinals | null>(null);
   protected readonly loading = signal(true);
+  // The academic year a load is already in flight for: the viewing-year
+  // effect can fire twice for the same year on first render, and loading
+  // the view (plus finals and manual subjects) twice is wasted work. The
+  // guard clears when the load settles, so quarter changes and later
+  // saves still reload.
+  private loadingYear: string | null = null;
   protected readonly error = signal('');
   protected readonly refreshing = signal(false);
 
@@ -318,11 +324,15 @@ export class TeacherConsolidationComponent {
   }
 
   protected load(quarter?: number): void {
+    const yearKey = this.year.selectedYear() ?? '';
+    if (yearKey === this.loadingYear) return;
+    this.loadingYear = yearKey;
     this.loading.set(true);
     // No period on the first load: the API opens the highest period that
     // already has data, else the first period, and the page follows it.
     this.consolidation.view(quarter, this.year.selectedYear() ?? undefined).subscribe({
       next: (view) => {
+        this.loadingYear = null;
         this.view.set(view);
         this.quarter.set(view.quarter);
         this.loading.set(false);
@@ -330,6 +340,7 @@ export class TeacherConsolidationComponent {
         this.loadFinals();
       },
       error: (error) => {
+        this.loadingYear = null;
         this.loading.set(false);
         this.handleLoadError(error);
       },

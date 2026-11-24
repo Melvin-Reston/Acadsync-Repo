@@ -34,13 +34,6 @@ const STATUS_FROM_CELL: Record<string, AttendanceStatus> = {
   EXCUSED: 'excused',
 };
 
-const STATUS_LABEL: Record<AttendanceStatus, string> = {
-  present: 'Present',
-  late: 'Late',
-  absent: 'Absent',
-  excused: 'Excused',
-};
-
 const SKIP_REASON: Record<string, string> = {
   not_enrolled: 'Learner is not enrolled in this class.',
   duplicate_in_file: 'Listed twice in the file.',

@@ -8,7 +8,7 @@
         · AY {{ year.selectedYear() }}
       }
       @if (refreshedAt()) {
-        · Refreshed {{ refreshedAt()!.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' }) }}
+        · Refreshed {{ refreshedLabel() }}
       }
     </p>
   </div>
@@ -106,7 +106,14 @@
                 <td [attr.data-label]="day.day_name">
                   @for (meeting of meetingsAt(day.date, hour); track meeting.id) {
                     <div class="meeting-block">
-                      <b>{{ meeting.subject_name }} · {{ meeting.section_name }}</b>
+                      <div class="meeting-top">
+                        <b>{{ meeting.subject_name }} · {{ meeting.section_name }}</b>
+                        <app-menu
+                          [items]="meetingMenuItems"
+                          [label]="'Actions for ' + meeting.subject_name + ' · ' + meeting.section_name"
+                          (picked)="meetingMenuAction($event, meeting)"
+                        />
+                      </div>
                       <span>{{ meeting.room }} · {{ time12(meeting.start_time) }} – {{ time12(meeting.end_time) }}</span>
                     </div>
                   }
@@ -140,14 +147,17 @@
                 <b>{{ meeting.subject_name }} · {{ meeting.section_name }}</b>
                 <p class="muted">{{ meeting.room }} · {{ time12(meeting.start_time) }} – {{ time12(meeting.end_time) }}</p>
               </div>
-              <span class="nowrap">
+              <span class="nowrap agenda-actions">
                 @if (agendaStatus(meeting) === 'now') {
                   <span class="pill accent">Now</span>
                 } @else if (agendaStatus(meeting) === 'next') {
                   <span class="pill plain">Next</span>
                 }
-                <button type="button" class="btn btn-small" (click)="openEditMeeting(meeting)">Edit</button>
-                <button type="button" class="btn btn-small btn-danger" (click)="deleteMeetingTarget.set(meeting)">Delete</button>
+                <app-menu
+                  [items]="meetingMenuItems"
+                  [label]="'Actions for ' + meeting.subject_name + ' · ' + meeting.section_name"
+                  (picked)="meetingMenuAction($event, meeting)"
+                />
               </span>
             </div>
           </li>
@@ -178,7 +188,14 @@
                 <td [attr.data-label]="day.day_name">
                   @for (meeting of meetingsForClassDay(klass.id, day.date); track meeting.id) {
                     <div class="meeting-block">
-                      <span>{{ time12(meeting.start_time) }} – {{ time12(meeting.end_time) }} · {{ meeting.room }}</span>
+                      <div class="meeting-top">
+                        <span>{{ time12(meeting.start_time) }} – {{ time12(meeting.end_time) }} · {{ meeting.room }}</span>
+                        <app-menu
+                          [items]="meetingMenuItems"
+                          [label]="'Actions for ' + meeting.subject_name + ' · ' + meeting.section_name"
+                          (picked)="meetingMenuAction($event, meeting)"
+                        />
+                      </div>
                     </div>
                   }
                 </td>
@@ -212,7 +229,14 @@
                 <td [attr.data-label]="day.day_name">
                   @for (meeting of meetingsForRoomDay(room, day.date); track meeting.id) {
                     <div class="meeting-block">
-                      <b>{{ meeting.subject_name }} · {{ meeting.section_name }}</b>
+                      <div class="meeting-top">
+                        <b>{{ meeting.subject_name }} · {{ meeting.section_name }}</b>
+                        <app-menu
+                          [items]="meetingMenuItems"
+                          [label]="'Actions for ' + meeting.subject_name + ' · ' + meeting.section_name"
+                          (picked)="meetingMenuAction($event, meeting)"
+                        />
+                      </div>
                       <span>{{ time12(meeting.start_time) }} – {{ time12(meeting.end_time) }}</span>
                     </div>
                   }

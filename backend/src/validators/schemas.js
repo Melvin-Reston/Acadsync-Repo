@@ -735,6 +735,98 @@ const viewingYearQuerySchema = z.object({
   academic_year: optionalAcademicYear,
 });
 
+// ---------- Online quizzes (Batch 9) ----------
+const quizListQuerySchema = z.object({
+  class_id: optionalId,
+  quarter: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    wholeNumber('Period', 1, 4).optional()
+  ),
+  status: z.enum(['', 'draft', 'published', 'closed']).optional().default(''),
+  academic_year: optionalAcademicYear,
+});
+
+const quizCreateSchema = z.object({
+  class_id: id,
+  quarter: wholeNumber('Period', 1, 4),
+  quiz_number: wholeNumber('Quiz number', 1, 20),
+  title: text('Quiz title', 120),
+  instructions: z.string().trim().max(2000, 'Instructions must be 2000 characters or fewer.').optional().default(''),
+});
+
+const quizUpdateSchema = z
+  .object({
+    title: text('Quiz title', 120).optional(),
+    instructions: z.string().trim().max(2000, 'Instructions must be 2000 characters or fewer.').optional(),
+    deadline: z
+      .preprocess(
+        (value) => (value === '' || value === null ? undefined : value),
+        z.string().refine((value) => !Number.isNaN(Date.parse(value)), 'Enter a valid date and time.').optional()
+      )
+      .optional(),
+    clear_deadline: z.boolean().optional().default(false),
+  })
+  .refine(
+    (value) =>
+      value.title !== undefined || value.instructions !== undefined || value.deadline !== undefined || value.clear_deadline,
+    { message: 'Change the title, the instructions, or the deadline.' }
+  );
+
+// True/False carries exactly the two options True and False; a multiple
+// choice question carries 2 to 5 options, so a 2-option question is still
+// possible without calling it True/False.
+const quizQuestionSchema = z
+  .object({
+    question_type: z.enum(['mcq', 'true_false'], { error: 'Choose multiple choice or True/False.' }),
+    question_text: text('Question', 1000),
+    options: z.array(z.string().trim().min(1, 'Every choice needs text.').max(300, 'A choice must be 300 characters or fewer.')).optional(),
+    correct_index: wholeNumber('Correct answer', 0, 4),
+    points: wholeNumber('Points', 1, 10),
+  })
+  .refine(
+    (value) =>
+      value.question_type === 'true_false'
+        ? true // True/False always carries True and False; any choices sent with it are ignored.
+        : value.options !== undefined && value.options.length >= 2 && value.options.length <= 5,
+    { path: ['options'], message: 'Give 2 to 5 choices.' }
+  )
+  .refine((value) => value.correct_index < (value.question_type === 'true_false' ? 2 : (value.options?.length ?? 0)), {
+    path: ['correct_index'],
+    message: 'The correct answer must be one of the choices.',
+  });
+
+const quizQuestionParamsSchema = z.object({ id, questionId: id });
+const quizAttemptParamsSchema = z.object({ id, attemptId: id });
+
+const quizDetailQuerySchema = z.object({
+  format: z.enum(['', 'json', 'csv']).optional().default(''),
+});
+
+const quizCodeParamSchema = z.object({
+  code: z
+    .string({ error: 'Quiz link is required.' })
+    .trim()
+    .min(1, 'Quiz link is required.')
+    .max(60, 'Quiz link is too long.'),
+});
+
+const quizLookupQuerySchema = z.object({
+  learner_id: text('Learner ID', 60),
+});
+
+const quizSubmitSchema = z.object({
+  learner_id: text('Learner ID', 60),
+  answers: z
+    .array(
+      z.object({
+        question_id: id,
+        selected_index: z.union([wholeNumber('Answer', 0, 4), z.null()], { error: 'Answer must be a choice number.' }),
+      })
+    )
+    .min(1, 'Answer at least one question.')
+    .max(100, 'Too many answers.'),
+});
+
 const reportCardQuerySchema = viewingYearQuerySchema;
 
 module.exports = {
@@ -811,4 +903,14 @@ module.exports = {
   reportCardCommentSchema,
   viewingYearQuerySchema,
   reportCardQuerySchema,
+  quizListQuerySchema,
+  quizDetailQuerySchema,
+  quizQuestionParamsSchema,
+  quizAttemptParamsSchema,
+  quizCreateSchema,
+  quizUpdateSchema,
+  quizQuestionSchema,
+  quizCodeParamSchema,
+  quizLookupQuerySchema,
+  quizSubmitSchema,
 };

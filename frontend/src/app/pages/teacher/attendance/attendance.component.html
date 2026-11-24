@@ -260,26 +260,26 @@
                 </tr>
               </thead>
               <tbody>
-                @for (learner of sf2()!.learners; track learner.id; let i = $index) {
+                @for (row of sf2Rows(); track row.learner.id; let i = $index) {
                   <tr>
                     <td class="sf2-no">{{ i + 1 }}.</td>
-                    <td class="sf2-name">{{ sf2Name(learner) }}</td>
-                    @for (day of sf2()!.days; track day.date) {
-                      <td>{{ markLetter(learner.marks[day.date]) }}</td>
+                    <td class="sf2-name">{{ row.displayName }}</td>
+                    @for (day of sf2()!.days; track day.date; let di = $index) {
+                      <td>{{ row.letters[di] }}</td>
                     }
-                    <td>{{ learner.totals.absent }}</td>
-                    <td>{{ learner.totals.present }}</td>
+                    <td>{{ row.learner.totals.absent }}</td>
+                    <td>{{ row.learner.totals.present }}</td>
                     <td class="sf2-remarks"></td>
                   </tr>
-                  @if (isLastOfGender(i)) {
+                  @if (row.isLastOfGender) {
                     <tr class="sf2-gender">
                       <td class="sf2-no"></td>
-                      <td class="sf2-name">{{ genderTotalLabel(learner.sex) }}</td>
+                      <td class="sf2-name">{{ genderTotalLabel(row.learner.sex) }}</td>
                       @for (day of sf2()!.days; track day.date) {
-                        <td>{{ totalCell(genderTotal(learner.sex)?.present_by_day[day.date]) }}</td>
+                        <td>{{ totalCell(genderTotal(row.learner.sex)?.present_by_day[day.date]) }}</td>
                       }
-                      <td>{{ genderTotal(learner.sex)?.totals.absent ?? 0 }}</td>
-                      <td>{{ genderTotal(learner.sex)?.totals.present ?? 0 }}</td>
+                      <td>{{ genderTotal(row.learner.sex)?.totals.absent ?? 0 }}</td>
+                      <td>{{ genderTotal(row.learner.sex)?.totals.present ?? 0 }}</td>
                       <td class="sf2-remarks"></td>
                     </tr>
                   }
@@ -344,26 +344,26 @@
         </tr>
       </thead>
       <tbody>
-        @for (learner of sf2()!.learners; track learner.id; let i = $index) {
+        @for (row of sf2Rows(); track row.learner.id; let i = $index) {
           <tr>
             <td class="dp-no">{{ i + 1 }}.</td>
-            <td class="dp-name">{{ sf2Name(learner) }}</td>
-            @for (day of sf2()!.days; track day.date) {
-              <td>{{ markLetter(learner.marks[day.date]) }}</td>
+            <td class="dp-name">{{ row.displayName }}</td>
+            @for (day of sf2()!.days; track day.date; let di = $index) {
+              <td>{{ row.letters[di] }}</td>
             }
-            <td>{{ learner.totals.absent }}</td>
-            <td>{{ learner.totals.present }}</td>
+            <td>{{ row.learner.totals.absent }}</td>
+            <td>{{ row.learner.totals.present }}</td>
             <td class="dp-remarks"></td>
           </tr>
-          @if (isLastOfGender(i)) {
+          @if (row.isLastOfGender) {
             <tr class="dp-gender">
               <td class="dp-no"></td>
-              <td class="dp-name">{{ genderTotalLabel(learner.sex) }}</td>
+              <td class="dp-name">{{ genderTotalLabel(row.learner.sex) }}</td>
               @for (day of sf2()!.days; track day.date) {
-                <td>{{ totalCell(genderTotal(learner.sex)?.present_by_day[day.date]) }}</td>
+                <td>{{ totalCell(genderTotal(row.learner.sex)?.present_by_day[day.date]) }}</td>
               }
-              <td>{{ genderTotal(learner.sex)?.totals.absent ?? 0 }}</td>
-              <td>{{ genderTotal(learner.sex)?.totals.present ?? 0 }}</td>
+              <td>{{ genderTotal(row.learner.sex)?.totals.absent ?? 0 }}</td>
+              <td>{{ genderTotal(row.learner.sex)?.totals.present ?? 0 }}</td>
               <td class="dp-remarks"></td>
             </tr>
           }

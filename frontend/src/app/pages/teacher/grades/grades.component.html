@@ -247,6 +247,7 @@
         </div>
       </div>
 
+      @if (!isNarrow()) {
       <!-- Encoding table (desktop) -->
       <div class="table-wrap">
         <table class="grades-table">
@@ -332,7 +333,9 @@
           </tbody>
         </table>
       </div>
+      }
 
+      @if (isNarrow()) {
       <!-- Per-learner cards (phones) -->
       <div class="cards">
         @for (row of filteredRows(); track row.learner.id) {
@@ -380,6 +383,7 @@
           </article>
         }
       </div>
+      }
 
       <!-- Add a column: kept outside the table so it works on phones too. -->
       <div class="add-columns">

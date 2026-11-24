@@ -44,7 +44,8 @@
             "browser": "src/main.ts",
             "tsConfig": "tsconfig.app.json",
             "allowedCommonJsDependencies": [
-              "qrcode"
+              "qrcode",
+              "dijkstrajs"
             ],
             "assets": [
               {

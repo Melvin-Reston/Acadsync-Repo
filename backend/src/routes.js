@@ -21,6 +21,7 @@ const classes = require('./controllers/classes.controller');
 const attendance = require('./controllers/attendance.controller');
 const grades = require('./controllers/grades.controller');
 const reportCard = require('./controllers/reportCard.controller');
+const quizzes = require('./controllers/quizzes.controller');
 const { requireTeacher } = require('./middleware/teacherAuth');
 const { uploadSingle } = require('./utils/uploads');
 
@@ -43,6 +44,23 @@ router.post('/teacher-auth/forgot-password', authLimiter, validate(s.forgotPassw
 router.post('/teacher-auth/reset-password', authLimiter, validate(s.resetPasswordSchema), teacherAuth.resetPassword);
 
 router.get('/plans/active', plans.listActivePlans); // for the Choose Plan screen
+
+// Online quizzes (Batch 9): the public link a teacher shares. No sign-in:
+// the code is the address, the answer key never leaves the server, and a
+// learner is found only by a Learner ID enrolled in the quiz's class.
+router.get('/quiz/:code', validate(s.quizCodeParamSchema, 'params'), quizzes.getPublicQuiz);
+router.get(
+  '/quiz/:code/lookup',
+  validate(s.quizCodeParamSchema, 'params'),
+  validate(s.quizLookupQuerySchema, 'query'),
+  quizzes.lookupPublicLearner
+);
+router.post(
+  '/quiz/:code/submit',
+  validate(s.quizCodeParamSchema, 'params'),
+  validate(s.quizSubmitSchema),
+  quizzes.submitPublicQuiz
+);
 
 // ---------- Teacher-facing routes (need a teacher token from /teacher-auth/login) ----------
 const teacher = express.Router();
@@ -135,6 +153,34 @@ teacher.post(
   idParam,
   validate(s.manualGradesSchema),
   grades.fileManualGrades
+);
+
+// Online quizzes (Batch 9): the teacher's quizzes, their questions with
+// the answer key, and the results. Publishing creates the Written Works
+// column in the Grades page that the scores are written into.
+teacher.get('/quizzes', validate(s.quizListQuerySchema, 'query'), quizzes.listQuizzes);
+teacher.post('/quizzes', validate(s.quizCreateSchema), quizzes.createQuiz);
+teacher.get('/quizzes/:id', idParam, validate(s.quizDetailQuerySchema, 'query'), quizzes.getQuiz);
+teacher.patch('/quizzes/:id', idParam, validate(s.quizUpdateSchema), quizzes.updateQuiz);
+teacher.post('/quizzes/:id/publish', idParam, quizzes.publishQuiz);
+teacher.post('/quizzes/:id/close', idParam, quizzes.closeQuiz);
+teacher.delete('/quizzes/:id', idParam, quizzes.deleteQuiz);
+teacher.post('/quizzes/:id/questions', idParam, validate(s.quizQuestionSchema), quizzes.addQuestion);
+teacher.patch(
+  '/quizzes/:id/questions/:questionId',
+  validate(s.quizQuestionParamsSchema, 'params'),
+  validate(s.quizQuestionSchema),
+  quizzes.updateQuestion
+);
+teacher.delete(
+  '/quizzes/:id/questions/:questionId',
+  validate(s.quizQuestionParamsSchema, 'params'),
+  quizzes.deleteQuestion
+);
+teacher.post(
+  '/quizzes/:id/attempts/:attemptId/reset',
+  validate(s.quizAttemptParamsSchema, 'params'),
+  quizzes.resetAttempt
 );
 
 // Report Card (Batch 5): the adviser's section, one card per learner, filled

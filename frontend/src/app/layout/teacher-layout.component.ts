@@ -1,11 +1,11 @@
 // The frame around every teacher page: numbered sidebar on the left, top bar, then the page.
 // Dashboard, Classes & Sections, Schedules, Attendance, Grades, Consolidation, Report Card,
-// Payments & Invoices and Profile are live; the other items are marked "Soon" and are not
+// Quizzes, Payments & Invoices and Profile are live; the other items are marked "Soon" and are not
 // links, so nothing pretends to work before its batch arrives.
 import { DatePipe } from '@angular/common';
-import { Component, inject, signal } from '@angular/core';
+import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { filter } from 'rxjs';
+import { filter, Subscription } from 'rxjs';
 import { initials } from '../core/helpers';
 import { TeacherAuthService } from '../core/teacher-auth.service';
 import { ThemeService } from '../core/theme.service';
@@ -27,6 +27,7 @@ const TITLES: Record<string, string> = {
   '/teacher/grades': 'Grades · Teacher Portal',
   '/teacher/consolidation': 'Academic Consolidation · Teacher Portal',
   '/teacher/report-card': 'Report Card · Teacher Portal',
+  '/teacher/quizzes': 'Quizzes · Teacher Portal',
   '/teacher/payments': 'Payments & Invoices · Teacher Portal',
   '/teacher/profile': 'Profile · Teacher Portal',
 };
@@ -37,11 +38,12 @@ const TITLES: Record<string, string> = {
   templateUrl: './teacher-layout.component.html',
   styleUrl: './teacher-layout.component.css',
 })
-export class TeacherLayoutComponent {
+export class TeacherLayoutComponent implements OnDestroy {
   protected readonly auth = inject(TeacherAuthService);
   protected readonly theme = inject(ThemeService);
   protected readonly year = inject(ViewingYearService);
   private readonly router = inject(Router);
+  private readonly routerSubscription: Subscription;
 
   protected readonly today = new Date();
   protected readonly drawerOpen = signal(false);
@@ -64,13 +66,14 @@ export class TeacherLayoutComponent {
         { number: '05', label: 'Grades', path: '/teacher/grades', icon: 'edit' },
         { number: '06', label: 'Consolidation', path: '/teacher/consolidation', icon: 'chart' },
         { number: '07', label: 'Report Card', path: '/teacher/report-card', icon: 'card' },
+        { number: '08', label: 'Quizzes', path: '/teacher/quizzes', icon: 'quiz' },
       ],
     },
     {
       label: 'Account',
       items: [
-        { number: '08', label: 'Payments & Invoices', path: '/teacher/payments', icon: 'receipt' },
-        { number: '09', label: 'Profile', path: '/teacher/profile', icon: 'users' },
+        { number: '09', label: 'Payments & Invoices', path: '/teacher/payments', icon: 'receipt' },
+        { number: '10', label: 'Profile', path: '/teacher/profile', icon: 'users' },
       ],
     },
   ];
@@ -80,32 +83,39 @@ export class TeacherLayoutComponent {
   constructor() {
     this.pageTitle.set(TITLES[this.router.url] ?? 'Dashboard · Teacher Portal');
     this.currentRoute.set(this.router.url);
-    this.router.events.pipe(filter((event) => event instanceof NavigationEnd)).subscribe((event) => {
-      this.pageTitle.set(TITLES[event.urlAfterRedirects] ?? 'Teacher Portal');
-      this.currentRoute.set(event.urlAfterRedirects);
-    });
+    this.routerSubscription = this.router.events
+      .pipe(filter((event) => event instanceof NavigationEnd))
+      .subscribe((event) => {
+        this.pageTitle.set(TITLES[event.urlAfterRedirects] ?? 'Teacher Portal');
+        this.currentRoute.set(event.urlAfterRedirects);
+      });
     // Loads the years for the AY filter in the top bar.
     this.year.load();
   }
 
+  ngOnDestroy(): void {
+    this.routerSubscription.unsubscribe();
+  }
+
   // The AY filter only belongs on pages that show records for a year.
   // Payments and Profile are the teacher's current account, not a year's records.
-  protected showYearFilter(): boolean {
-    return !['/teacher/payments', '/teacher/profile'].includes(this.currentRoute());
-  }
+  // A computed, so the top bar does not re-derive it on every change-detection run.
+  protected readonly showYearFilter = computed(
+    () => !['/teacher/payments', '/teacher/profile'].includes(this.currentRoute()),
+  );
 
-  protected onYearChange(event: Event): void {
-    const value = (event.target as HTMLSelectElement).value;
-    if (value) this.year.select(value);
-  }
-
-  protected adviserLine(): string {
+  protected readonly adviserLine = computed(() => {
     const teacher = this.auth.teacher();
     if (!teacher) return '';
     if (teacher.is_adviser && teacher.advisory_grade && teacher.advisory_section) {
       return `Adviser · G${teacher.advisory_grade} – ${teacher.advisory_section}`;
     }
     return teacher.school_name ?? 'Teacher';
+  });
+
+  protected onYearChange(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+    if (value) this.year.select(value);
   }
 
   protected closeDrawer(): void {

@@ -12,6 +12,7 @@ import { ViewingYearService } from '../../../core/viewing-year.service';
 import { ToastService } from '../../../core/toast.service';
 import { IconComponent } from '../../../shared/icon.component';
 import { DropdownComponent, DropdownOption } from '../../../shared/dropdown.component';
+import { MenuComponent, MenuItem } from '../../../shared/menu.component';
 import { ModalComponent } from '../../../shared/modal.component';
 
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
@@ -36,7 +37,7 @@ function parseIso(value: string): Date {
 
 @Component({
   selector: 'app-teacher-schedules',
-  imports: [FormsModule, IconComponent, DropdownComponent, ModalComponent],
+  imports: [FormsModule, IconComponent, DropdownComponent, MenuComponent, ModalComponent],
   templateUrl: './schedules.component.html',
   styleUrl: './schedules.component.css',
 })
@@ -49,6 +50,11 @@ export class TeacherSchedulesComponent {
   protected readonly classes = signal<ClassItem[]>([]);
   protected readonly loading = signal(true);
   protected readonly error = signal('');
+  // The academic year a load is already in flight for: the viewing-year
+  // effect can fire twice for the same year on first render, and loading
+  // the timetable and the class list twice is wasted work. The guard
+  // clears when the load settles, so Refresh and later saves still reload.
+  private loadingYear: string | null = null;
   protected readonly saving = signal(false);
   protected readonly formErrors = signal<FieldErrors>({});
   protected readonly refreshedAt = signal<Date | null>(null);
@@ -75,6 +81,23 @@ export class TeacherSchedulesComponent {
     skipped: { day_name: string; reason: string }[];
   } | null>(null);
   protected readonly deleteMeetingTarget = signal<Meeting | null>(null);
+
+  // The 3-dots actions at the right end of a Daily Agenda row: Edit opens
+  // the Manage Class Schedules form filled in; Delete asks first.
+  protected readonly meetingMenuItems: MenuItem[] = [
+    { value: 'edit', label: 'Edit' },
+    { value: 'delete', label: 'Delete', danger: true },
+  ];
+
+  protected meetingMenuAction(action: string, meeting: ScheduleMeeting): void {
+    if (action === 'edit') {
+      this.openEditMeeting(meeting);
+      return;
+    }
+    if (action === 'delete') {
+      this.deleteMeetingTarget.set(meeting);
+    }
+  }
 
   protected readonly time12 = time12;
   protected readonly dayNames = DAY_NAMES;
@@ -151,6 +174,78 @@ export class TeacherSchedulesComponent {
     return this.classes().filter((klass) => klass.id === this.classFilter());
   });
 
+  // The timetable lookups, built once per load instead of re-scanning the
+  // whole meeting list from the template for every grid, matrix and room
+  // cell on every change-detection run. The template reads them by key.
+  protected readonly dayLabels = computed(() => {
+    const labels = new Map<string, string>();
+    for (const day of this.schedule()?.days ?? []) {
+      labels.set(day.date, parseIso(day.date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }));
+    }
+    return labels;
+  });
+
+  protected readonly gridMeetings = computed(() => {
+    const byKey = new Map<string, ScheduleMeeting[]>();
+    for (const meeting of this.filteredMeetings()) {
+      const key = `${meeting.date}|${Number(meeting.start_time.split(':')[0])}`;
+      const list = byKey.get(key);
+      if (list) list.push(meeting);
+      else byKey.set(key, [meeting]);
+    }
+    return byKey;
+  });
+
+  protected readonly classDayMeetings = computed(() => {
+    const byKey = new Map<string, ScheduleMeeting[]>();
+    for (const meeting of this.filteredMeetings()) {
+      const key = `${meeting.class_id}|${meeting.date}`;
+      const list = byKey.get(key);
+      if (list) list.push(meeting);
+      else byKey.set(key, [meeting]);
+    }
+    return byKey;
+  });
+
+  protected readonly roomDayMeetings = computed(() => {
+    const byKey = new Map<string, ScheduleMeeting[]>();
+    for (const meeting of this.filteredMeetings()) {
+      const key = `${meeting.room}|${meeting.date}`;
+      const list = byKey.get(key);
+      if (list) list.push(meeting);
+      else byKey.set(key, [meeting]);
+    }
+    return byKey;
+  });
+
+  // Now/Next for the agenda, worked out once per render from one Manila
+  // "now" instead of rebuilding the Manila clock for every meeting, twice,
+  // on every change-detection run.
+  protected readonly agendaStatusById = computed(() => {
+    const statuses = new Map<number, 'now' | 'next' | null>();
+    const now = manilaNow();
+    for (const meeting of this.agendaMeetings()) {
+      if (this.agendaDay() !== now.date) {
+        statuses.set(meeting.id, null);
+        continue;
+      }
+      if (meeting.start_time.slice(0, 5) <= now.time && meeting.end_time.slice(0, 5) > now.time) {
+        statuses.set(meeting.id, 'now');
+      } else if (meeting.start_time.slice(0, 5) > now.time) {
+        statuses.set(meeting.id, 'next');
+      } else {
+        statuses.set(meeting.id, null);
+      }
+    }
+    return statuses;
+  });
+
+  protected readonly refreshedLabel = computed(() => {
+    const refreshed = this.refreshedAt();
+    if (!refreshed) return '';
+    return refreshed.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' });
+  });
+
   constructor() {
     effect(() => {
       if (this.year.selectedYear() || this.year.loaded()) this.load();
@@ -158,9 +253,13 @@ export class TeacherSchedulesComponent {
   }
 
   protected load(): void {
+    const yearKey = this.year.selectedYear() ?? '';
+    if (yearKey === this.loadingYear) return;
+    this.loadingYear = yearKey;
     this.loading.set(true);
     this.classesService.schedule(this.weekStart(), this.year.selectedYear() ?? undefined).subscribe({
       next: (response) => {
+        this.loadingYear = null;
         this.schedule.set(response);
         this.loading.set(false);
         // The agenda opens on today when today is in this week, otherwise Monday.
@@ -168,6 +267,7 @@ export class TeacherSchedulesComponent {
         this.agendaDay.set(response.days.some((d) => d.date === today) ? today : response.week_start);
       },
       error: (error) => {
+        this.loadingYear = null;
         this.loading.set(false);
         this.error.set(errorMessage(error));
       },
@@ -208,33 +308,23 @@ export class TeacherSchedulesComponent {
   }
 
   protected meetingsAt(day: string, hour: number): ScheduleMeeting[] {
-    return this.filteredMeetings().filter(
-      (meeting) => meeting.date === day && Number(meeting.start_time.split(':')[0]) === hour,
-    );
+    return this.gridMeetings().get(`${day}|${hour}`) ?? [];
   }
 
   protected meetingsForClassDay(classId: number, date: string): ScheduleMeeting[] {
-    return this.filteredMeetings().filter(
-      (meeting) => meeting.class_id === classId && meeting.date === date,
-    );
+    return this.classDayMeetings().get(`${classId}|${date}`) ?? [];
   }
 
   protected meetingsForRoomDay(room: string, date: string): ScheduleMeeting[] {
-    return this.filteredMeetings().filter(
-      (meeting) => meeting.room === room && meeting.date === date,
-    );
+    return this.roomDayMeetings().get(`${room}|${date}`) ?? [];
   }
 
   protected agendaStatus(meeting: Meeting): 'now' | 'next' | null {
-    if (this.agendaDay() !== manilaNow().date) return null;
-    const time = manilaNow().time;
-    if (meeting.start_time.slice(0, 5) <= time && meeting.end_time.slice(0, 5) > time) return 'now';
-    if (meeting.start_time.slice(0, 5) > time) return 'next';
-    return null;
+    return this.agendaStatusById().get(meeting.id) ?? null;
   }
 
   protected dayLabel(date: string): string {
-    return parseIso(date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+    return this.dayLabels().get(date) ?? '';
   }
 
   // ---------- Manage Class Schedules ----------

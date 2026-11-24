@@ -1,0 +1,392 @@
+<div class="page-head">
+  <div>
+    <div class="eyebrow">Online quizzes</div>
+    <h1 class="page-title">Quizzes</h1>
+  </div>
+  <div class="head-actions">
+    <button type="button" class="btn btn-primary" (click)="openCreate()" [disabled]="classes().length === 0">
+      <app-icon name="plus" [size]="16" /> New quiz
+    </button>
+  </div>
+</div>
+
+@if (loadError()) {
+  <p class="error">{{ loadError() }}</p>
+}
+
+@if (!detail()) {
+  <div class="filters card card-pad">
+    <div class="field">
+      <label>Class</label>
+      <app-dropdown
+        [ngModel]="classFilter()" (ngModelChange)="onClassFilterChange($event)"
+        [options]="[{ value: '', label: 'All classes' }, ...classOptions()]"
+        placeholder="All classes"
+        countSingular="class"
+        countPlural="classes"
+      />
+    </div>
+    <div class="field">
+      <label>Status</label>
+      <app-dropdown
+        [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)"
+        [options]="[
+          { value: '', label: 'All statuses' },
+          { value: 'draft', label: 'Draft' },
+          { value: 'published', label: 'Published' },
+          { value: 'closed', label: 'Closed' },
+        ]"
+        placeholder="All statuses"
+        countSingular="status"
+        countPlural="statuses"
+      />
+    </div>
+  </div>
+
+  @if (loading()) {
+    <p class="muted">Loading quizzes…</p>
+  } @else if (filteredQuizzes().length === 0) {
+    <div class="empty card card-pad">
+      <p><b>No quizzes yet.</b></p>
+      <p class="muted">Create a quiz, add its questions, publish it, then send the link to your learners.</p>
+      <button type="button" class="btn btn-primary" (click)="openCreate()" [disabled]="classes().length === 0">New quiz</button>
+    </div>
+  } @else {
+    <div class="card">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Quiz</th>
+            <th>Class</th>
+            <th>Period</th>
+            <th class="right">Questions</th>
+            <th class="right">Taken</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (quiz of filteredQuizzes(); track quiz.id) {
+            <tr>
+              <td>
+                <b>Quiz {{ quiz.quiz_number }}</b>
+                <span class="muted"> · {{ quiz.title }}</span>
+              </td>
+              <td>{{ quiz.subject_name }} · {{ quiz.section_name }}</td>
+              <td>{{ periodLabel(quiz) }} {{ quiz.quarter }}</td>
+              <td class="right">{{ quiz.question_count }}</td>
+              <td class="right">{{ quiz.attempt_count }}</td>
+              <td>
+                <span class="pill" [class.accent]="quiz.status === 'published'" [class.amber]="quiz.status === 'draft'" [class.red]="quiz.status === 'closed'">{{
+                  statusLabel(quiz.status)
+                }}</span>
+              </td>
+              <td class="right nowrap">
+                <button type="button" class="btn btn-small" (click)="openDetail(quiz.id)">Open</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+} @else if (detail(); as detail) {
+  <button type="button" class="btn btn-small back" (click)="backToList()">
+    <app-icon name="arrow-left" [size]="16" /> All quizzes
+  </button>
+
+  @if (detailLoading()) {
+    <p class="muted">Loading quiz…</p>
+  } @else {
+    <div class="page-head detail-head">
+      <div>
+        <div class="eyebrow">{{ detail.quiz.subject_name }} · Grade {{ detail.quiz.grade_level }} – {{ detail.quiz.section_name }}</div>
+        <h1 class="page-title">Quiz {{ detail.quiz.quiz_number }} · {{ detail.quiz.title }}</h1>
+        <p class="muted">
+          {{ detailPeriodLabel() }} {{ detail.quiz.quarter }} · {{ detail.quiz.academic_year }} ·
+          {{ detail.quiz.total_points }} points · Deadline: {{ deadlineLabel(detail.quiz.deadline) }}
+        </p>
+      </div>
+      <div class="head-actions">
+        <span class="pill" [class.accent]="detail.quiz.status === 'published'" [class.amber]="detail.quiz.status === 'draft'" [class.red]="detail.quiz.status === 'closed'">{{
+          statusLabel(detail.quiz.status)
+        }}</span>
+        @if (detail.quiz.status !== 'published') {
+          <button type="button" class="btn btn-primary" (click)="publish()" [disabled]="busy() || detail.questions.length === 0">
+            {{ detail.quiz.status === 'closed' ? 'Reopen quiz' : 'Publish quiz' }}
+          </button>
+        } @else {
+          <button type="button" class="btn" (click)="closeQuiz()" [disabled]="busy()">Close quiz</button>
+        }
+        <button type="button" class="btn btn-danger" (click)="deleteQuizConfirm.set(true)" [disabled]="busy()">Delete quiz</button>
+      </div>
+    </div>
+
+    <div class="card card-pad link-card">
+      <label class="field-label" for="quiz-link">Quiz link — send this to your learners</label>
+      <div class="link-row">
+        <input id="quiz-link" class="link-input" type="text" readonly [value]="quizLink()" />
+        <button type="button" class="btn" (click)="copyLink()"><app-icon name="copy" [size]="16" /> {{ copied() ? 'Copied' : 'Copy link' }}</button>
+      </div>
+      @if (detail.quiz.status === 'draft') {
+        <p class="muted">The link will work once the quiz is published.</p>
+      }
+      @if (detail.quiz.status === 'closed') {
+        <p class="muted">The link is closed. Reopen the quiz to let learners in again.</p>
+      }
+      <p class="muted">
+        Scores go into the Grades page as a Written Works column labelled “Quiz {{ detail.quiz.quiz_number }}”.
+        <a routerLink="/teacher/grades">Open Grades</a>
+      </p>
+    </div>
+
+    <div class="grid">
+      <section class="card card-pad">
+        <h2 class="card-title">Quiz details</h2>
+        <div class="field">
+          <label for="edit-title">Title</label>
+          <input id="edit-title" type="text" [ngModel]="editTitle()" (ngModelChange)="editTitle.set($event)" />
+        </div>
+        <div class="field">
+          <label for="edit-instructions">Instructions for learners</label>
+          <textarea id="edit-instructions" rows="3" [ngModel]="editInstructions()" (ngModelChange)="editInstructions.set($event)"></textarea>
+        </div>
+        <div class="field">
+          <label for="edit-deadline">Deadline (optional)</label>
+          <input id="edit-deadline" type="datetime-local" [ngModel]="editDeadline()" (ngModelChange)="editDeadline.set($event)" />
+          @if (detailErrors()['deadline']) {
+            <span class="field-error">{{ detailErrors()['deadline'] }}</span>
+          }
+        </div>
+        <button type="button" class="btn btn-primary" (click)="saveDetails()" [disabled]="savingDetail()">Save details</button>
+      </section>
+
+      <section class="card card-pad">
+        <h2 class="card-title">Questions</h2>
+        @if (questionsLocked()) {
+          <p class="locked">
+            Learners have already taken this quiz, so its questions can no longer be changed. Reset every attempt first if the quiz
+            itself was wrong.
+          </p>
+        }
+        @if (detail.questions.length === 0) {
+          <p class="muted">No questions yet.</p>
+        }
+        <ol class="question-list">
+          @for (question of detail.questions; track question.id) {
+            <li class="question">
+              <div class="question-top">
+                <b>Q{{ question.position }}</b>
+                <span class="muted">{{ question.question_type === 'mcq' ? 'Multiple choice' : 'True / False' }} · {{ question.points }} point{{ question.points === 1 ? '' : 's' }}</span>
+                @if (!questionsLocked()) {
+                  <span class="question-actions">
+                    <button type="button" class="btn btn-small" (click)="startEditQuestion(question)">Edit</button>
+                    <button type="button" class="btn btn-small btn-danger" (click)="deleteQuestionId.set(question.id)">Delete</button>
+                  </span>
+                }
+              </div>
+              <p>{{ question.question_text }}</p>
+              <ul class="choices">
+                @for (option of question.options; track $index) {
+                  <li [class.correct]="question.correct_index === $index">
+                    <span class="choice-letter">{{ 'ABCDE'[$index] }}</span> {{ option }}
+                    @if (question.correct_index === $index) {
+                      <span class="correct-tag">Correct answer</span>
+                    }
+                  </li>
+                }
+              </ul>
+              @if (questionStat(question.id); as stat) {
+                <p class="muted small">{{ stat.correct }} of {{ stat.attempts }} learner{{ stat.attempts === 1 ? '' : 's' }} got this right.</p>
+              }
+            </li>
+          }
+        </ol>
+
+        @if (!questionsLocked()) {
+          <h3 class="form-title">{{ editingQuestionId() === null ? 'Add a question' : 'Edit question' }}</h3>
+          <div class="type-row" role="group" aria-label="Question type">
+            <button type="button" class="btn btn-small" [class.btn-primary]="questionForm().question_type === 'mcq'" (click)="setQuestionType('mcq')">Multiple choice</button>
+            <button type="button" class="btn btn-small" [class.btn-primary]="questionForm().question_type === 'true_false'" (click)="setQuestionType('true_false')">True / False</button>
+          </div>
+          <div class="field">
+            <label for="q-text">Question</label>
+            <textarea id="q-text" rows="2" [ngModel]="questionForm().question_text" (ngModelChange)="questionForm.set({ ...questionForm(), question_text: $event })"></textarea>
+          </div>
+          @if (questionForm().question_type === 'mcq') {
+            <div class="field">
+              <label>Choices — tick the correct answer</label>
+              @for (option of questionForm().options; track $index) {
+                <div class="choice-row">
+                  <input type="radio" name="correct" [value]="$index" [ngModel]="questionForm().correct_index" (ngModelChange)="setCorrect($event)" [attr.aria-label]="'Choice ' + ('ABCDE'[$index]) + ' is correct'" />
+                  <span class="choice-letter">{{ 'ABCDE'[$index] }}</span>
+                  <input type="text" [ngModel]="option" (ngModelChange)="updateChoice($index, $event)" placeholder="Choice {{ 'ABCDE'[$index] }}" />
+                  @if (questionForm().options.length > 2) {
+                    <button type="button" class="icon-btn small" aria-label="Remove choice" (click)="removeChoice($index)"><app-icon name="x" [size]="16" /></button>
+                  }
+                </div>
+              }
+              @if (questionForm().options.length < 5) {
+                <button type="button" class="btn btn-small" (click)="addChoice()"><app-icon name="plus" [size]="16" /> Add choice</button>
+              }
+            </div>
+          } @else {
+            <div class="field">
+              <label>Correct answer</label>
+              <div class="type-row" role="group" aria-label="Correct answer">
+                <button type="button" class="btn btn-small" [class.btn-primary]="questionForm().correct_index === 0" (click)="setCorrect(0)">True</button>
+                <button type="button" class="btn btn-small" [class.btn-primary]="questionForm().correct_index === 1" (click)="setCorrect(1)">False</button>
+              </div>
+            </div>
+          }
+          <div class="field inline-field">
+            <label for="q-points">Points for a correct answer</label>
+            <input id="q-points" type="number" min="1" max="10" step="1" [ngModel]="questionForm().points" (ngModelChange)="setPoints($event)" />
+          </div>
+          @if (questionErrors()['form']) {
+            <p class="field-error">{{ questionErrors()['form'] }}</p>
+          }
+          <div class="form-actions">
+            <button type="button" class="btn btn-primary" (click)="saveQuestion()" [disabled]="savingQuestion()">
+              {{ editingQuestionId() === null ? 'Add question' : 'Save question' }}
+            </button>
+            @if (editingQuestionId() !== null) {
+              <button type="button" class="btn" (click)="cancelEditQuestion()">Cancel</button>
+            }
+          </div>
+        }
+      </section>
+    </div>
+
+    <section class="card">
+      <div class="card-head">
+        <h2 class="card-title">Results · {{ detail.attempts.length }} of {{ detail.roster.length }} taken</h2>
+        <div class="head-actions">
+          <input class="search" type="search" placeholder="Search learner or ID…" [ngModel]="rosterSearch()" (ngModelChange)="rosterSearch.set($event)" aria-label="Search results" />
+          <button type="button" class="btn btn-small" (click)="downloadResults()"><app-icon name="download" [size]="16" /> Download CSV</button>
+        </div>
+      </div>
+      @if (detail.roster.length === 0) {
+        <p class="muted card-pad">No learners are enrolled in this class yet.</p>
+      } @else {
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Learner</th>
+              <th>Learner ID</th>
+              <th class="right">Score</th>
+              <th>Submitted</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (row of rosterRows(); track row.id) {
+              <tr>
+                <td>{{ row.last_name }}, {{ row.first_name }}</td>
+                <td class="mono">{{ row.learner_id }}</td>
+                <td class="right">{{ row.attempt ? row.attempt.score + ' / ' + row.attempt.total_points : '—' }}</td>
+                <td>{{ row.attempt ? row.attempt.submitted_at : '—' }}</td>
+                <td class="right nowrap">
+                  @if (row.attempt) {
+                    <button
+                      type="button"
+                      class="btn btn-small"
+                      (click)="resetAttemptId.set(detail.attempts.find((a) => a.learner_id === row.id)?.id ?? null)"
+                    >
+                      Reset attempt
+                    </button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </section>
+  }
+}
+
+@if (createOpen()) {
+  <app-modal title="New quiz" (closed)="createOpen.set(false)">
+    <div class="field">
+      <label>Class</label>
+      <app-dropdown
+        [ngModel]="newClassId()"
+        (ngModelChange)="onNewClassChange($event)"
+        [options]="classOptions()"
+        placeholder="Choose a class"
+        countSingular="class"
+        countPlural="classes"
+      />
+      @if (formErrors()['class_id']) {
+        <span class="field-error">{{ formErrors()['class_id'] }}</span>
+      }
+    </div>
+    <div class="field">
+      <label>Period</label>
+      <app-dropdown
+        [ngModel]="newQuarter()"
+        (ngModelChange)="onNewQuarterChange($event)"
+        [options]="periodOptions()"
+        placeholder="Choose a period"
+        countSingular="period"
+        countPlural="periods"
+      />
+    </div>
+    <div class="field">
+      <label for="new-number">Quiz number</label>
+      <input id="new-number" type="number" min="1" max="20" step="1" [ngModel]="newQuizNumber()" (ngModelChange)="setQuizNumber($event)" />
+      @if (formErrors()['quiz_number']) {
+        <span class="field-error">{{ formErrors()['quiz_number'] }}</span>
+      }
+    </div>
+    <div class="field">
+      <label for="new-title">Title</label>
+      <input id="new-title" type="text" [ngModel]="newTitle()" (ngModelChange)="newTitle.set($event)" placeholder="For example: Quiz 1 — Fractions" />
+      @if (formErrors()['title']) {
+        <span class="field-error">{{ formErrors()['title'] }}</span>
+      }
+    </div>
+    <div class="field">
+      <label for="new-instructions">Instructions for learners (optional)</label>
+      <textarea id="new-instructions" rows="3" [ngModel]="newInstructions()" (ngModelChange)="newInstructions.set($event)"></textarea>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn" (click)="createOpen.set(false)">Cancel</button>
+      <button type="button" class="btn btn-primary" (click)="createQuiz()" [disabled]="savingQuiz()">Create quiz</button>
+    </div>
+  </app-modal>
+}
+
+@if (deleteQuizConfirm() && detail(); as detail) {
+  <app-modal title="Delete this quiz?" (closed)="deleteQuizConfirm.set(false)">
+    <p>
+      “{{ detail.quiz.title }}” and its results will be deleted, and its Written Works column will be removed from the Grades page.
+      This cannot be undone.
+    </p>
+    <div class="form-actions">
+      <button type="button" class="btn" (click)="deleteQuizConfirm.set(false)">Keep it</button>
+      <button type="button" class="btn btn-danger" (click)="confirmDeleteQuiz()" [disabled]="busy()">Delete quiz</button>
+    </div>
+  </app-modal>
+}
+
+@if (deleteQuestionId() !== null) {
+  <app-modal title="Delete this question?" (closed)="deleteQuestionId.set(null)">
+    <p>This question will be removed from the quiz. The other questions will be renumbered.</p>
+    <div class="form-actions">
+      <button type="button" class="btn" (click)="deleteQuestionId.set(null)">Keep it</button>
+      <button type="button" class="btn btn-danger" (click)="confirmDeleteQuestion()" [disabled]="busy()">Delete question</button>
+    </div>
+  </app-modal>
+}
+
+@if (resetAttemptId() !== null) {
+  <app-modal title="Reset this attempt?" (closed)="resetAttemptId.set(null)">
+    <p>The learner can take the quiz again, and their old score will be removed from the Grades page.</p>
+    <div class="form-actions">
+      <button type="button" class="btn" (click)="resetAttemptId.set(null)">Keep it</button>
+      <button type="button" class="btn btn-danger" (click)="confirmResetAttempt()" [disabled]="busy()">Reset attempt</button>
+    </div>
+  </app-modal>
+}

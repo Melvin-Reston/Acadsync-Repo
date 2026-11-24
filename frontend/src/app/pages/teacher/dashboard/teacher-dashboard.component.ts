@@ -36,6 +36,11 @@ export class TeacherDashboardComponent {
   protected readonly data = signal<TeacherDashboard | null>(null);
   protected readonly loading = signal(true);
   protected readonly error = signal('');
+  // The academic year a load is already in flight for: the viewing-year
+  // effect can fire twice for the same year on first render, and loading
+  // the dashboard twice is wasted work. The guard clears when the load
+  // settles.
+  private loadingYear: string | null = null;
   protected readonly saving = signal(false);
   protected readonly formErrors = signal<FieldErrors>({});
 
@@ -97,9 +102,13 @@ export class TeacherDashboardComponent {
   }
 
   protected load(academicYear?: string): void {
+    const yearKey = academicYear ?? this.year.selectedYear() ?? '';
+    if (yearKey === this.loadingYear) return;
+    this.loadingYear = yearKey;
     this.loading.set(true);
     this.portal.dashboard(academicYear ?? this.year.selectedYear() ?? undefined).subscribe({
       next: (dashboard) => {
+        this.loadingYear = null;
         this.loading.set(false);
         this.data.set(dashboard);
         const teacher = dashboard.teacher;
@@ -114,6 +123,7 @@ export class TeacherDashboardComponent {
         this.holidays.set(dashboard.holidays ?? []);
       },
       error: (error) => {
+        this.loadingYear = null;
         this.loading.set(false);
         this.error.set(errorMessage(error));
       },

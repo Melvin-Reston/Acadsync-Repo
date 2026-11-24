@@ -785,6 +785,10 @@ export interface GradeColumn {
   // The display name of a default Examinations column ("Summative Test 1"),
   // or null.
   label: string | null;
+  // A column filled by an online quiz: the quiz that owns it, or null for
+  // a column typed in by hand on the Grades page.
+  quiz_id?: number | null;
+  quiz_title?: string | null;
 }
 
 export interface GradeWeights {
@@ -944,6 +948,122 @@ export interface ManualSubject {
 export interface ManualGradesFileResponse {
   manual_subject: ManualSubject;
   filed: number;
+}
+
+// ---------- Online quizzes (Batch 9) ----------
+
+export type QuizStatus = 'draft' | 'published' | 'closed';
+export type QuizQuestionType = 'mcq' | 'true_false';
+
+export interface Quiz {
+  id: number;
+  teacher_id: number;
+  class_id: number;
+  quarter: number;
+  quiz_number: number;
+  title: string;
+  instructions: string;
+  status: QuizStatus;
+  code: string;
+  deadline: string | null;
+  grade_column_id: number | null;
+  created_at: string;
+  updated_at: string;
+  subject_name: string;
+  grade_level: number;
+  section_name: string;
+  academic_year: string;
+  question_count: number;
+  attempt_count: number;
+  total_points: number;
+}
+
+export interface QuizQuestion {
+  id: number;
+  quiz_id: number;
+  position: number;
+  question_type: QuizQuestionType;
+  question_text: string;
+  options: string[];
+  // The answer key. Present on the teacher's detail read, never on the
+  // public read a learner sees.
+  correct_index?: number;
+  points: number;
+}
+
+export interface QuizQuestionForm {
+  question_type: QuizQuestionType;
+  question_text: string;
+  options: string[];
+  correct_index: number;
+  points: number;
+}
+
+export interface QuizRosterRow {
+  id: number;
+  first_name: string;
+  last_name: string;
+  learner_id: string;
+  sex: 'Male' | 'Female';
+  attempt: { score: number; total_points: number; submitted_at: string } | null;
+}
+
+export interface QuizAttemptRow {
+  id: number;
+  learner_id: number;
+  first_name: string;
+  last_name: string;
+  learner_code: string;
+  score: number;
+  total_points: number;
+  submitted_at: string;
+}
+
+export interface QuizDetail {
+  quiz: Quiz;
+  grading: GradingInfo;
+  questions: QuizQuestion[];
+  roster: QuizRosterRow[];
+  attempts: QuizAttemptRow[];
+  question_stats: { question_id: number; attempts: number; correct: number }[];
+}
+
+// What a learner sees at the shared link: the quiz's details and its
+// questions, without the answer key.
+export interface PublicQuiz {
+  quiz: {
+    code: string;
+    title: string;
+    instructions: string;
+    status: QuizStatus;
+    deadline: string | null;
+    quiz_number: number;
+    quarter: number;
+    period_label: string;
+    total_points: number;
+    question_count: number;
+    teacher_name: string;
+    class: { subject_name: string; grade_level: number; section_name: string; academic_year: string };
+    open: boolean;
+  };
+  questions: QuizQuestion[];
+}
+
+export interface QuizLookup {
+  learner: { first_name: string; last_name: string; learner_id: string; sex: 'Male' | 'Female' };
+  already_submitted: boolean;
+  attempt: { score: number; total_points: number; submitted_at: string } | null;
+  open: boolean;
+}
+
+export interface QuizSubmitResult {
+  score: number;
+  total_points: number;
+  correct_count: number;
+  total_questions: number;
+  submitted_at: string;
+  learner_name: string;
+  message: string;
 }
 
 export interface ConsolidationLearner {

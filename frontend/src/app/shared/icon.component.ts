@@ -41,6 +41,7 @@ const ICONS: Record<string, string> = {
   eye: 'M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   scan: 'M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h3v3h-3zM21 14h.01M14 21h.01M18 18h3v3h-3z',
   printer: 'M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z',
+  quiz: 'M9 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 14H5a2 2 0 0 0-2 2v3h18v-3a2 2 0 0 0-2-2h-3M12 9v4M12 17h.01',
 };
 
 @Component({

@@ -66,7 +66,9 @@ async function getWeights(client, classId, profileCode) {
 async function listColumns(client, classId, quarter, profileCode) {
   const result = await client.query(
     `SELECT id, class_id, quarter, component, position, highest_possible::text AS highest_possible,
-            sub_weight::text AS sub_weight, label
+            sub_weight::text AS sub_weight, label,
+            (SELECT q.id FROM quizzes q WHERE q.grade_column_id = grade_columns.id LIMIT 1) AS quiz_id,
+            (SELECT q.title FROM quizzes q WHERE q.grade_column_id = grade_columns.id LIMIT 1) AS quiz_title
        FROM grade_columns WHERE class_id = $1 AND quarter = $2
       ORDER BY CASE component WHEN 'WW' THEN 1 WHEN 'PT' THEN 2 ELSE 3 END, position, id`,
     [classId, quarter]
@@ -460,6 +462,18 @@ async function updateColumn(req, res) {
     );
     if (found.rowCount === 0) throw notFound('Column not found.');
     checkPeriod(profile, found.rows[0].quarter);
+    // A quiz column's highest possible score is the quiz's total points:
+    // changing it here would make the Grades page and the quiz disagree.
+    // Change the quiz questions instead, before anyone has taken it.
+    const quizLinked = await client.query(
+      'SELECT id, title FROM quizzes WHERE grade_column_id = $1 LIMIT 1',
+      [columnId]
+    );
+    if (quizLinked.rowCount > 0) {
+      throw badRequest(`"${quizLinked.rows[0].title}" fills this column from its quiz. Edit the quiz to change its total points.`, {
+        errors: { highest_possible: 'This column comes from a quiz.' },
+      });
+    }
     const over = await client.query(
       'SELECT COUNT(*)::int AS count FROM grade_scores WHERE column_id = $1 AND score > $2',
       [columnId, highest_possible]
@@ -510,6 +524,17 @@ async function deleteColumn(req, res) {
     if (found.rowCount === 0) throw notFound('Column not found.');
     const column = found.rows[0];
     checkPeriod(profile, column.quarter);
+    // A quiz column belongs to its quiz: deleting it here would leave the
+    // quiz with nowhere to write its scores. Delete the quiz instead.
+    const quizLinked = await client.query(
+      'SELECT id, title FROM quizzes WHERE grade_column_id = $1 LIMIT 1',
+      [columnId]
+    );
+    if (quizLinked.rowCount > 0) {
+      throw badRequest(`"${quizLinked.rows[0].title}" fills this column from its quiz. Delete the quiz to remove this column.`, {
+        errors: { column: 'This column comes from a quiz.' },
+      });
+    }
     const count = await client.query(
       'SELECT COUNT(*)::int AS count FROM grade_columns WHERE class_id = $1 AND quarter = $2 AND component = $3',
       [id, column.quarter, column.component]
@@ -1959,4 +1984,10 @@ module.exports = {
   attachManualSubjects,
   manualPeriodGrades,
   manualHasGrades,
+  // Shared by online quizzes (Batch 9): publishing a quiz appends its
+  // Written Works column to the same record, and a new quiz score clears
+  // a filing the same way a typed score does.
+  ensureColumns,
+  clearSubmission,
+  listColumns,
 };

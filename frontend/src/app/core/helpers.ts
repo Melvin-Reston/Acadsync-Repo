@@ -53,9 +53,16 @@ export function roleLabel(role: ActivityRole): string {
 // ---------- Money, plans and statuses ----------
 
 // "100.00" -> "₱100.00", "1250.5" -> "₱1,250.50". Always two decimals.
+// The formatter is built once: peso() runs once per money cell in a
+// ledger, and constructing a NumberFormat per call is wasted work.
+const pesoFormatter = new Intl.NumberFormat('en-PH', {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
 export function peso(amount: string | number | null | undefined): string {
   const value = Number(amount ?? 0);
-  return '₱' + value.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return '₱' + pesoFormatter.format(value);
 }
 
 export function billingCycleLabel(cycle: BillingCycle): string {
@@ -145,16 +152,21 @@ export function time12(value: string): string {
 // The current date and time in Manila (Asia/Manila), the way the API works it out.
 // The browser's own clock may be in another timezone, so anything that says "now"
 // or "today" — the agenda's Now/Next pills, the agenda day — uses this, not local time.
+// The formatter is built once: manilaNow() is called on every agenda row and
+// every mark tap, and constructing an Intl formatter per call is the most
+// expensive thing in it.
+const manilaFormatter = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Manila',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
 export function manilaNow(): { date: string; time: string } {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Manila',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).formatToParts(new Date());
+  const parts = manilaFormatter.formatToParts(new Date());
   const get = (type: string) => parts.find((part) => part.type === type)?.value ?? '';
   return {
     date: `${get('year')}-${get('month')}-${get('day')}`,

@@ -4,6 +4,8 @@
 // Batch 3 (Attendance) has a roster to work from.
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { forkJoin, of } from 'rxjs';
+import { catchError, map } from 'rxjs/operators';
 import { errorMessage, fieldErrors, time12 } from '../../../core/helpers';
 import { BulkUploadResult, ClassItem, ClassLearner, FieldErrors, Learner, Subject } from '../../../core/models';
 import { ClassesService, ClassForm, LearnerForm } from '../../../core/classes.service';
@@ -44,6 +46,8 @@ export class TeacherClassesComponent {
   protected readonly learners = signal<Learner[]>([]);
   protected readonly loading = signal(true);
   protected readonly error = signal('');
+  // The academic year a load is already in flight for (see load()).
+  private loadingYear: string | null = null;
   protected readonly saving = signal(false);
   protected readonly formErrors = signal<FieldErrors>({});
 
@@ -52,6 +56,17 @@ export class TeacherClassesComponent {
   protected readonly search = signal('');
   protected readonly gradeFilter = signal<number | ''>('');
   protected readonly learnerSearch = signal('');
+
+  // Checkbox selection on the Learners tab for deleting several learners
+  // at once. The selection is by learner id, so it survives a search or a
+  // class filter; the confirm step always names exactly who will be deleted.
+  protected readonly selectedLearnerIds = signal<Set<number>>(new Set());
+  protected readonly bulkDeleteConfirm = signal(false);
+  protected readonly bulkDeleting = signal(false);
+  protected readonly bulkDeleteResult = signal<{
+    deleted: string[];
+    refused: { name: string; reason: string }[];
+  } | null>(null);
 
   // The Learners tab shows the whole school directory, or the roster of one
   // class when a class is picked. '' means the whole directory.
@@ -234,6 +249,39 @@ export class TeacherClassesComponent {
     );
   });
 
+  // The selected learners, by name, for the bulk-delete confirm step.
+  // Resolved from both lists, since a roster row may not be in the
+  // directory list when a class is picked. Only the fields the confirm
+  // step and the delete calls need are kept.
+  protected readonly selectedLearners = computed(() => {
+    const byId = new Map<
+      number,
+      { id: number; first_name: string; last_name: string; learner_id: string }
+    >();
+    for (const learner of this.learners()) byId.set(learner.id, learner);
+    for (const learner of this.rosterClassLearners()) byId.set(learner.id, learner);
+    return [...this.selectedLearnerIds()]
+      .map((id) => byId.get(id))
+      .filter(
+        (
+          learner,
+        ): learner is { id: number; first_name: string; last_name: string; learner_id: string } =>
+          !!learner,
+      );
+  });
+
+  // The header checkbox: checked when every shown row is selected,
+  // indeterminate when only some are. It covers the rows on screen —
+  // the search and class filter decide which rows those are.
+  protected readonly allVisibleSelected = computed(() => {
+    const rows = this.rosterRows();
+    return rows.length > 0 && rows.every((row) => this.selectedLearnerIds().has(row.id));
+  });
+
+  protected readonly someVisibleSelected = computed(() =>
+    this.rosterRows().some((row) => this.selectedLearnerIds().has(row.id)),
+  );
+
   protected readonly gradeOptions = computed<DropdownOption[]>(() => [
     { value: '', label: 'All grades' },
     ...this.grades().map((grade) => ({ value: grade, label: `Grade ${grade}` })),
@@ -371,13 +419,25 @@ export class TeacherClassesComponent {
   }
 
   protected load(): void {
+    // The viewing-year effect fires when either the selected year or the
+    // loaded flag changes, which can be the same year twice on first
+    // render — loading the classes, subjects and learners twice for it
+    // is wasted work (and on the free tiers, wasted wake-ups). While a
+    // load for a year is in flight, a second call for the same year is
+    // ignored; the guard clears when the load settles, so Refresh and
+    // later saves still reload.
+    const yearKey = this.year.selectedYear() ?? '';
+    if (yearKey === this.loadingYear) return;
+    this.loadingYear = yearKey;
     this.loading.set(true);
     this.classesService.classes({ academic_year: this.year.selectedYear() ?? '' }).subscribe({
       next: (response) => {
+        this.loadingYear = null;
         this.classes.set(response.items);
         this.loading.set(false);
       },
       error: (error) => {
+        this.loadingYear = null;
         this.loading.set(false);
         this.error.set(errorMessage(error));
       },
@@ -705,6 +765,78 @@ export class TeacherClassesComponent {
       error: (error) => {
         this.saving.set(false);
         this.formErrors.set(fieldErrors(error));
+        this.error.set(errorMessage(error));
+      },
+    });
+  }
+
+  // ---------- Bulk delete ----------
+
+  protected toggleLearnerSelected(id: number, event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    const next = new Set(this.selectedLearnerIds());
+    if (checked) next.add(id);
+    else next.delete(id);
+    this.selectedLearnerIds.set(next);
+  }
+
+  protected toggleSelectAllVisible(event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    const next = new Set(this.selectedLearnerIds());
+    for (const row of this.rosterRows()) {
+      if (checked) next.add(row.id);
+      else next.delete(row.id);
+    }
+    this.selectedLearnerIds.set(next);
+  }
+
+  protected clearSelection(): void {
+    this.selectedLearnerIds.set(new Set());
+  }
+
+  // Deletes every selected learner through the same single-delete
+  // endpoint as the row menu, one request per learner, and reports each
+  // result: a learner who is enrolled or has records is refused by the
+  // server with a plain reason and is kept, never silently dropped.
+  protected confirmBulkDelete(): void {
+    const targets = this.selectedLearners();
+    if (targets.length === 0) return;
+    this.bulkDeleting.set(true);
+    forkJoin(
+      targets.map((learner) =>
+        this.classesService.deleteLearner(learner.id).pipe(
+          map(() => ({ learner, ok: true as const, reason: '' })),
+          catchError((error: unknown) =>
+            of({ learner, ok: false as const, reason: errorMessage(error) }),
+          ),
+        ),
+      ),
+    ).subscribe({
+      next: (results) => {
+        this.bulkDeleting.set(false);
+        this.bulkDeleteConfirm.set(false);
+        this.bulkDeleteResult.set({
+          deleted: results
+            .filter((result) => result.ok)
+            .map((result) => `${result.learner.first_name} ${result.learner.last_name}`),
+          refused: results
+            .filter((result) => !result.ok)
+            .map((result) => ({
+              name: `${result.learner.first_name} ${result.learner.last_name}`,
+              reason: result.reason,
+            })),
+        });
+        this.selectedLearnerIds.set(new Set());
+        const deletedCount = results.filter((result) => result.ok).length;
+        if (deletedCount > 0) {
+          this.toast.success(
+            `${deletedCount} ${deletedCount === 1 ? 'learner' : 'learners'} deleted.`,
+          );
+        }
+        this.load();
+      },
+      error: (error: unknown) => {
+        this.bulkDeleting.set(false);
         this.error.set(errorMessage(error));
       },
     });

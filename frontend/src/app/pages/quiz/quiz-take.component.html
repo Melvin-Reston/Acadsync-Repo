@@ -1,0 +1,135 @@
+<main class="quiz-page">
+  <header class="quiz-brand">
+    <span class="brand-mark">A</span>
+    <span class="brand-name">AcadSync</span>
+    <span class="brand-sub">Online quiz</span>
+  </header>
+
+  @if (step() === 'loading') {
+    <p class="muted">Loading quiz…</p>
+  } @else if (quiz(); as data) {
+    <section class="card card-pad quiz-head">
+      <div class="eyebrow">{{ data.quiz.class.subject_name }} · Grade {{ data.quiz.class.grade_level }} – {{ data.quiz.class.section_name }}</div>
+      <h1 class="page-title">Quiz {{ data.quiz.quiz_number }} · {{ data.quiz.title }}</h1>
+      <p class="muted">
+        {{ data.quiz.period_label }} {{ data.quiz.quarter }} · {{ data.quiz.class.academic_year }} · Prepared by {{ data.quiz.teacher_name }} ·
+        {{ data.quiz.total_points }} points
+      </p>
+      @if (data.quiz.deadline) {
+        <p class="muted">Deadline: {{ deadlineLabel(data.quiz.deadline) }}</p>
+      }
+      @if (data.quiz.instructions) {
+        <p class="instructions">{{ data.quiz.instructions }}</p>
+      }
+    </section>
+
+    @if (step() === 'blocked') {
+      <section class="card card-pad">
+        @if (loadError()) {
+          <p><b>{{ loadError() }}</b></p>
+        } @else {
+          <p><b>{{ blockedReason() }}</b></p>
+        }
+        <p class="muted">If your teacher sent you this link, ask them to check that the quiz is published and still open.</p>
+      </section>
+    }
+
+    @if (step() === 'identify') {
+      <section class="card card-pad">
+        <h2 class="card-title">Enter your Learner ID</h2>
+        <p class="muted">Use the same Learner ID on your class list. One attempt per learner.</p>
+        <div class="field">
+          <label for="learner-id">Learner ID</label>
+          <input
+            id="learner-id"
+            type="text"
+            [ngModel]="learnerIdInput()"
+            (ngModelChange)="learnerIdInput.set($event)"
+            (keyup.enter)="findLearner()"
+            placeholder="For example: STU-2026-1048"
+            autocomplete="off"
+          />
+          @if (lookupError()) {
+            <span class="field-error">{{ lookupError() }}</span>
+          }
+        </div>
+        <button type="button" class="btn btn-primary btn-block" (click)="findLearner()" [disabled]="lookupBusy()">
+          {{ lookupBusy() ? 'Looking you up…' : 'Find my name' }}
+        </button>
+      </section>
+    }
+
+    @if (step() === 'confirm' && lookup(); as found) {
+      <section class="card card-pad">
+        <h2 class="card-title">Is this you?</h2>
+        <p class="confirm-name">{{ found.learner.last_name }}, {{ found.learner.first_name }}</p>
+        <p class="muted mono">{{ found.learner.learner_id }}</p>
+        <div class="form-actions">
+          <button type="button" class="btn" (click)="notMe()">Not me</button>
+          <button type="button" class="btn btn-primary" (click)="startQuiz()">Yes, start the quiz</button>
+        </div>
+      </section>
+    }
+
+    @if (step() === 'questions') {
+      <p class="muted progress">{{ answeredCount() }} of {{ totalQuestions() }} answered</p>
+      @for (question of data.questions; track question.id) {
+        <section class="card card-pad question">
+          <div class="question-top">
+            <b>Question {{ question.position }}</b>
+            <span class="muted">{{ question.question_type === 'mcq' ? 'Multiple choice' : 'True / False' }} · {{ question.points }} point{{ question.points === 1 ? '' : 's' }}</span>
+          </div>
+          <p class="question-text">{{ question.question_text }}</p>
+          <div class="options" role="radiogroup" [attr.aria-label]="'Question ' + question.position">
+            @for (option of question.options; track $index) {
+              <button
+                type="button"
+                class="option"
+                [class.selected]="answers()[question.id] === $index"
+                role="radio"
+                [attr.aria-checked]="answers()[question.id] === $index"
+                (click)="choose(question.id, $index)"
+              >
+                <span class="choice-letter">{{ 'ABCDE'[$index] }}</span>
+                <span>{{ option }}</span>
+              </button>
+            }
+          </div>
+        </section>
+      }
+      @if (submitError()) {
+        <p class="field-error submit-error">{{ submitError() }}</p>
+      }
+      <button
+        type="button"
+        class="btn btn-primary btn-block submit-btn"
+        (click)="submit()"
+        [disabled]="submitting() || answeredCount() < totalQuestions()"
+      >
+        @if (answeredCount() < totalQuestions()) {
+          Answer all {{ totalQuestions() }} questions to submit ({{ totalQuestions() - answeredCount() }} left)
+        } @else {
+          {{ submitting() ? 'Submitting…' : 'Submit my answers' }}
+        }
+      </button>
+      <p class="muted small-note">Once you submit, you cannot change your answers. Your score goes straight to your teacher.</p>
+    }
+
+    @if (step() === 'result' && result(); as outcome) {
+      <section class="card card-pad result">
+        <h2 class="card-title">Submitted</h2>
+        <p class="score">{{ outcome.score }} <span class="muted">out of {{ outcome.total_points }}</span></p>
+        @if (outcome.total_questions > 0) {
+          <p class="muted">{{ outcome.correct_count }} of {{ outcome.total_questions }} questions right.</p>
+        }
+        <p>{{ outcome.message }}</p>
+        <p class="muted">Your teacher can see your score. You cannot take this quiz again unless your teacher resets your attempt.</p>
+      </section>
+    }
+  } @else if (step() === 'blocked') {
+    <section class="card card-pad">
+      <p><b>{{ loadError() || 'This quiz link is not valid.' }}</b></p>
+      <p class="muted">Check the link your teacher sent.</p>
+    </section>
+  }
+</main>

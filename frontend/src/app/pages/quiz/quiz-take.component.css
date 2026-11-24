@@ -1,0 +1,172 @@
+/* The learner's quiz page: a narrow column on warm paper, large tap
+   targets, no sidebar and no sign-in. */
+
+.quiz-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+  display: grid;
+  gap: 16px;
+}
+
+.quiz-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.brand-name {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.brand-sub {
+  color: var(--muted);
+  font-size: 13px;
+  margin-left: auto;
+}
+
+.quiz-head .instructions {
+  margin-top: 10px;
+  white-space: pre-wrap;
+}
+
+.field {
+  margin: 14px 0;
+}
+
+.field label {
+  display: block;
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.field input {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  font-size: 16px;
+}
+
+.field-error {
+  display: block;
+  color: var(--red);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.confirm-name {
+  font-family: var(--font-serif);
+  font-size: 26px;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+.progress {
+  font-weight: 700;
+}
+
+.question-top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.question-text {
+  font-size: 17px;
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+.options {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 50px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+  text-align: left;
+  font-size: 15px;
+}
+
+.option.selected {
+  border-color: var(--accent);
+  border-width: 2px;
+  background: var(--accent-tint);
+  font-weight: 700;
+}
+
+.choice-letter {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 700;
+  background: var(--surface);
+}
+
+.submit-btn {
+  min-height: 50px;
+  font-size: 16px;
+}
+
+.submit-error {
+  margin-bottom: 10px;
+}
+
+.small-note {
+  font-size: 13px;
+  text-align: center;
+}
+
+.result .score {
+  font-family: var(--font-serif);
+  font-size: 44px;
+  font-weight: 600;
+  margin: 8px 0;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}

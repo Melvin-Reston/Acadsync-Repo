@@ -5,6 +5,13 @@ import { teacherGuard, teacherGuestGuard } from './core/teacher-guards';
 import { TeacherLayoutComponent } from './layout/teacher-layout.component';
 
 export const routes: Routes = [
+  // A quiz link a learner opens: no sign-in, no layout, just the quiz.
+  {
+    path: 'quiz/:code',
+    title: 'Online Quiz · AcadSync',
+    loadComponent: () =>
+      import('./pages/quiz/quiz-take.component').then((m) => m.QuizTakeComponent),
+  },
   // Teacher sign-in pages (no admin sign-up exists)
   {
     path: 'teacher/login',
@@ -109,6 +116,12 @@ export const routes: Routes = [
           import('./pages/teacher/report-card/report-card.component').then(
             (m) => m.TeacherReportCardComponent,
           ),
+      },
+      {
+        path: 'quizzes',
+        title: 'Quizzes · AcadSync Teacher',
+        loadComponent: () =>
+          import('./pages/teacher/quizzes/quizzes.component').then((m) => m.TeacherQuizzesComponent),
       },
       {
         path: 'payments',

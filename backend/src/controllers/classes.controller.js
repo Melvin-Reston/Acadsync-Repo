@@ -486,6 +486,7 @@ async function deleteLearner(req, res) {
     `SELECT (SELECT COUNT(*)::int FROM class_learners WHERE learner_id = $1) AS enrolments,
             (SELECT COUNT(*)::int FROM attendance WHERE learner_id = $1) AS attendance,
             (SELECT COUNT(*)::int FROM grade_scores WHERE learner_id = $1) AS scores,
+            (SELECT COUNT(*)::int FROM quiz_attempts WHERE learner_id = $1) AS quiz_attempts,
             (SELECT COUNT(*)::int FROM report_card_comments WHERE learner_id = $1) AS comments`,
     [id]
   );
@@ -499,6 +500,9 @@ async function deleteLearner(req, res) {
   }
   if (used.scores > 0) {
     throw conflict(`${name} has grade scores, so they cannot be deleted.`);
+  }
+  if (used.quiz_attempts > 0) {
+    throw conflict(`${name} has quiz attempts, so they cannot be deleted.`);
   }
   if (used.comments > 0) {
     throw conflict(`${name} has report card comments, so they cannot be deleted.`);

@@ -6,7 +6,6 @@
 // Print opens a small printable page with just the card, so the teacher can
 // print one pass per learner on plain paper.
 import { Component, effect, input, output, signal } from '@angular/core';
-import QRCode from 'qrcode';
 import { downloadBlob } from '../core/helpers';
 import { IconComponent } from './icon.component';
 import { ModalComponent } from './modal.component';
@@ -99,16 +98,25 @@ export class QrCardComponent {
   protected readonly qrUrl = signal<string>('');
 
   constructor() {
-    // Rebuilds the code whenever a different learner is shown.
+    // Rebuilds the code whenever a different learner is shown. The QR
+    // library loads only when a card actually opens, so the Classes page
+    // does not carry it; a card opened for one learner while the library
+    // is still loading never shows another learner's code.
     effect(() => {
       const learner = this.learner();
       this.qrUrl.set('');
-      QRCode.toDataURL(`acadsync:${learner.learner_id}`, {
-        width: 220,
-        margin: 1,
-        color: { dark: '#2b1a0e', light: '#ffffff' },
-      })
-        .then((url) => this.qrUrl.set(url))
+      const learnerId = learner.learner_id;
+      void import('qrcode')
+        .then((module) =>
+          module.default.toDataURL(`acadsync:${learnerId}`, {
+            width: 220,
+            margin: 1,
+            color: { dark: '#2b1a0e', light: '#ffffff' },
+          }),
+        )
+        .then((url) => {
+          if (this.learner().learner_id === learnerId) this.qrUrl.set(url);
+        })
         .catch(() => undefined);
     });
   }

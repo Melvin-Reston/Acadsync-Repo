@@ -26,6 +26,28 @@
         </span>
         <span class="scan-class mono">{{ classLabel() }}</span>
       </div>
+      @if (cameraInUse() || cameras().length > 1) {
+        <div class="camera-row">
+          @if (cameraInUse()) {
+            <span class="camera-in-use">Camera: {{ cameraInUse() }}</span>
+          }
+          @if (cameras().length > 1) {
+            <label class="camera-switch">
+              <span>Switch camera</span>
+              <select
+                aria-label="Choose camera"
+                [ngModel]="selectedCameraId()"
+                (ngModelChange)="onCameraSelected($event)"
+              >
+                <option value="">Automatic (rear camera)</option>
+                @for (camera of cameras(); track camera.deviceId; let i = $index) {
+                  <option [value]="camera.deviceId">{{ cameraDisplayName(undefined, camera.label || 'Camera ' + (i + 1)) }}</option>
+                }
+              </select>
+            </label>
+          }
+        </div>
+      }
       @if (cameraError()) {
         <p class="scan-camera-error">{{ cameraError() }}</p>
       }

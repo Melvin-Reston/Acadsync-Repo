@@ -490,6 +490,51 @@
   color: var(--bg);
 }
 
+/* Checkbox selection and bulk delete on the Learners tab. */
+.select-col {
+  width: 40px;
+}
+
+.select-col input[type='checkbox'] {
+  width: 18px;
+  height: 18px;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+}
+
+.bulk-bar > span {
+  flex: 1;
+}
+
+.bulk-dismiss {
+  margin-left: auto;
+  flex: none;
+}
+
+.refused-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.bulk-names {
+  max-height: 180px;
+  overflow-y: auto;
+  margin: 12px 0;
+  padding-left: 18px;
+}
+
 .upload-summary {
   display: flex;
   flex-wrap: wrap;
