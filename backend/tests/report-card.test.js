@@ -5,7 +5,7 @@ const { test, describe, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const { api, pool, resetDatabase, signIn, bearer, SUPER, ADMIN } = require('./helpers');
 const deped = require('../src/utils/deped');
-const { schoolYearMonths } = require('../src/controllers/reportCard.controller');
+const { schoolYearMonths, ageOnJune1 } = require('../src/controllers/reportCard.controller');
 
 let superToken;
 let adminToken;
@@ -278,6 +278,17 @@ describe('Report card helpers', () => {
     assert.deepEqual(table[4], { range: '0–64', descriptor: 'Emerging', remarks: 'Failed' });
   });
 
+  test('age on June 1 of the school year, from the birthdate', () => {
+    assert.equal(ageOnJune1('2010-05-20', '2026-2027'), 16);
+    assert.equal(ageOnJune1('2010-06-01', '2026-2027'), 16);
+    assert.equal(ageOnJune1('2010-06-02', '2026-2027'), 15);
+    assert.equal(ageOnJune1('2012-02-29', '2026-2027'), 14);
+    assert.equal(ageOnJune1('2010-05-20', '2025-2026'), 15);
+    assert.equal(ageOnJune1(null, '2026-2027'), null);
+    assert.equal(ageOnJune1('', '2026-2027'), null);
+    assert.equal(ageOnJune1('2010-05-20', ''), null);
+  });
+
   test('descriptor table under DO 8: Outstanding down to Did Not Meet Expectations', () => {
     const table = deped.descriptorTable('do8_2015');
     assert.equal(table.length, 5);
@@ -390,6 +401,15 @@ describe('Report card data', () => {
     assert.equal(row.attendance.months['2026-06'], null);
     assert.equal(row.attendance.totals, null);
     assert.deepEqual(subjectRow(row, 'Sacraments').period_grades, [null, null, null]);
+  });
+
+  test('age comes from the birthdate; no birthdate means no age', async () => {
+    const aged = await makeLearner(melvinToken, { first_name: 'Aged', last_name: 'Learner', learner_id: 'STU-2026-1060', sex: 'Male', birthdate: '2010-05-20' });
+    await enrol(melvinToken, sacramentsClass.id, aged.id);
+    const cards = await getCards(melvinToken);
+    assert.equal(cardFor(cards, 'STU-2026-1060').age, 16);
+    // Alex has no birthdate on file.
+    assert.equal(cardFor(cards, 'STU-2026-1048').age, null);
   });
 });
 

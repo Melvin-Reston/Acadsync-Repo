@@ -536,9 +536,17 @@
   </app-modal>
 }
 
-<!-- Add / edit learner -->
+<!-- Add / edit learner. When adding, the modal has two tabs: one learner
+     at a time, or many at once from a CSV file. -->
 @if (learnerFormOpen()) {
   <app-modal [title]="editingLearner ? 'Edit learner' : 'Add learner'" (closed)="learnerFormOpen.set(false)">
+    @if (!editingLearner) {
+      <div class="modal-tabs" role="tablist" aria-label="How to add learners">
+        <button type="button" role="tab" [attr.aria-selected]="learnerTab() === 'individual'" [class.active]="learnerTab() === 'individual'" (click)="learnerTab.set('individual')">Individual</button>
+        <button type="button" role="tab" [attr.aria-selected]="learnerTab() === 'bulk'" [class.active]="learnerTab() === 'bulk'" (click)="learnerTab.set('bulk')">Bulk upload (CSV)</button>
+      </div>
+    }
+    @if (editingLearner || learnerTab() === 'individual') {
     <form (ngSubmit)="saveLearner()" novalidate>
       <div class="form-grid">
         <div class="field">
@@ -589,12 +597,8 @@
         </button>
       </div>
     </form>
-  </app-modal>
-}
-
-<!-- Bulk upload learners (CSV) -->
-@if (uploadOpen()) {
-  <app-modal title="Upload learners (CSV)" (closed)="uploadOpen.set(false)">
+    } @else {
+    <!-- Bulk upload learners (CSV): one learner per row. -->
     <p class="muted">
       One learner per row. A row whose learner ID already exists in your school is skipped as a duplicate; a row with a mistake is reported and never stops the good rows. Nothing is overwritten.
     </p>
@@ -608,6 +612,9 @@
     <div class="field">
       <label for="upload-file">CSV file</label>
       <input id="upload-file" type="file" class="input" accept=".csv,text/csv" (change)="onUploadFileSelected($event)" />
+      @if (uploadFile) {
+        <span class="muted">Selected file: {{ uploadFile.name }}</span>
+      }
     </div>
     @if (error()) {
       <div class="alert" role="alert">
@@ -645,11 +652,12 @@
       </table>
     }
     <div class="form-actions">
-      <button type="button" class="btn btn-secondary" (click)="uploadOpen.set(false)">Close</button>
+      <button type="button" class="btn btn-secondary" (click)="learnerFormOpen.set(false)">Close</button>
       <button type="button" class="btn btn-primary" (click)="uploadCsv()" [disabled]="!uploadFile || uploading()">
         {{ uploading() ? 'Uploading…' : 'Upload' }}
       </button>
     </div>
+    }
   </app-modal>
 }
 

@@ -8,6 +8,7 @@
 import {
   Component,
   computed,
+  DestroyRef,
   effect,
   inject,
   signal,
@@ -28,7 +29,7 @@ import {
   SubmissionCheck,
   TeacherSelf,
 } from '../../../core/models';
-import { computeLearnerGrade, DEFAULT_WEIGHTS, descriptorFor, exSubWs } from '../../../core/deped';
+import { computeLearnerGrade, descriptorFor, exSubWs } from '../../../core/deped';
 import { DropdownComponent, DropdownOption } from '../../../shared/dropdown.component';
 import { IconComponent } from '../../../shared/icon.component';
 import { ModalComponent } from '../../../shared/modal.component';
@@ -106,7 +107,6 @@ export class TeacherGradesComponent {
   });
 
   protected readonly components: ('WW' | 'PT' | 'EX')[] = ['WW', 'PT', 'EX'];
-  protected readonly defaultWeights = DEFAULT_WEIGHTS;
 
   protected readonly selectedClass = computed(
     () => this.classes().find((klass) => klass.id === this.selectedClassId()) ?? null,
@@ -151,8 +151,10 @@ export class TeacherGradesComponent {
       return {
         learner,
         computed: computeLearnerGrade(sheet.columns, scores, sheet.weights, sheet.grading.code),
-        // The final grade, from filed submissions only — null until every
-        // period is filed. It never follows the unsaved draft.
+        // The final grade, from the saved scores of every period — null
+        // until every period has a complete saved record for the
+        // learner. It never follows an unsaved draft: only Save scores
+        // makes a typed score part of the final grade.
         final: sheet.finals.grades[learner.id] ?? null,
         // The Examinations sub-column weighted scores (WS ST1 / WS ST2 /
         // WS TE) for the DepEd class record printout.
@@ -172,8 +174,8 @@ export class TeacherGradesComponent {
     return groups.filter((group) => group.rows.length > 0);
   });
 
-  // The Final Grades tab: every filed period side by side, from filed
-  // submissions only, with the final grade, descriptor and remark.
+  // The Final Grades tab: every period's saved grade side by side, with
+  // the final grade, descriptor and remark.
   protected readonly finalRows = computed(() => {
     const sheet = this.sheet();
     if (!sheet) return [];
@@ -270,9 +272,57 @@ export class TeacherGradesComponent {
     };
   });
 
-  protected readonly dirty = computed(
-    () => JSON.stringify(this.draft()) !== JSON.stringify(this.savedDraft()),
-  );
+  // How many cells differ from the last saved sheet, counted in one pass
+  // over the draft — no stringifying the whole sheet on every check, which
+  // is what the old dirty check did on every change-detection run.
+  protected readonly changedCount = computed(() => {
+    const sheet = this.sheet();
+    if (!sheet) return 0;
+    const draft = this.draft();
+    const saved = this.savedDraft();
+    let count = 0;
+    for (const learner of sheet.learners) {
+      for (const column of sheet.columns) {
+        if ((draft[learner.id]?.[column.id] ?? null) !== (saved[learner.id]?.[column.id] ?? null)) {
+          count += 1;
+        }
+      }
+    }
+    return count;
+  });
+
+  protected readonly dirty = computed(() => this.changedCount() > 0);
+
+  // The weights form holds unsaved changes when its numbers differ from
+  // the sheet's saved weights (or the Examinations shares differ).
+  protected readonly weightsDirty = computed(() => {
+    const sheet = this.sheet();
+    if (!sheet || !this.weightsEditing()) return false;
+    const draft = this.weightsDraft();
+    return (
+      draft.ww !== sheet.weights.ww ||
+      draft.pt !== sheet.weights.pt ||
+      draft.ex !== sheet.weights.ex ||
+      this.subWeightsDirty()
+    );
+  });
+
+  // Everything on this page that would be lost by leaving: unsaved scores
+  // or an unsaved weights edit. The route guard and the browser's
+  // before-unload prompt both ask through this one check.
+  hasUnsavedChanges(): boolean {
+    return this.dirty() || this.weightsDirty();
+  }
+
+  // Asks before throwing away unsaved scores (or weights) for an in-page
+  // switch — changing class or term reloads the sheet from the server.
+  // Returns true when the switch may go ahead.
+  private confirmDiscardIfDirty(): boolean {
+    if (!this.hasUnsavedChanges()) return true;
+    return window.confirm(
+      'You have unsaved scores on this page. Leave without saving them?',
+    );
+  }
 
   protected readonly weightsSum = computed(
     () => this.weightsDraft().ww + this.weightsDraft().pt + this.weightsDraft().ex,
@@ -337,6 +387,13 @@ export class TeacherGradesComponent {
     effect(() => {
       if (this.year.selectedYear() || this.year.loaded()) this.loadClasses();
     });
+    // Leaving the tab or closing the browser with unsaved scores: the
+    // browser shows its own leave-page prompt for this event.
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (this.hasUnsavedChanges()) event.preventDefault();
+    };
+    window.addEventListener('beforeunload', beforeUnload);
+    inject(DestroyRef).onDestroy(() => window.removeEventListener('beforeunload', beforeUnload));
     // A print section renders only for the form being printed; clear it
     // once the print dialog closes so the next print starts clean.
     window.addEventListener('afterprint', () => this.printTarget.set(null));
@@ -344,9 +401,19 @@ export class TeacherGradesComponent {
 
   // ---------- Loading ----------
 
+  // The academic year a class-list load is already in flight for. The
+  // viewing-year effect fires when either the selected year or the loaded
+  // flag changes, which can be the same year twice on first render —
+  // loading the class list (and the sheet) twice for it is wasted work.
+  private loadingClassesYear: string | null = null;
+
   private loadClasses(): void {
+    const yearKey = this.year.selectedYear() ?? '';
+    if (yearKey === this.loadingClassesYear) return;
+    this.loadingClassesYear = yearKey;
     this.classesService.classes({ academic_year: this.year.selectedYear() ?? '' }).subscribe({
       next: (response) => {
+        this.loadingClassesYear = null;
         this.classes.set(response.items);
         if (response.items.length === 0) {
           this.loading.set(false);
@@ -356,6 +423,7 @@ export class TeacherGradesComponent {
         this.loadSheet();
       },
       error: (error) => {
+        this.loadingClassesYear = null;
         this.loading.set(false);
         this.error.set(errorMessage(error));
       },
@@ -392,12 +460,21 @@ export class TeacherGradesComponent {
     });
   }
 
-  protected onClassChange(): void {
+  protected onClassSelect(classId: number | ''): void {
+    if (classId === this.selectedClassId()) return;
+    // The picker is bound to selectedClassId, so cancelling here leaves
+    // it showing the class whose sheet is still on screen.
+    if (!this.confirmDiscardIfDirty()) return;
+    this.selectedClassId.set(classId);
     this.error.set('');
     this.loadSheet();
   }
 
   protected onQuarterChange(value: number): void {
+    // Already encoding this term: nothing to do — unless the Final
+    // Grades tab is showing, in which case this returns to the sheet.
+    if (value === this.quarter() && this.view() === 'period') return;
+    if (!this.confirmDiscardIfDirty()) return;
     this.view.set('period');
     this.quarter.set(value);
     this.error.set('');
@@ -425,10 +502,6 @@ export class TeacherGradesComponent {
   }
 
   // ---------- Encoding ----------
-
-  protected scoreValue(learnerId: number, columnId: number): number | null {
-    return this.draft()[learnerId]?.[columnId] ?? null;
-  }
 
   protected setScore(learner: GradeLearnerRow, column: GradeColumn, raw: string): void {
     const value = raw.trim() === '' ? null : Number(raw);

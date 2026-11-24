@@ -1,0 +1,100 @@
+<!-- Attendance upload: a CSV grid of past records for one class. -->
+<app-modal title="Upload attendance records" (closed)="close()">
+  <p class="muted">For {{ classLabel() }}. One row per learner, one column per date. A file may cover several months at once.</p>
+
+  @if (rosterError()) {
+    <div class="alert" role="alert">
+      <app-icon name="alert" [size]="16" />
+      <span>{{ rosterError() }}</span>
+    </div>
+  }
+
+  <div class="field-row">
+    <app-dropdown
+      class="field"
+      [ngModel]="templateMonth()"
+      (ngModelChange)="templateMonth.set($event)"
+      [options]="monthOptions()"
+      placeholder="Choose a month"
+      searchPlaceholder="Search months"
+      countSingular="month"
+      countPlural="months"
+      aria-label="Template month"
+    />
+    <button type="button" class="btn" (click)="downloadTemplate()" [disabled]="!templateMonth() || downloadingTemplate()">
+      <app-icon name="download" [size]="16" /> {{ downloadingTemplate() ? 'Downloading…' : 'Download template' }}
+    </button>
+  </div>
+
+  <p class="legend">Marks: <b>P</b> Present · <b>L</b> Late · <b>A</b> Absent (X also means Absent) · <b>E</b> Excused. Leave a day blank to skip it. Days already saved in AcadSync are never overwritten.</p>
+
+  <div class="file-row">
+    <label class="btn file-label" for="attendance-upload-file">
+      <app-icon name="upload" [size]="16" /> Choose CSV file
+    </label>
+    <input id="attendance-upload-file" type="file" accept=".csv,text/csv" (change)="onFile($event)" class="sr-only" />
+    <span class="muted file-name">{{ fileName() || 'No file chosen.' }}</span>
+  </div>
+
+  @if (preview(); as preview) {
+    @if (preview.errors.length > 0) {
+      <div class="alert" role="alert">
+        <app-icon name="alert" [size]="16" />
+        <span><b>Fix the file before uploading:</b></span>
+      </div>
+      <ul class="problem-list">
+        @for (error of preview.errors; track error) {
+          <li>{{ error }}</li>
+        }
+      </ul>
+    }
+    @if (preview.warnings.length > 0) {
+      <ul class="problem-list warnings">
+        @for (warning of preview.warnings; track warning) {
+          <li>{{ warning }}</li>
+        }
+      </ul>
+    }
+    @if (preview.records.length > 0) {
+      <div class="preview-stats">
+        <span><b>{{ preview.records.length }}</b> marks</span>
+        <span><b>{{ preview.learners }}</b> learners</span>
+        <span><b>{{ preview.dates }}</b> days</span>
+        <span>{{ preview.months.join(', ') }}</span>
+        <span>Present {{ preview.counts.present }} · Late {{ preview.counts.late }} · Absent {{ preview.counts.absent }} · Excused {{ preview.counts.excused }}</span>
+      </div>
+    }
+  }
+
+  @if (importError()) {
+    <div class="alert" role="alert">
+      <app-icon name="alert" [size]="16" />
+      <span>{{ importError() }}</span>
+    </div>
+  }
+
+  @if (result(); as result) {
+    <div class="result">
+      <p><b>{{ result.message }}</b></p>
+      @if (result.skipped.length > 0) {
+        <p class="muted">Skipped marks:</p>
+        <ul class="problem-list">
+          @for (skipped of result.skipped; track $index) {
+            <li>{{ skippedName(skipped) }} · {{ skipped.date }} — {{ skipReason[skipped.reason] }}</li>
+          }
+        </ul>
+      }
+    </div>
+  }
+
+  <div class="actions">
+    @if (result()) {
+      <button type="button" class="btn btn-primary" (click)="close()">Done</button>
+    } @else {
+      <button type="button" class="btn" (click)="close()">Cancel</button>
+      <button type="button" class="btn btn-primary" (click)="upload()" [disabled]="!preview() || preview()!.errors.length > 0 || preview()!.records.length === 0 || importing() || roster().length === 0">
+        {{ importing() ? 'Uploading…' : 'Upload records' }}
+      </button>
+    }
+  </div>
+</app-modal>

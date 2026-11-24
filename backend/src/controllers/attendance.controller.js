@@ -117,6 +117,70 @@ const SF2_MONTHS = [
   'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER',
 ];
 
+// ---------- The school calendar, shared by SF2 and the attendance import ----------
+
+// The teacher's first/last day of classes and the holidays they entered.
+// A date is a school day when it is a Monday–Friday inside the first/last
+// day of its own school year (June–April) and not a holiday. The stored
+// first/last day belong to the current school year, so they only narrow a
+// month of that same year: a past year's month must not be emptied by this
+// year's opening date (fix 13). A holiday is a date, so it narrows any year.
+function schoolYearOf(dateText) {
+  const [y, m] = dateText.split('-').map(Number);
+  return m >= 6 ? y : y - 1;
+}
+
+async function loadSchoolCalendar(client, teacherId) {
+  const teacher = await client.query(
+    `SELECT classes_start_date::text AS classes_start_date, classes_end_date::text AS classes_end_date
+       FROM teachers WHERE id = $1`,
+    [teacherId]
+  );
+  const holidays = await client.query(
+    'SELECT date::text AS date, name FROM teacher_holidays WHERE teacher_id = $1 ORDER BY date',
+    [teacherId]
+  );
+  const row = teacher.rows[0] || {};
+  return {
+    classes_start_date: row.classes_start_date || null,
+    classes_end_date: row.classes_end_date || null,
+    holidays: new Map(holidays.rows.map((holiday) => [holiday.date, holiday.name])),
+  };
+}
+
+function isSchoolDay(dateText, calendar) {
+  const date = new Date(`${dateText}T00:00:00Z`);
+  const weekday = date.getUTCDay();
+  if (weekday < 1 || weekday > 5) return false;
+  if (
+    calendar.classes_start_date &&
+    schoolYearOf(calendar.classes_start_date) === schoolYearOf(dateText) &&
+    dateText < calendar.classes_start_date
+  ) {
+    return false;
+  }
+  if (
+    calendar.classes_end_date &&
+    schoolYearOf(calendar.classes_end_date) === schoolYearOf(dateText) &&
+    dateText > calendar.classes_end_date
+  ) {
+    return false;
+  }
+  if (calendar.holidays.has(dateText)) return false;
+  return true;
+}
+
+function schoolDaysOfMonth(month, calendar) {
+  const [year, monthNumber] = month.split('-').map(Number);
+  const daysInMonth = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
+  const days = [];
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    const dateText = `${month}-${String(day).padStart(2, '0')}`;
+    if (isSchoolDay(dateText, calendar)) days.push(dateText);
+  }
+  return days;
+}
+
 // GET /api/teacher/attendance/sf2?class_id=&month=YYYY-MM
 // The month's daily attendance for one class, in School Form 2 shape: one
 // column per school day (a Monday–Friday day inside the teacher's first
@@ -178,38 +242,16 @@ async function getSf2(req, res) {
       });
     }
   }
-  const isSchoolDay = (day) => {
-    // The stored first/last day belong to the current school year. They
-    // only narrow a month of that same year: a past year's SF2 month must
-    // not be emptied by this year's opening date (fix 13). A holiday is a
-    // date, so it narrows any year it falls in.
-    const monthSchoolYear = monthNumber >= 6 ? year : year - 1;
-    const schoolYearOf = (dateText) => {
-      const [y, m] = dateText.split('-').map(Number);
-      return m >= 6 ? y : y - 1;
-    };
-    if (
-      calendar.classes_start_date &&
-      schoolYearOf(calendar.classes_start_date) === monthSchoolYear &&
-      day.date < calendar.classes_start_date
-    ) {
-      return false;
-    }
-    if (
-      calendar.classes_end_date &&
-      schoolYearOf(calendar.classes_end_date) === monthSchoolYear &&
-      day.date > calendar.classes_end_date
-    ) {
-      return false;
-    }
-    if (holidayByDate.has(day.date)) return false;
-    return true;
+  const schoolCalendar = {
+    classes_start_date: calendar.classes_start_date,
+    classes_end_date: calendar.classes_end_date,
+    holidays: holidayByDate,
   };
-  const days = weekdays.filter(isSchoolDay);
+  const days = weekdays.filter((day) => isSchoolDay(day.date, schoolCalendar));
   // Weekdays that are not school days, for the preview note: the reason a
   // day is out, and the holiday name when one was entered.
   const nonSchoolDays = weekdays
-    .filter((day) => !isSchoolDay(day))
+    .filter((day) => !isSchoolDay(day.date, schoolCalendar))
     .map((day) => ({
       date: day.date,
       day: day.day,
@@ -528,6 +570,112 @@ async function checkIn(req, res) {
   });
 }
 
+// ---------- Attendance upload (Batch 8 fix 15) ----------
+
+// GET /api/teacher/attendance/import-template?class_id=&month=YYYY-MM
+// A blank grid for one month: the enrolled learners, one column per school
+// day of that month (the same days SF2 shows), empty cells to fill with
+// P, L, A or E. The month only shapes the template; an upload may carry
+// date columns from several months at once.
+async function downloadImportTemplate(req, res) {
+  const { class_id, month } = req.valid.query;
+  const klass = await findClass(class_id, req.teacher.id);
+  const learners = await db.query(
+    `SELECT l.id, l.first_name, l.last_name, l.learner_id
+       FROM class_learners cl JOIN learners l ON l.id = cl.learner_id
+      WHERE cl.class_id = $1
+      ORDER BY l.last_name, l.first_name, l.id`,
+    [class_id]
+  );
+  const calendar = await loadSchoolCalendar(db, req.teacher.id);
+  const days = schoolDaysOfMonth(month, calendar);
+  const columns = [
+    { header: 'Learner ID', value: (row) => row.learner_id },
+    { header: 'Student Name', value: (row) => `${row.last_name}, ${row.first_name}` },
+    ...days.map((date) => ({ header: date, value: () => '' })),
+  ];
+  sendCsv(
+    res,
+    `attendance-template-${klass.subject_name.replace(/[^A-Za-z0-9]+/g, '-').toLowerCase()}-${klass.section_name.replace(/[^A-Za-z0-9]+/g, '-').toLowerCase()}-${month}.csv`,
+    columns,
+    learners.rows
+  );
+}
+
+// POST /api/teacher/attendance/import  { class_id, records: [{ learner_id, date, status }] }
+// Fills in attendance from an earlier record book (a teacher who joined
+// AcadSync months after classes started). Marks are stored exactly like a
+// saved roll — method 'manual', no time-in, since a paper record has none —
+// so SF2, the Report Card and the roll read them the same way. Nothing
+// already saved is overwritten: a date that already has a mark is skipped
+// and reported, so an upload can never clobber rolls tapped in AcadSync.
+// Marks on a day that is not a school day (weekend, holiday, outside the
+// first/last day of classes) and dates after today are skipped the same
+// way. Every skip is listed in the response with its reason; the valid
+// marks still import.
+async function importAttendance(req, res) {
+  const { class_id, records } = req.valid.body;
+  await findClass(class_id, req.teacher.id);
+
+  const enrolled = await db.query('SELECT learner_id FROM class_learners WHERE class_id = $1', [class_id]);
+  const enrolledIds = new Set(enrolled.rows.map((row) => row.learner_id));
+  const today = manilaParts().date;
+  const calendar = await loadSchoolCalendar(db, req.teacher.id);
+
+  const dates = [...new Set(records.map((record) => record.date))];
+  const existing = await db.query(
+    'SELECT learner_id, date::text AS date FROM attendance WHERE class_id = $1 AND date = ANY($2::date[])',
+    [class_id, dates]
+  );
+  const existingKeys = new Set(existing.rows.map((row) => `${row.learner_id}|${row.date}`));
+
+  const skipped = [];
+  const seen = new Set();
+  const toInsert = [];
+  for (const record of records) {
+    const key = `${record.learner_id}|${record.date}`;
+    if (!enrolledIds.has(record.learner_id)) {
+      skipped.push({ ...record, reason: 'not_enrolled' });
+      continue;
+    }
+    if (seen.has(key)) {
+      skipped.push({ ...record, reason: 'duplicate_in_file' });
+      continue;
+    }
+    seen.add(key);
+    if (record.date > today) {
+      skipped.push({ ...record, reason: 'future_date' });
+      continue;
+    }
+    if (!isSchoolDay(record.date, calendar)) {
+      skipped.push({ ...record, reason: 'not_a_school_day' });
+      continue;
+    }
+    if (existingKeys.has(key)) {
+      skipped.push({ ...record, reason: 'already_saved' });
+      continue;
+    }
+    toInsert.push(record);
+  }
+
+  await db.withTransaction(async (client) => {
+    for (const record of toInsert) {
+      await client.query(
+        `INSERT INTO attendance (teacher_id, class_id, learner_id, date, status, time_in, method)
+         VALUES ($1, $2, $3, $4, $5, NULL, 'manual')`,
+        [req.teacher.id, class_id, record.learner_id, record.date, record.status]
+      );
+    }
+  });
+
+  res.json({
+    message: `${toInsert.length} mark${toInsert.length === 1 ? '' : 's'} uploaded.${skipped.length ? ` ${skipped.length} skipped.` : ''}`,
+    class_id,
+    imported: toInsert.length,
+    skipped,
+  });
+}
+
 module.exports = {
   learnerIdFromCode,
   getRoll,
@@ -535,4 +683,6 @@ module.exports = {
   saveRoll,
   lookupLearner,
   checkIn,
+  downloadImportTemplate,
+  importAttendance,
 };

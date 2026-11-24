@@ -96,6 +96,8 @@ teacher.get('/schedules', validate(s.scheduleQuerySchema, 'query'), classes.getS
 // Attendance (Batch 3): the daily roll sheet and the QR check-in.
 teacher.get('/attendance', validate(s.attendanceQuerySchema, 'query'), attendance.getRoll);
 teacher.get('/attendance/sf2', validate(s.sf2QuerySchema, 'query'), attendance.getSf2);
+teacher.get('/attendance/import-template', validate(s.attendanceTemplateQuerySchema, 'query'), attendance.downloadImportTemplate);
+teacher.post('/attendance/import', validate(s.attendanceImportSchema), attendance.importAttendance);
 teacher.post('/attendance', validate(s.attendanceSaveSchema), attendance.saveRoll);
 teacher.get('/attendance/lookup', validate(s.attendanceLookupSchema, 'query'), attendance.lookupLearner);
 teacher.post('/attendance/check-in', validate(s.attendanceCheckInSchema), attendance.checkIn);

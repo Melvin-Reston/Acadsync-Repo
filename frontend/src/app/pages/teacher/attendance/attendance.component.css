@@ -554,3 +554,10 @@
     margin: 6px 0 0;
   }
 }
+
+.sf2-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}

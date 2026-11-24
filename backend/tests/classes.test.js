@@ -801,7 +801,7 @@ describe('Schedules and today-classes', () => {
     const subject = await makeSubject(token, { name: 'Music and Arts', grade_level: 10 });
     const klass = await makeClass(token, { subject, section_name: 'Luke' });
     // 00:00–23:59 covers the whole day, so it is always the class in progress.
-    await makeMeeting(token, klass.id, { day_of_week: weekday, start_time: '00:00', end_time: '23:59', room: 'Room 8' });
+    await makeMeeting(token, klass.id, { day_of_week: weekday, start_time: '00:00', end_time: '23:59', room: 'Room 21' }); // Room 21: no other test books it, so this all-day meeting never collides with the school-wide room check on any weekday (fix 15: the Room 8 booking on Tuesdays made this test fail on Tuesdays only).
 
     const today = await api().get('/api/teacher/today-classes').set(bearer(token));
     assert.equal(today.body.items.length, 1);

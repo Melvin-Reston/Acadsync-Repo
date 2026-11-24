@@ -58,8 +58,11 @@ export class TeacherClassesComponent {
   protected readonly rosterClassId = signal<number | ''>('');
   protected readonly rosterClassLearners = signal<ClassLearner[]>([]);
 
-  // Bulk upload (CSV) of learners into the school directory.
-  protected readonly uploadOpen = signal(false);
+  // Which tab of the Add learner modal is showing. Editing a learner is
+  // always the individual form — bulk upload only makes sense when adding.
+  protected readonly learnerTab = signal<'individual' | 'bulk'>('individual');
+  // Bulk upload (CSV) of learners into the school directory (the Bulk tab
+  // of the Add learner modal; the Upload CSV button opens the same modal).
   protected readonly uploadResult = signal<BulkUploadResult | null>(null);
   protected readonly uploading = signal(false);
   protected uploadFile: File | null = null;
@@ -326,7 +329,8 @@ export class TeacherClassesComponent {
     this.uploadFile = null;
     this.uploadResult.set(null);
     this.error.set('');
-    this.uploadOpen.set(true);
+    this.learnerTab.set('bulk');
+    this.learnerFormOpen.set(true);
   }
 
   protected onUploadFileSelected(event: Event): void {
@@ -664,6 +668,7 @@ export class TeacherClassesComponent {
     this.learnerSex = 'Female';
     this.learnerBirthdate = '';
     this.formErrors.set({});
+    this.learnerTab.set('individual');
     this.learnerFormOpen.set(true);
   }
 

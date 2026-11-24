@@ -864,11 +864,15 @@ export interface GradeSheet {
   // Every period already filed for this class and year (the period tabs
   // mark the filed ones).
   submitted_periods: number[];
-  // Final grades for this class, from filed submissions only: the mean of
-  // the filed period grades, keyed by learner id, once every period is
-  // filed. Null means no final grade yet. period_grades carries the filed
-  // grade of each period per learner (null when that period is not filed),
-  // so the Final Grades tab can show every period side by side.
+  // Final grades for this class, from the SAVED scores of every period:
+  // the mean of the saved period grades, keyed by learner id, once every
+  // period has a complete saved record for that learner. Null means no
+  // final grade yet. period_grades carries the saved grade of each period
+  // per learner (null when that period has no complete saved record), so
+  // the Final Grades tab can show every period side by side. filed_periods
+  // is the number of periods with a filing (submitted_periods says which);
+  // filing is what sends grades to Consolidation and the Report Card, which
+  // stay filed-only.
   finals: {
     filed_periods: number;
     total_periods: number;
@@ -1079,6 +1083,7 @@ export interface ReportCardLearner {
   first_name: string;
   last_name: string;
   sex: 'Male' | 'Female';
+  age: number | null;
   subjects: ReportCardLearnerSubject[];
   general_average: number | null;
   general_average_remarks: string | null;

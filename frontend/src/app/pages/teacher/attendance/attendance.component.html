@@ -90,6 +90,9 @@
       <button type="button" class="btn" (click)="exportCsv()" [disabled]="roll()!.learners.length === 0">
         <app-icon name="download" [size]="16" /> CSV
       </button>
+      <button type="button" class="btn" (click)="openUpload()" [disabled]="roll()!.learners.length === 0">
+        <app-icon name="upload" [size]="16" /> Upload records
+      </button>
       <button type="button" class="btn" (click)="markAllPresent()" [disabled]="roll()!.learners.length === 0 || counts().marked === counts().enrolled">
         <app-icon name="check" [size]="16" /> Mark all present
       </button>
@@ -206,9 +209,14 @@
           <h2 class="card-title">School Form 2</h2>
           <p class="muted">Daily Attendance Report of Learners · {{ sf2()?.month_label ?? '' }}</p>
         </div>
-        <button type="button" class="btn" (click)="printSf2()" [disabled]="!sf2() || sf2()!.learners.length === 0">
-          <app-icon name="printer" [size]="16" /> Print SF2
-        </button>
+        <div class="sf2-actions">
+          <button type="button" class="btn" (click)="openUpload()" [disabled]="!sf2() || sf2()!.learners.length === 0">
+            <app-icon name="upload" [size]="16" /> Upload records
+          </button>
+          <button type="button" class="btn" (click)="printSf2()" [disabled]="!sf2() || sf2()!.learners.length === 0">
+            <app-icon name="printer" [size]="16" /> Print SF2
+          </button>
+        </div>
       </div>
       @if (sf2Loading() && !sf2()) {
         <p class="muted">Loading the month…</p>
@@ -386,5 +394,17 @@
     [learners]="roll()?.learners ?? []"
     (checkedIn)="onCheckedIn($event)"
     (closed)="closeScan()"
+  />
+}
+
+<!-- Attendance upload modal: a CSV grid of past records for this class. -->
+@if (uploadOpen() && selectedClassId() !== '' && selectedClass()) {
+  <app-upload-modal
+    [classId]="selectedClassIdNum()"
+    [classLabel]="selectedClass()!.subject_name + ' · ' + selectedClass()!.section_name"
+    [monthOptions]="sf2MonthOptions()"
+    [defaultMonth]="sf2DefaultMonth()"
+    (imported)="onUploaded()"
+    (closed)="closeUpload()"
   />
 }

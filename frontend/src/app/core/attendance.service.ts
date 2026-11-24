@@ -13,6 +13,25 @@ import {
 } from './models';
 import { downloadBlob, toParams } from './helpers';
 
+// One uploaded mark: the learner's database id, the date, and the status.
+// The server re-checks enrolment, school days and existing marks.
+export interface AttendanceImportRecord {
+  learner_id: number;
+  date: string;
+  status: AttendanceStatus;
+}
+
+export interface AttendanceImportSkipped extends AttendanceImportRecord {
+  reason: 'not_enrolled' | 'duplicate_in_file' | 'future_date' | 'not_a_school_day' | 'already_saved';
+}
+
+export interface AttendanceImportResult {
+  message: string;
+  class_id: number;
+  imported: number;
+  skipped: AttendanceImportSkipped[];
+}
+
 export interface RollMark {
   learner_id: number;
   status: AttendanceStatus;
@@ -78,6 +97,27 @@ export class AttendanceService {
       already_checked_in: boolean;
       mark: AttendanceMark;
     }>(`${this.api}/attendance/check-in`, { class_id: classId, date, learner_id: learnerId });
+  }
+
+  // Downloads a blank upload grid for one class and month: the enrolled
+  // learners with one column per school day of that month.
+  importTemplate(classId: number, month: string): Observable<Blob> {
+    return this.http.get(`${this.api}/attendance/import-template`, {
+      params: toParams({ class_id: classId, month }),
+      responseType: 'blob',
+    });
+  }
+
+  // Uploads parsed attendance marks. Marks already saved, on non-school
+  // days, or after today are skipped and reported, never overwritten.
+  importRecords(
+    classId: number,
+    records: AttendanceImportRecord[],
+  ): Observable<AttendanceImportResult> {
+    return this.http.post<AttendanceImportResult>(`${this.api}/attendance/import`, {
+      class_id: classId,
+      records,
+    });
   }
 
   // Downloads the day sheet for one class and date as a CSV file.

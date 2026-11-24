@@ -1497,7 +1497,7 @@ describe('Final grade column', () => {
     assert.equal(sheet.finals.grades[alex.id], null);
   });
 
-  test('the final appears only once all three terms are filed, and saved-but-unfiled scores never count', async () => {
+  test('the final appears once all three terms are saved complete, before filing, and filing keeps it', async () => {
     const { token } = await signup();
     const klass = await makeClass(token, { section_name: 'Luke' });
     const alex = await makeLearner(token, { first_name: 'Alex', last_name: 'Rivera', learner_id: 'STU-2026-1048', sex: 'Male' });
@@ -1517,7 +1517,9 @@ describe('Final grade column', () => {
     assert.equal(sheet.finals.filed_periods, 2);
     assert.equal(sheet.finals.grades[alex.id], null);
 
-    // Term 3 scores saved but NOT filed: the final must stay blank.
+    // Term 3 scores saved but NOT filed: the final already shows, from
+    // the saved scores (Batch 8 fix 15 — the Grades-page final is no
+    // longer filed-only). Only the filed count stays behind.
     const term3 = await getSheet(token, klass.id, 3);
     await saveScores(token, klass.id, 3, [
       ...scoresFor(term3, alex, LOW),
@@ -1525,9 +1527,10 @@ describe('Final grade column', () => {
     ]);
     sheet = await getSheet(token, klass.id, 3);
     assert.equal(sheet.finals.filed_periods, 2);
-    assert.equal(sheet.finals.grades[alex.id], null);
+    assert.equal(sheet.finals.grades[alex.id], 86);
+    assert.equal(sheet.finals.grades[isabella.id], 68);
 
-    // Filing Term 3 shows the final: mean of 90, 100 and 68, rounded.
+    // Filing Term 3 keeps the final: mean of 90, 100 and 68, rounded.
     const filed = await api().post(`/api/teacher/grades/${klass.id}/submit`).set(bearer(token))
       .send({ quarter: 3, confirm_blanks: true });
     assert.equal(filed.status, 200, JSON.stringify(filed.body));
@@ -1538,7 +1541,7 @@ describe('Final grade column', () => {
     assert.equal(sheet.finals.grades[isabella.id], 68);
   });
 
-  test('editing scores after filing clears the final until the period is re-filed', async () => {
+  test('editing scores after filing clears the filing, and the final follows the saved scores until re-filed', async () => {
     const { token } = await signup();
     const klass = await makeClass(token, { section_name: 'Luke' });
     const alex = await makeLearner(token, { first_name: 'Alex', last_name: 'Rivera', learner_id: 'STU-2026-1048', sex: 'Male' });
@@ -1550,13 +1553,15 @@ describe('Final grade column', () => {
     let sheet = await getSheet(token, klass.id, 1);
     assert.equal(sheet.finals.grades[alex.id], 86);
 
-    // One changed score clears the Term 1 submission — and the final.
+    // One changed score clears the Term 1 submission — but the final
+    // stays, recomputed from the saved scores (Batch 8 fix 15).
     const term1 = await getSheet(token, klass.id, 1);
     await saveScores(token, klass.id, 1, scoresFor(term1, alex, { ww: [21] }));
     sheet = await getSheet(token, klass.id, 1);
     assert.equal(sheet.submission, null);
     assert.equal(sheet.finals.filed_periods, 2);
-    assert.equal(sheet.finals.grades[alex.id], null);
+    assert.equal(sheet.finals.period_grades[alex.id][1], sheet.learners[0].computed.qg);
+    assert.equal(sheet.finals.grades[alex.id], 86);
 
     // Re-filing brings the final back, recomputed from the new scores.
     const filed = await api().post(`/api/teacher/grades/${klass.id}/submit`).set(bearer(token))
@@ -1618,7 +1623,7 @@ describe('Final grade column', () => {
     assert.deepEqual(first.grading.periods, [1, 2, 3, 4]);
     assert.equal(first.finals.total_periods, 4);
 
-    // Q1 92, Q2 100, Q3 70 — no final until Q4 is filed.
+    // Q1 92, Q2 100, Q3 70 — no final until Q4 has a complete saved record.
     // DO 8 has a single Quarterly Assessment column, so the perfect and
     // low sets carry one EX score, not three.
     const PERFECT_DO8 = { ww: [25, 25, 25, 25], pt: [50, 50, 50, 50], ex: [50] };
@@ -1630,10 +1635,12 @@ describe('Final grade column', () => {
     assert.equal(sheet.finals.filed_periods, 3);
     assert.equal(sheet.finals.grades[alex.id], null);
 
-    // Q4 92: mean of 92, 100, 70 and 92 is 88.5, rounded to 89.
-    await fillAndFile(token, klass.id, 4, [[alex, WORKED_DO8]]);
+    // Q4 92, saved but not filed: mean of 92, 100, 70 and 92 is 88.5,
+    // rounded to 89. The final follows the saved scores (Batch 8 fix 15).
+    const q4 = await getSheet(token, klass.id, 4);
+    await saveScores(token, klass.id, 4, scoresFor(q4, alex, WORKED_DO8));
     sheet = await getSheet(token, klass.id, 4);
-    assert.equal(sheet.finals.filed_periods, 4);
+    assert.equal(sheet.finals.filed_periods, 3);
     assert.equal(sheet.finals.grades[alex.id], 89);
   });
 });

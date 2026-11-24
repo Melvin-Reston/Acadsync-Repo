@@ -13,7 +13,7 @@
       <label>Class &amp; section</label>
       <app-dropdown
         [ngModel]="selectedClassId()"
-        (ngModelChange)="selectedClassId.set($event); onClassChange()"
+        (ngModelChange)="onClassSelect($event)"
         [options]="classOptions()"
         placeholder="Choose a class"
         searchPlaceholder="Search classes"
@@ -85,10 +85,6 @@
           <button type="button" class="btn" (click)="printForm('class-record')" [disabled]="sheet()!.learners.length === 0">
             <app-icon name="printer" [size]="16" /> Print class record
           </button>
-          <button type="button" class="btn btn-secondary" (click)="discardChanges()" [disabled]="!dirty()">Discard changes</button>
-          <button type="button" class="btn btn-primary" (click)="save()" [disabled]="saving() || !dirty()">
-            {{ saving() ? 'Saving…' : 'Save scores' }}
-          </button>
           <button type="button" class="btn btn-primary" (click)="openSubmit()" [disabled]="submitLoading() || sheet()!.learners.length === 0">
             {{ submitLoading() ? 'Checking…' : submitLabel() }}
           </button>
@@ -121,7 +117,7 @@
       <button type="button" class="qtab" role="tab" [class.active]="view() === 'finals'" [attr.aria-selected]="view() === 'finals'" (click)="onFinalsTab()">
         <span>
           <span class="qn">Final Grades</span>
-          <span class="qs">{{ sheet()!.finals.filed_periods }} of {{ sheet()!.finals.total_periods }} filed</span>
+          <span class="qs">{{ sheet()!.submitted_periods.length }} of {{ sheet()!.finals.total_periods }} filed</span>
         </span>
         <span class="qdot" aria-hidden="true"></span>
       </button>
@@ -242,6 +238,13 @@
         @if (search() || sexFilter() !== 'all' || highlightBelow() || sortByRank()) {
           <button type="button" class="btn btn-ghost" (click)="resetFilters()">Clear filters</button>
         }
+        <div class="grid-save" role="group" aria-label="Save scores">
+          <span class="unsaved-note" [class.dirty]="dirty()">{{ dirty() ? changedCount() + ' unsaved ' + (changedCount() === 1 ? 'cell' : 'cells') : 'Saved' }}</span>
+          <button type="button" class="btn btn-secondary" (click)="discardChanges()" [disabled]="!dirty()">Discard changes</button>
+          <button type="button" class="btn btn-primary" (click)="save()" [disabled]="saving() || !dirty()">
+            {{ saving() ? 'Saving…' : 'Save scores' }}
+          </button>
+        </div>
       </div>
 
       <!-- Encoding table (desktop) -->
@@ -251,13 +254,28 @@
             <tr class="group-row">
               <th class="sticky" rowspan="2">Learner</th>
               @if (columnsByComponent().WW.length > 0) {
-                <th class="group ww" [attr.colspan]="columnsByComponent().WW.length">Written Works · {{ sheet()!.weights.ww }}%</th>
+                <th class="group ww" [attr.colspan]="columnsByComponent().WW.length">
+                  <span class="group-inner">
+                    <span>Written Works · {{ sheet()!.weights.ww }}%</span>
+                    <button type="button" class="group-add" (click)="addColumn('WW')" [attr.aria-label]="'Add a Written Works column, next is WW' + (columnsByComponent().WW.length + 1)">+ Add column</button>
+                  </span>
+                </th>
               }
               @if (columnsByComponent().PT.length > 0) {
-                <th class="group pt" [attr.colspan]="columnsByComponent().PT.length">Performance Tasks · {{ sheet()!.weights.pt }}%</th>
+                <th class="group pt" [attr.colspan]="columnsByComponent().PT.length">
+                  <span class="group-inner">
+                    <span>Performance Tasks · {{ sheet()!.weights.pt }}%</span>
+                    <button type="button" class="group-add" (click)="addColumn('PT')" [attr.aria-label]="'Add a Performance Tasks column, next is PT' + (columnsByComponent().PT.length + 1)">+ Add column</button>
+                  </span>
+                </th>
               }
               @if (columnsByComponent().EX.length > 0) {
-                <th class="group qa" [attr.colspan]="columnsByComponent().EX.length">{{ sheet()!.grading.third_label }} · {{ sheet()!.weights.ex }}%</th>
+                <th class="group qa" [attr.colspan]="columnsByComponent().EX.length">
+                  <span class="group-inner">
+                    <span>{{ sheet()!.grading.third_label }} · {{ sheet()!.weights.ex }}%</span>
+                    <button type="button" class="group-add" (click)="addColumn('EX')" [attr.aria-label]="'Add an Examinations column, next is ' + sheet()!.grading.third_short + (columnsByComponent().EX.length + 1)">+ Add column</button>
+                  </span>
+                </th>
               }
               <th class="group calc" colspan="9">Computed</th>
             </tr>
@@ -292,7 +310,7 @@
                 @for (column of sheet()!.columns; track column.id) {
                   <td [class]="'score-cell col-' + column.component.toLowerCase()">
                     <input type="number" class="score-input" min="0" [max]="column.highest_possible" step="0.01" placeholder="—"
-                      [value]="scoreValue(row.learner.id, column.id) ?? ''"
+                      [value]="draft()[row.learner.id]?.[column.id] ?? ''"
                       (change)="setScore(row.learner, column, $any($event.target).value)"
                       [attr.aria-label]="column.name + ' score for ' + learnerName(row.learner)" />
                   </td>
@@ -332,12 +350,15 @@
               <div class="card-qg">
                 <span class="lbl">Final</span>
                 <span class="qg-big" [class.below]="row.final !== null && row.final < 75">{{ fmt(row.final) }}</span>
-                <span class="lbl">{{ sheet()!.finals.filed_periods }} of {{ sheet()!.finals.total_periods }} filed</span>
+                <span class="lbl">Saved scores</span>
               </div>
             </header>
             @for (component of components; track component) {
               <div class="card-group">
-                <span class="group-label">{{ componentLabel(component) }} · {{ component === 'WW' ? sheet()!.weights.ww : component === 'PT' ? sheet()!.weights.pt : sheet()!.weights.ex }}%</span>
+                <div class="group-label-row">
+                  <span class="group-label">{{ componentLabel(component) }} · {{ component === 'WW' ? sheet()!.weights.ww : component === 'PT' ? sheet()!.weights.pt : sheet()!.weights.ex }}%</span>
+                  <button type="button" class="card-add" (click)="addColumn(component)" [attr.aria-label]="'Add a ' + componentLabel(component) + ' column'">+ Add column</button>
+                </div>
                 <div class="card-scores">
                   @for (column of columnsByComponent()[component]; track column.id) {
                     <div class="score-field">
@@ -346,7 +367,7 @@
                         <button type="button" class="col-remove" (click)="askRemoveColumn(column)" [attr.aria-label]="'Remove ' + column.name" [title]="'Remove ' + column.name">×</button>
                       </span>
                       <input type="number" class="input score-input" min="0" [max]="column.highest_possible" step="0.01" placeholder="—"
-                        [value]="scoreValue(row.learner.id, column.id) ?? ''"
+                        [value]="draft()[row.learner.id]?.[column.id] ?? ''"
                         (change)="setScore(row.learner, column, $any($event.target).value)"
                         [attr.aria-label]="column.name + ' score for ' + learnerName(row.learner)" />
                     </div>
@@ -368,12 +389,26 @@
         <button type="button" class="btn btn-ghost" (click)="addColumn('EX')">+ {{ sheet()!.grading.third_short }}{{ columnsByComponent().EX.length + 1 }}</button>
       </div>
     </section>
+
+    <!-- Outside the grid card: the card clips its contents, which would
+         pin this bar to the card's own foot instead of the screen's.
+         Sticks to the foot of the screen while the grid scrolls, so the
+         save button is never a scroll away from the scores. -->
+    @if (dirty()) {
+      <div class="savebar" role="group" aria-label="Save scores">
+        <span class="savebar-note"><span class="unsaved-dot"></span>Unsaved changes · {{ changedCount() }} {{ changedCount() === 1 ? 'cell' : 'cells' }} not saved yet</span>
+        <button type="button" class="btn btn-secondary" (click)="discardChanges()">Discard changes</button>
+        <button type="button" class="btn btn-primary" (click)="save()" [disabled]="saving()">
+          {{ saving() ? 'Saving…' : 'Save scores' }}
+        </button>
+      </div>
+    }
   } @else {
     <!-- Final grades sheet: every filed period side by side. -->
     <section class="card finalscard" aria-label="Final grades">
       <div class="finals-head">
         <span class="card-title">Final Grades</span>
-        <span class="muted">Filed {{ sheet()!.grading.period_label.toLowerCase() }}s only · a final grade appears once every {{ sheet()!.grading.period_label.toLowerCase() }} is filed</span>
+        <span class="muted">Saved scores · file each {{ sheet()!.grading.period_label.toLowerCase() }} to send them to Consolidation</span>
       </div>
       <div class="table-wrap">
         <table class="finals-table">
@@ -527,7 +562,7 @@
               <tr>
                 <td class="dp-name">{{ i + 1 }}. {{ upperName(row.learner) }}</td>
                 @for (column of columnsByComponent().WW; track column.id) {
-                  <td>{{ pfmt(scoreValue(row.learner.id, column.id)) }}</td>
+                  <td>{{ pfmt(draft()[row.learner.id]?.[column.id] ?? null) }}</td>
                 }
                 @if (columnsByComponent().WW.length > 0) {
                   <td>{{ pfmt(printTotal(row, 'WW')) }}</td>
@@ -535,7 +570,7 @@
                   <td>{{ pfmt(row.computed.components.WW.ws) }}</td>
                 }
                 @for (column of columnsByComponent().PT; track column.id) {
-                  <td>{{ pfmt(scoreValue(row.learner.id, column.id)) }}</td>
+                  <td>{{ pfmt(draft()[row.learner.id]?.[column.id] ?? null) }}</td>
                 }
                 @if (columnsByComponent().PT.length > 0) {
                   <td>{{ pfmt(printTotal(row, 'PT')) }}</td>
@@ -543,7 +578,7 @@
                   <td>{{ pfmt(row.computed.components.PT.ws) }}</td>
                 }
                 @for (column of columnsByComponent().EX; track column.id) {
-                  <td>{{ pfmt(scoreValue(row.learner.id, column.id)) }}</td>
+                  <td>{{ pfmt(draft()[row.learner.id]?.[column.id] ?? null) }}</td>
                 }
                 @if (exBreakdown()) {
                   @for (column of columnsByComponent().EX; track column.id) {

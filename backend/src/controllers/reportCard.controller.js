@@ -52,6 +52,22 @@ function dayStatus(statuses) {
   return 'absent';
 }
 
+// Completed years of age on June 1 of the school year's first year: the
+// age the card prints for the year, stable across the year and across
+// viewing years (a past year's card shows the age the learner was then,
+// not today). A learner with no birthdate on file has no age.
+function ageOnJune1(birthdate, year) {
+  if (!birthdate) return null;
+  const startYear = parseInt(String(year || '').slice(0, 4), 10);
+  if (!Number.isFinite(startYear)) return null;
+  const born = new Date(`${birthdate}T00:00:00Z`);
+  if (Number.isNaN(born.getTime())) return null;
+  let age = startYear - born.getUTCFullYear();
+  // The birthday counts for this year only when it falls on or before June 1.
+  if (born.getUTCMonth() > 5 || (born.getUTCMonth() === 5 && born.getUTCDate() > 1)) age -= 1;
+  return age < 0 ? 0 : age;
+}
+
 // The whole card set for one advisory section: the school name for the
 // printed card, the subjects with filed grades, each learner's period
 // grades, final grades and general average, the attendance months, and the
@@ -253,6 +269,7 @@ async function buildReportCards(client, adviser, requestedYear) {
       last_name: learner.last_name,
       learner_id: learner.learner_id,
       sex: learner.sex,
+      age: ageOnJune1(learner.birthdate, year),
       subjects,
       general_average: generalAverage,
       general_average_remarks:
@@ -359,6 +376,7 @@ async function saveComment(req, res) {
 
 module.exports = {
   schoolYearMonths,
+  ageOnJune1,
   buildReportCards,
   getReportCards,
   saveComment,

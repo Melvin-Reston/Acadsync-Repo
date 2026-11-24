@@ -538,6 +538,27 @@ const attendanceSaveSchema = z.object({
   marks: z.array(attendanceMarkSchema).max(500, 'Too many learners in one roll.'),
 });
 
+// Attendance import (Batch 8 fix 15): the template is one month of school
+// days; an upload may span several months.
+const attendanceTemplateQuerySchema = z.object({
+  class_id: id,
+  month: z.string({ error: 'Choose a month.' }).regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Choose a month.'),
+});
+
+const attendanceImportRecordSchema = z.object({
+  learner_id: id,
+  date: dateString,
+  status: z.enum(['present', 'late', 'absent', 'excused']),
+});
+
+const attendanceImportSchema = z.object({
+  class_id: id,
+  records: z
+    .array(attendanceImportRecordSchema)
+    .min(1, 'Add at least one mark.')
+    .max(5000, 'Too many marks in one upload.'),
+});
+
 const attendanceLookupSchema = z.object({
   class_id: id,
   date: optionalDate,
@@ -771,6 +792,8 @@ module.exports = {
   sf2QuerySchema,
   attendanceLookupSchema,
   attendanceCheckInSchema,
+  attendanceTemplateQuerySchema,
+  attendanceImportSchema,
   gradeSheetQuerySchema,
   gradeSaveScoresSchema,
   gradeAddColumnSchema,

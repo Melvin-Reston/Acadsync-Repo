@@ -82,6 +82,13 @@ export const routes: Routes = [
       {
         path: 'grades',
         title: 'Grades · AcadSync Teacher',
+        // Leaving with unsaved scores asks first, here and in the
+        // browser's own leave-page prompt (see the component).
+        canDeactivate: [
+          (component: { hasUnsavedChanges: () => boolean }) =>
+            !component.hasUnsavedChanges() ||
+            window.confirm('You have unsaved scores on this page. Leave without saving them?'),
+        ],
         loadComponent: () =>
           import('./pages/teacher/grades/grades.component').then(
             (m) => m.TeacherGradesComponent,

@@ -1,5 +1,5 @@
 // Teacher Batch 8 tests: the DepEd print forms — migration 010 and the
-// teacher-entered school details on the profile, the filed-only final
+// teacher-entered school details on the profile, the saved-scores final
 // grades data (period_grades) behind the Final Grades tab, and the SF2
 // daily attendance report. Batch 8 fix 2 adds: migration 011 (school head
 // name), Male-then-Female ordering, the Combined TOTAL Per Day row, and the
@@ -278,10 +278,10 @@ describe('School head name for the SF2 footer', () => {
   });
 });
 
-// ---------- Final grades data (filed-only) ----------
+// ---------- Final grades data (saved scores) ----------
 
 describe('Final grades data', () => {
-  test('period_grades follow the filed-only rule under the active profile, and no final appears until every period is filed', async () => {
+  test('period_grades follow the saved-scores rule under the active profile, and no final appears until every period is complete', async () => {
     const { token } = await signup();
     const klass = await makeClass(token, { section_name: 'Luke' });
     const alex = await makeLearner(token, { first_name: 'Alex', last_name: 'Rivera', sex: 'Male' });
@@ -319,14 +319,17 @@ describe('Final grades data', () => {
     assert.equal(filed.finals.grades[alex.id], 90);
     assert.equal(filed.finals.grades[isabella.id], null);
 
-    // Editing Term 1 after filing clears that term and the final until re-filed.
+    // Editing Term 1 after filing clears that term's filing — the
+    // period grade and the final follow the saved scores (Batch 8 fix 15).
     const edited = scoresFor(sheet, alex, WORKED);
     edited[0].score = 10;
     await saveScores(token, klass.id, 1, edited);
     const cleared = await getSheet(token, klass.id, 1);
-    assert.equal(cleared.finals.period_grades[alex.id][1], null);
+    const alexTerm1 = cleared.learners.find((learner) => learner.id === alex.id).computed.qg;
+    assert.equal(cleared.finals.filed_periods, 2);
+    assert.equal(cleared.finals.period_grades[alex.id][1], alexTerm1);
     assert.equal(cleared.finals.period_grades[alex.id][2], 90);
-    assert.equal(cleared.finals.grades[alex.id], null);
+    assert.equal(cleared.finals.grades[alex.id], Math.round((alexTerm1 + 90 + 90) / 3));
   });
 
   test('the final grade is the rounded mean of the filed period grades', async () => {

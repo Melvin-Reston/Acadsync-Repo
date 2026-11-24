@@ -459,6 +459,37 @@
   min-width: 200px;
 }
 
+/* The Individual / Bulk upload tabs at the top of the Add learner modal. */
+.modal-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  margin-bottom: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+}
+
+.modal-tabs button {
+  flex: 1;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-weight: 700;
+  font-size: 13.5px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.modal-tabs button.active {
+  background: var(--ink);
+  color: var(--bg);
+}
+
 .upload-summary {
   display: flex;
   flex-wrap: wrap;

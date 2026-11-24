@@ -36,6 +36,7 @@ import { IconComponent } from '../../../shared/icon.component';
 import { DropdownComponent, DropdownOption } from '../../../shared/dropdown.component';
 import { MenuComponent, MenuItem } from '../../../shared/menu.component';
 import { ScanModalComponent } from './scan-modal.component';
+import { UploadModalComponent } from './upload-modal.component';
 import { Sf2FooterComponent } from './sf2-footer.component';
 
 const STATUSES: AttendanceStatus[] = ['present', 'late', 'absent', 'excused'];
@@ -72,7 +73,7 @@ const SF2_MONTHS: { value: number; label: string }[] = [
 
 @Component({
   selector: 'app-teacher-attendance',
-  imports: [FormsModule, RouterLink, IconComponent, DropdownComponent, MenuComponent, ScanModalComponent, Sf2FooterComponent],
+  imports: [FormsModule, RouterLink, IconComponent, DropdownComponent, MenuComponent, ScanModalComponent, Sf2FooterComponent, UploadModalComponent],
   templateUrl: './attendance.component.html',
   styleUrl: './attendance.component.css',
 })
@@ -124,6 +125,9 @@ export class TeacherAttendanceComponent {
 
   // The QR check-in modal (its own component, with the camera).
   protected readonly scanOpen = signal(false);
+
+  // The attendance-upload modal (its own component, with the CSV preview).
+  protected readonly uploadOpen = signal(false);
 
   // ---------- SF2 (School Form 2) ----------
   // The SF2 tab shows the same class's saved rolls for one month,
@@ -541,6 +545,22 @@ export class TeacherAttendanceComponent {
     this.scanOpen.set(false);
     // The roll may have changed through a QR check-in.
     this.loadRoll();
+  }
+
+  protected openUpload(): void {
+    this.uploadOpen.set(true);
+  }
+
+  protected closeUpload(): void {
+    this.uploadOpen.set(false);
+  }
+
+  // An upload finished in the modal: reload the roll and the SF2 month so
+  // the uploaded marks show at once.
+  protected onUploaded(): void {
+    this.uploadOpen.set(false);
+    this.loadRoll();
+    if (this.sf2Tab()) this.loadSf2();
   }
 
   // A QR check-in confirmed in the modal: show it in the working roll at once.

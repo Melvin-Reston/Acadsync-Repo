@@ -124,7 +124,7 @@
             <div class="info" aria-label="Learner information">
               <div class="info-row full name-row"><label>Name:</label><span>{{ learnerDisplayName(learner) }}</span></div>
               <div class="info-row col-a"><label>LRN:</label><span>{{ learner.learner_id }}</span></div>
-              <div class="info-row"><label>Age:</label><span class="blank">&nbsp;</span></div>
+              <div class="info-row"><label>Age:</label><span>{{ learner.age ?? '' }}</span></div>
               <div class="info-row"><label>Sex:</label><span>{{ learner.sex }}</span></div>
               <div class="info-row col-a"><label>Grade:</label><span>{{ view()!.adviser.grade }}</span></div>
               <div class="info-row"><label>Section:</label><span>{{ view()!.adviser.section }}</span></div>

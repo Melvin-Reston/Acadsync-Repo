@@ -169,9 +169,14 @@ async function resolveQuarter(client, classId, requested, profile) {
 // learners with their scores and computed grades, the summary numbers, the
 // submission state and any live reminder from the adviser. The grading
 // profile is the profile of the class's own academic year.
-async function loadSheet(client, teacherId, classId, quarter) {
-  const klass = await findClass(classId, teacherId, client);
-  const profile = await grading.getClassGradingProfile(client, classId);
+// `options.klass` / `options.profile` let callers that already read the
+// class and its grading profile skip re-reading them; `options.finals`
+// (default true) skips the final-grades computation for callers that only
+// need this period's checklist (submit check, filing), where finals are
+// never read. Skipping them keeps those calls to this period's data only.
+async function loadSheet(client, teacherId, classId, quarter, options = {}) {
+  const klass = options.klass || (await findClass(classId, teacherId, client));
+  const profile = options.profile || (await grading.getClassGradingProfile(client, classId));
   checkPeriod(profile, quarter);
   const year = klass.academic_year;
   const weights = await getWeights(client, classId, profile.code);
@@ -243,10 +248,19 @@ async function loadSheet(client, teacherId, classId, quarter) {
   );
   const directAdd = teacher.rows[0] ? shouldUseDirectAdd(teacher.rows[0], klass) : false;
 
-  // Final grades for this class, from filed submissions only. Any subject
-  // teacher sees them here — no advisory assignment is needed, unlike
-  // Consolidation.
-  const finals = await computeClassFinals(client, classId, year, profile);
+  // Final grades for this class, from the SAVED scores of every period
+  // (Batch 8 fix 15): a period grade shows once that learner's saved
+  // record for the period is complete, and the final grade is the mean
+  // once every period is complete — whether or not the period was filed.
+  // Filing is what sends grades to Consolidation and the Report Card,
+  // which stay filed-only; this Grades-page view is the teacher's own
+  // working final. Any subject teacher sees it here — no advisory
+  // assignment is needed, unlike Consolidation. Callers that skip finals
+  // get the same shape with nulls, so the checklist never reads them.
+  const finals =
+    options.finals === false
+      ? { filed_periods: filedPeriods.rows.length, total_periods: profile.periods.length, grades: {}, period_grades: {} }
+      : await computeClassFinals(client, classId, year, profile, filedPeriods.rows.length);
 
   return {
     class: klass,
@@ -257,9 +271,9 @@ async function loadSheet(client, teacherId, classId, quarter) {
     columns,
     learners: sheetLearners,
     stats: deped.computeClassStats(sheetLearners),
-    // The mean of the filed period grades, per learner, once every period
-    // is filed — null until then. The Grades page shows it as the Final
-    // column.
+    // The mean of the saved period grades, per learner, once every period
+    // is complete — null until then. The Grades page shows it as the Final
+    // column and in the Final Grades tab.
     finals,
     // The Grades page reads this to label its button: "Move to
     // Consolidation" for the adviser's own class, "Submit to adviser" otherwise.
@@ -290,7 +304,7 @@ async function getGradeSheet(req, res) {
   const profile = await grading.getClassGradingProfile(db, id);
   if (requestedQuarter) checkPeriod(profile, requestedQuarter);
   const quarter = await resolveQuarter(db, id, requestedQuarter, profile);
-  const sheet = await loadSheet(db, req.teacher.id, id, quarter);
+  const sheet = await loadSheet(db, req.teacher.id, id, quarter, { klass, profile });
 
   if (format === 'csv') {
     const third = profile.thirdShort;
@@ -346,9 +360,13 @@ async function saveScores(req, res) {
   checkPeriod(profile, quarter);
   const year = klass.academic_year;
 
-  const sheet = await loadSheet(db, req.teacher.id, id, quarter);
-  const columnsById = new Map(sheet.columns.map((column) => [column.id, column]));
-  const enrolled = new Set(sheet.learners.map((learner) => learner.id));
+  // Validation needs only this period's columns and the enrolment list —
+  // not a full sheet (the old code loaded the whole sheet, finals for
+  // every period included, just to check the scores belong here).
+  const columns = await ensureColumns(db, id, quarter, profile);
+  const columnsById = new Map(columns.map((column) => [column.id, column]));
+  const enrolledRows = await db.query('SELECT learner_id FROM class_learners WHERE class_id = $1', [id]);
+  const enrolled = new Set(enrolledRows.rows.map((row) => row.learner_id));
 
   for (const entry of scores) {
     const column = columnsById.get(entry.column_id);
@@ -636,7 +654,8 @@ async function getSubmissionCheck(req, res) {
   const profile = await grading.getClassGradingProfile(db, id);
   if (requestedQuarter) checkPeriod(profile, requestedQuarter);
   const quarter = await resolveQuarter(db, id, requestedQuarter, profile);
-  const sheet = await loadSheet(db, req.teacher.id, id, quarter);
+  // The checklist needs this period only; the final grades are never read.
+  const sheet = await loadSheet(db, req.teacher.id, id, quarter, { finals: false });
   res.json(submissionChecklist(sheet));
 }
 
@@ -663,7 +682,7 @@ async function submitGrades(req, res) {
   );
   const direct = teacher.rows[0] ? shouldUseDirectAdd(teacher.rows[0], klass) : false;
 
-  const sheet = await loadSheet(db, req.teacher.id, id, quarter);
+  const sheet = await loadSheet(db, req.teacher.id, id, quarter, { klass, profile, finals: false });
   const checklist = submissionChecklist(sheet);
   if (checklist.complete_learners < checklist.total_learners && !confirm_blanks) {
     throw badRequest(
@@ -809,7 +828,7 @@ async function sectionRoster(client, adviser, classIds) {
   const roster = new Map(); // lower learner_id -> { first_name, last_name, learner_id, sex, byClass: Map(classId -> learner PK) }
   if (classIds.length === 0) return roster;
   const enrolled = await client.query(
-    `SELECT cl.class_id, l.id, l.first_name, l.last_name, l.learner_id, l.sex, l.teacher_id
+    `SELECT cl.class_id, l.id, l.first_name, l.last_name, l.learner_id, l.sex, l.birthdate::text AS birthdate, l.teacher_id
        FROM class_learners cl
        JOIN learners l ON l.id = cl.learner_id
       WHERE cl.class_id = ANY($1::int[])
@@ -825,6 +844,7 @@ async function sectionRoster(client, adviser, classIds) {
         last_name: row.last_name,
         learner_id: row.learner_id,
         sex: row.sex,
+        birthdate: null,
         byClass: new Map(),
       };
       roster.set(key, learner);
@@ -834,6 +854,9 @@ async function sectionRoster(client, adviser, classIds) {
       learner.first_name = row.first_name;
       learner.last_name = row.last_name;
       learner.sex = row.sex;
+      if (row.birthdate) learner.birthdate = row.birthdate;
+    } else if (learner.birthdate == null) {
+      learner.birthdate = row.birthdate;
     }
     learner.byClass.set(row.class_id, row.id);
   }
@@ -1031,46 +1054,77 @@ async function classFiledPeriodGrades(client, classId, year, profile, roster) {
   return byPeriod;
 }
 
-// The final grade for every learner of one class, from filed submissions
-// only: the mean of the period grades, and only once every period of the
-// active profile is filed. A learner with an incomplete record in any
-// filed period has no final grade yet. Keyed by learner id (the learners
-// table primary key), so the Grades page can attach it to its rows — any
-// subject teacher sees their own class's finals here, with no advisory
-// assignment needed. period_grades carries the filed grade of each period
-// per learner (null when that period is not filed), so the Final Grades tab
-// can show every period side by side from the same filed-only data.
-async function computeClassFinals(client, classId, year, profile) {
+// The final grade for every learner of one class, from the SAVED scores
+// of every period (Batch 8 fix 15): the mean of the period grades, and
+// only once every period of the active profile has a complete saved
+// record for that learner. A learner with an incomplete record in any
+// period has no final grade yet. Keyed by learner id (the learners table
+// primary key), so the Grades page can attach it to its rows — any subject
+// teacher sees their own class's finals here, with no advisory assignment
+// needed. period_grades carries the saved grade of each period per
+// learner (null when that period has no complete saved record), so the
+// Final Grades tab can show every period side by side. `filedCount` is
+// the number of periods with a filing, carried through so the tab can
+// still say how many terms are filed. The periods are computed under the
+// profile in force, the same computation the teacher sees when opening
+// each period's sheet. One pass: a single columns query and a single
+// scores query for all periods, instead of one set of queries per period.
+async function computeClassFinals(client, classId, year, profile, filedCount = 0) {
   const enrolled = await client.query(
     `SELECT l.id, l.first_name, l.last_name, l.learner_id, l.sex
        FROM class_learners cl JOIN learners l ON l.id = cl.learner_id
       WHERE cl.class_id = $1 ORDER BY l.last_name, l.first_name, l.id`,
     [classId]
   );
-  const roster = new Map();
-  for (const row of enrolled.rows) {
-    roster.set(String(row.learner_id).trim().toLowerCase(), {
+  const weights = await getWeights(client, classId, profile.code);
+  const columnRows = await client.query(
+    `SELECT id, class_id, quarter, component, position, highest_possible::text AS highest_possible,
+            sub_weight::text AS sub_weight, label
+       FROM grade_columns WHERE class_id = $1 AND quarter = ANY($2::int[])
+      ORDER BY quarter, CASE component WHEN 'WW' THEN 1 WHEN 'PT' THEN 2 ELSE 3 END, position, id`,
+    [classId, profile.periods]
+  );
+  const columnsByPeriod = new Map(profile.periods.map((period) => [period, []]));
+  for (const row of columnRows.rows) {
+    columnsByPeriod.get(row.quarter).push({
       ...row,
-      byClass: new Map([[classId, row.id]]),
+      highest_possible: Number(row.highest_possible),
+      sub_weight: row.sub_weight === null ? null : Number(row.sub_weight),
+      name: columnName(row, profile.code),
     });
   }
-  const byPeriod = await classFiledPeriodGrades(client, classId, year, profile, roster);
-  const allFiled = profile.periods.every((period) => byPeriod.has(period));
+  const columnIds = columnRows.rows.map((row) => row.id);
+  const scores = new Map(); // learner id -> Map(column id -> score)
+  if (columnIds.length > 0) {
+    const rows = await client.query(
+      `SELECT gs.column_id, gs.learner_id, gs.score::text AS score
+         FROM grade_scores gs WHERE gs.column_id = ANY($1::int[])`,
+      [columnIds]
+    );
+    for (const row of rows.rows) {
+      if (!scores.has(row.learner_id)) scores.set(row.learner_id, new Map());
+      scores.get(row.learner_id).set(row.column_id, Number(row.score));
+    }
+  }
   const grades = {};
   const periodGrades = {};
-  for (const [key, learner] of roster) {
+  for (const learner of enrolled.rows) {
+    const learnerScores = scores.get(learner.id) || new Map();
     periodGrades[learner.id] = {};
+    const periodGradeList = [];
     for (const period of profile.periods) {
-      periodGrades[learner.id][period] = byPeriod.has(period) ? byPeriod.get(period).get(key) ?? null : null;
+      const computed = deped.computeLearnerGrade(
+        columnsByPeriod.get(period),
+        learnerScores,
+        weights,
+        profile.code
+      );
+      periodGrades[learner.id][period] = computed.qg;
+      periodGradeList.push(computed.qg);
     }
-    if (!allFiled) {
-      grades[learner.id] = null;
-      continue;
-    }
-    const periodGradeList = profile.periods.map((period) => byPeriod.get(period).get(key) ?? null);
     grades[learner.id] = deped.finalGrade(periodGradeList);
   }
-  return { filed_periods: byPeriod.size, total_periods: profile.periods.length, grades, period_grades: periodGrades };
+  return { filed_periods: filedCount, total_periods: profile.periods.length, grades, period_grades: periodGrades };
 }
 
 // The whole consolidation view for one advisory section and period. Built from
