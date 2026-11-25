@@ -16,7 +16,7 @@ import { IconComponent } from './icon.component';
   selector: 'app-auth-shell',
   imports: [IconComponent],
   template: `
-    <div class="auth-page">
+    <div class="auth-page" [class.teacher-auth]="variant() === 'teacher'">
       <header class="auth-topbar">
         <div class="topbar-brand">
           <span class="topbar-mark">A</span>

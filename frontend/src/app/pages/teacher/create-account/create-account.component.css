@@ -1,24 +1,51 @@
 /* Create Account wizard: stepper, password meter and plan cards. */
 
+/* One line only: the three pills share the row and shrink together instead of
+   wrapping the third one onto a second row. Labels truncate with an ellipsis
+   only on very narrow screens, where the full row cannot fit at any size. */
 .steps {
   list-style: none;
-  margin: 0 0 20px;
+  margin: 0 0 10px;
   padding: 0;
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-wrap: nowrap;
+  gap: 5px;
 }
 
 .steps li {
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px 6px 6px;
+  gap: 4px;
+  padding: 4px 6px 4px 4px;
   border: 1px solid var(--border);
   border-radius: 99px;
-  font-size: 12.5px;
+  font-size: 10.5px;
   font-weight: 700;
   color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.step-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The labels are not the same length, so the pills do not split the row
+   evenly: the first and third pills get the room their labels need. */
+.steps li:first-child {
+  flex: 1.35 1 0;
+}
+
+.steps li:nth-child(2) {
+  flex: 0.85 1 0;
+}
+
+.steps li:last-child {
+  flex: 1.15 1 0;
 }
 
 .steps li.current {
@@ -32,14 +59,15 @@
 }
 
 .step-num {
-  width: 22px;
-  height: 22px;
+  width: 17px;
+  height: 17px;
+  flex: none;
   display: grid;
   place-items: center;
   border-radius: 50%;
   background: var(--surface-3);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
 }
 
@@ -53,6 +81,26 @@
   color: var(--accent);
 }
 
+/* Very narrow phones: shrink the pills a little more so the full labels
+   still fit on one line instead of truncating. */
+@media (max-width: 480px) {
+  .steps {
+    gap: 4px;
+  }
+
+  .steps li {
+    font-size: 9px;
+    padding: 3px 4px 3px 3px;
+    gap: 3px;
+  }
+
+  .step-num {
+    width: 14px;
+    height: 14px;
+    font-size: 9px;
+  }
+}
+
 .link-btn {
   padding: 0;
   border: 0;
@@ -61,7 +109,7 @@
   font-size: 13.5px;
   font-weight: 700;
   text-align: left;
-  margin: 2px 0 14px;
+  margin: 0 0 8px;
 }
 
 .link-btn:hover {
@@ -72,7 +120,7 @@
 .strength {
   display: flex;
   gap: 4px;
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .strength-bar {

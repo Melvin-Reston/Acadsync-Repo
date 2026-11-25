@@ -3,13 +3,13 @@
   @if (step() === 'profile' || step() === 'credentials' || step() === 'terms') {
     <ol class="steps">
       <li [class.done]="stepIndex(step()) > 0" [class.current]="step() === 'profile'">
-        <span class="step-num">1</span> Profile &amp; Assignment
+        <span class="step-num">1</span> <span class="step-label">Profile &amp; Assignment</span>
       </li>
       <li [class.done]="stepIndex(step()) > 1" [class.current]="step() === 'credentials'">
-        <span class="step-num">2</span> Credentials
+        <span class="step-num">2</span> <span class="step-label">Credentials</span>
       </li>
       <li [class.current]="step() === 'terms'">
-        <span class="step-num">3</span> Security &amp; Terms
+        <span class="step-num">3</span> <span class="step-label">Security &amp; Terms</span>
       </li>
     </ol>
   }

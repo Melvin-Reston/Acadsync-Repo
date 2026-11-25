@@ -1228,6 +1228,172 @@ button {
   text-decoration: underline;
 }
 
+/* ---------- Teacher auth at one viewport height (desktop) ---------- */
+/* Teacher login / create account only (the .teacher-auth class on the shell);
+   the admin sign-in keeps its previous spacing. On wide screens the page is
+   exactly 100dvh with no page scroll: both panels are shrunk a little and the
+   card is capped to the space between the top bar and the footer, so the form
+   column scrolls internally only on a very short viewport. Below 900px the
+   panels stack, so these rules do not apply and the page scrolls as before. */
+@media (min-width: 901px) {
+  .auth-page.teacher-auth {
+    height: 100dvh;
+    overflow: hidden;
+    padding: 10px 20px 6px;
+  }
+
+  .auth-page.teacher-auth .auth-topbar {
+    padding: 0 2px 8px;
+  }
+
+  .auth-page.teacher-auth .auth-layout {
+    padding: 0;
+    min-height: 0;
+  }
+
+  .auth-page.teacher-auth .auth-shell-card {
+    max-width: 1020px;
+    max-height: 100%;
+    min-height: 0;
+  }
+
+  .auth-page.teacher-auth .auth-brand {
+    padding: 22px 30px 18px;
+    overflow: hidden;
+  }
+
+  .auth-page.teacher-auth .auth-brand .brand-mark {
+    width: 40px;
+    height: 40px;
+    font-size: 22px;
+  }
+
+  .auth-page.teacher-auth .auth-tagline {
+    font-size: 27px;
+    margin-top: 16px;
+  }
+
+  .auth-page.teacher-auth .auth-lede {
+    margin-top: 8px;
+    font-size: 13.5px;
+    line-height: 1.55;
+  }
+
+  .auth-page.teacher-auth .today-card {
+    margin-top: 16px;
+    padding: 11px 14px;
+  }
+
+  .auth-page.teacher-auth .auth-features {
+    margin-top: 16px;
+    padding-top: 14px;
+    gap: 10px;
+  }
+
+  .auth-page.teacher-auth .feature-icon {
+    width: 28px;
+    height: 28px;
+  }
+
+  .auth-page.teacher-auth .auth-features b {
+    font-size: 13px;
+  }
+
+  .auth-page.teacher-auth .auth-features span {
+    font-size: 12px;
+  }
+
+  .auth-page.teacher-auth .auth-status,
+  .auth-page.teacher-auth .auth-foot {
+    padding-top: 16px;
+  }
+
+  .auth-page.teacher-auth .auth-form {
+    padding: 18px 28px 14px;
+    overflow-y: auto;
+    min-height: 0;
+  }
+
+  .auth-page.teacher-auth .auth-form .page-title {
+    font-size: 25px;
+  }
+
+  .auth-page.teacher-auth .auth-sub {
+    margin-top: 4px;
+    font-size: 13px;
+  }
+
+  .auth-page.teacher-auth .auth-form > form,
+  .auth-page.teacher-auth .auth-form > .steps {
+    margin-top: 12px;
+  }
+
+  .auth-page.teacher-auth .auth-form > .alert {
+    margin-top: 12px;
+  }
+
+  .auth-page.teacher-auth .auth-form form {
+    gap: 8px;
+  }
+
+  .auth-page.teacher-auth .form-grid {
+    gap: 10px;
+  }
+
+  .auth-page.teacher-auth .field {
+    gap: 4px;
+  }
+
+  .auth-page.teacher-auth .field > label {
+    font-size: 12.5px;
+  }
+
+  .auth-page.teacher-auth .input,
+  .auth-page.teacher-auth .select {
+    min-height: 37px;
+    padding: 6px 11px;
+  }
+
+  .auth-page.teacher-auth .icon-btn {
+    width: 37px;
+    height: 37px;
+  }
+
+  .auth-page.teacher-auth .btn {
+    min-height: 37px;
+    font-size: 13.5px;
+  }
+
+  .auth-page.teacher-auth .form-actions {
+    margin-top: 8px;
+  }
+
+  .auth-page.teacher-auth .divider {
+    margin: 14px 0 10px;
+  }
+
+  .auth-page.teacher-auth .secure-row {
+    margin-top: 10px;
+  }
+
+  .auth-page.teacher-auth .auth-links {
+    margin-top: 4px;
+  }
+
+  .auth-page.teacher-auth .auth-page-foot {
+    padding-top: 4px;
+  }
+
+  .auth-page.teacher-auth .plan-list {
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+
+  .auth-page.teacher-auth .plan-card {
+    padding: 10px 14px;
+  }
+}
+
 /* ---------- Phones and small tablets ---------- */
 @media (max-width: 900px) {
   .kpi-grid {
