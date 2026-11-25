@@ -431,17 +431,37 @@
     box-decoration-break: clone;
   }
 
-  .dp-title-center {
-    text-align: center;
+  /* The header carries the same DepEd seal (left) and logo
+     (right) as the Grades print forms, with the title centred. */
+  .dp-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     margin-bottom: 4px;
   }
 
-  .dp-title-center h2 {
+  .dp-seal {
+    height: 56px;
+    width: 56px;
+    object-fit: contain;
+  }
+
+  .dp-logo {
+    height: 34px;
+    width: auto;
+  }
+
+  .dp-title {
+    flex: 1;
+    text-align: center;
+  }
+
+  .dp-title h2 {
     font-size: 13px;
     margin: 0 0 2px;
   }
 
-  .dp-title-center p {
+  .dp-title p {
     font-size: 9px;
     margin: 0;
   }

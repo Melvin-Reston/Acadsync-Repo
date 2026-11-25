@@ -1,0 +1,104 @@
+/* Lesson Plans (Batch 11): the list, the editor and the print preview
+   follow the warm paper system; the printed sheet itself is black and
+   white and lives in the print component. */
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.filters .field {
+  margin: 0;
+}
+
+.back {
+  margin-bottom: 12px;
+}
+
+.detail-head {
+  align-items: start;
+}
+
+.lp-editor-section {
+  margin-top: 16px;
+}
+
+.lp-editor-section .field {
+  margin-top: 14px;
+}
+
+.lp-editor-section .field:first-of-type {
+  margin-top: 10px;
+}
+
+.field-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+
+.radio-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 8px;
+}
+
+.radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.radio input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.save-bar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px 16px;
+  box-shadow: var(--shadow-lg);
+}
+
+.save-bar p {
+  margin: 0;
+}
+
+.save-bar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 960px) {
+  .filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .filters {
+    grid-template-columns: 1fr;
+  }
+
+  .save-bar-actions {
+    width: 100%;
+  }
+
+  .save-bar-actions .btn {
+    flex: 1;
+  }
+}

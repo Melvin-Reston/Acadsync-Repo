@@ -1,0 +1,308 @@
+/* Paper exam checker: the teacher's exams, answer key, printed sheets
+   and checked results. Warm paper throughout, 8px corners, no green. */
+
+/* Inside the merged Quizzes & Exams page: the New button sits alone
+   under the tabs, right-aligned, where the page head used to be. */
+.embedded-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.filters .field {
+  min-width: 220px;
+  flex: 1 1 220px;
+}
+
+.field {
+  margin-bottom: 14px;
+}
+
+.field label,
+.field-label {
+  display: block;
+  font-weight: 700;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.field input[type='text'],
+.field input[type='number'],
+.field input[type='file'],
+.field textarea,
+.search {
+  width: 100%;
+  min-height: 42px;
+  padding: 9px 12px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+.field-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.field-row .field {
+  flex: 1 1 120px;
+}
+
+.field-error {
+  display: block;
+  color: var(--red);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.error {
+  color: var(--red);
+  font-weight: 700;
+}
+
+.back {
+  margin-bottom: 14px;
+}
+
+.detail-head {
+  margin-top: 4px;
+}
+
+.grades-note {
+  margin-bottom: 16px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+@media (max-width: 860px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.locked {
+  background: var(--amber-tint);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  margin-bottom: 14px;
+}
+
+.key-readonly {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 6px;
+}
+
+.key-readonly li {
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 13px;
+}
+
+.key-string-row {
+  display: flex;
+  gap: 8px;
+}
+
+.key-string-row input {
+  flex: 1;
+  text-transform: uppercase;
+}
+
+.key-grid,
+.review-grid {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.key-row,
+.review-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.review-row.uncertain {
+  border-color: var(--red);
+  background: var(--amber-tint);
+}
+
+.key-number {
+  min-width: 34px;
+}
+
+/* Small group names inside a key row ("Choices", "Answer"). */
+.key-group-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.key-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* The choices dropdown sits at the right end of each key row, with the
+   A/B or True/False switch beside it when a question has 2 choices. */
+.key-side {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.key-count {
+  width: 132px;
+}
+
+.key-choice {
+  min-width: 42px;
+}
+
+.flag {
+  margin-left: auto;
+  color: var(--red);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.review-mark {
+  margin-left: auto;
+}
+
+.review-row .flag + .review-mark,
+.review-row.uncertain .review-mark {
+  margin-left: 0;
+}
+
+.small {
+  font-size: 13px;
+}
+
+.form-title {
+  font-family: var(--font-serif);
+  font-size: 20px;
+  font-weight: 600;
+  margin: 18px 0 12px;
+}
+
+.type-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.print-actions {
+  justify-content: flex-start;
+}
+
+.search {
+  max-width: 260px;
+}
+
+.mono {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.stats-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.stats-list li {
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 13px;
+}
+
+.sheet-preview {
+  max-width: 520px;
+  margin: 16px auto 0;
+}
+
+.preview-wrap {
+  margin-top: 16px;
+}
+
+.preview-canvas {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.score-line {
+  margin: 14px 0 0;
+}
+
+/* ---------- Print: never shown on screen ---------- */
+.exam-print {
+  display: none;
+}
+
+@media print {
+  .exam-print {
+    display: block;
+  }
+
+  .exam-print app-exam-sheet {
+    display: block;
+    page: exam-sheet;
+    break-after: page;
+    page-break-after: always;
+  }
+
+  .exam-print app-exam-sheet:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+}

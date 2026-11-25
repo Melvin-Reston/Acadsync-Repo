@@ -1914,6 +1914,22 @@ form > .form-grid + .alert {
     margin: 0;
   }
 
+  @page exam-sheet {
+    size: A4 portrait;
+    /* No margin, for the same reason: the sheet's own corner squares
+       sit at fixed fractions of the page, and the browser must add no
+       date, title, URL or page number. */
+    margin: 0;
+  }
+
+  @page lesson-plan {
+    size: A4 portrait;
+    /* No margin, for the same reason: the lesson plan carries its own
+       10mm padding, and the browser must add no date, title, URL or
+       page number. */
+    margin: 0;
+  }
+
   body {
     background: #fff !important;
   }

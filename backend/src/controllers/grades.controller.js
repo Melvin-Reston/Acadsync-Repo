@@ -68,7 +68,9 @@ async function listColumns(client, classId, quarter, profileCode) {
     `SELECT id, class_id, quarter, component, position, highest_possible::text AS highest_possible,
             sub_weight::text AS sub_weight, label,
             (SELECT q.id FROM quizzes q WHERE q.grade_column_id = grade_columns.id LIMIT 1) AS quiz_id,
-            (SELECT q.title FROM quizzes q WHERE q.grade_column_id = grade_columns.id LIMIT 1) AS quiz_title
+            (SELECT q.title FROM quizzes q WHERE q.grade_column_id = grade_columns.id LIMIT 1) AS quiz_title,
+            (SELECT e.id FROM exams e WHERE e.grade_column_id = grade_columns.id LIMIT 1) AS exam_id,
+            (SELECT e.title FROM exams e WHERE e.grade_column_id = grade_columns.id LIMIT 1) AS exam_title
        FROM grade_columns WHERE class_id = $1 AND quarter = $2
       ORDER BY CASE component WHEN 'WW' THEN 1 WHEN 'PT' THEN 2 ELSE 3 END, position, id`,
     [classId, quarter]
@@ -474,6 +476,19 @@ async function updateColumn(req, res) {
         errors: { highest_possible: 'This column comes from a quiz.' },
       });
     }
+    // An exam column's highest possible score is its questions times
+    // its points each: changing it here would make the Grades page and
+    // the exam disagree. Change the exam setup instead, before any
+    // sheet has been saved.
+    const examLinked = await client.query(
+      'SELECT id, title FROM exams WHERE grade_column_id = $1 LIMIT 1',
+      [columnId]
+    );
+    if (examLinked.rowCount > 0) {
+      throw badRequest(`"${examLinked.rows[0].title}" fills this column from its exam. Edit the exam to change its total points.`, {
+        errors: { highest_possible: 'This column comes from an exam.' },
+      });
+    }
     const over = await client.query(
       'SELECT COUNT(*)::int AS count FROM grade_scores WHERE column_id = $1 AND score > $2',
       [columnId, highest_possible]
@@ -533,6 +548,17 @@ async function deleteColumn(req, res) {
     if (quizLinked.rowCount > 0) {
       throw badRequest(`"${quizLinked.rows[0].title}" fills this column from its quiz. Delete the quiz to remove this column.`, {
         errors: { column: 'This column comes from a quiz.' },
+      });
+    }
+    // An exam column belongs to its exam: deleting it here would leave
+    // the exam with nowhere to write its scores. Delete the exam instead.
+    const examLinked = await client.query(
+      'SELECT id, title FROM exams WHERE grade_column_id = $1 LIMIT 1',
+      [columnId]
+    );
+    if (examLinked.rowCount > 0) {
+      throw badRequest(`"${examLinked.rows[0].title}" fills this column from its exam. Delete the exam to remove this column.`, {
+        errors: { column: 'This column comes from an exam.' },
       });
     }
     const count = await client.query(

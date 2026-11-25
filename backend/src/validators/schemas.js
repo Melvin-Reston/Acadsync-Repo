@@ -820,11 +820,231 @@ const quizSubmitSchema = z.object({
     .array(
       z.object({
         question_id: id,
-        selected_index: z.union([wholeNumber('Answer', 0, 4), z.null()], { error: 'Answer must be a choice number.' }),
+        // Plain z.number, not wholeNumber: wholeNumber coerces, and
+        // Number(null) is 0, so an unanswered question would silently
+        // become choice 0 and could earn points.
+        selected_index: z.union(
+          [
+            z
+              .number({ error: 'Answer must be a choice number.' })
+              .int('Answer must be a whole number.')
+              .min(0, 'Answer must be 0 or more.')
+              .max(4, 'Answer must be 4 or less.'),
+            z.null(),
+          ],
+          { error: 'Answer must be a choice number.' }
+        ),
       })
     )
     .min(1, 'Answer at least one question.')
     .max(100, 'Too many answers.'),
+});
+
+// ---------- Paper exam checker (Batch 10) ----------
+// Choices per question: every question has its own 2 to 5 choices,
+// so the answer key is one entry per question carrying its choice
+// count, its correct position, and whether it uses True/False labels.
+// A True/False question always has exactly 2 choices.
+const examListQuerySchema = z.object({
+  class_id: optionalId,
+  quarter: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    wholeNumber('Period', 1, 4).optional()
+  ),
+  academic_year: optionalAcademicYear,
+});
+
+const examCreateSchema = z.object({
+  class_id: id,
+  quarter: wholeNumber('Period', 1, 4),
+  exam_number: wholeNumber('Exam number', 1, 20),
+  title: text('Exam title', 120),
+  instructions: z.string().trim().max(2000, 'Instructions must be 2000 characters or fewer.').optional().default(''),
+  question_count: wholeNumber('Number of questions', 5, 50),
+  points_each: wholeNumber('Points per question', 1, 10),
+});
+
+const examUpdateSchema = z
+  .object({
+    title: text('Exam title', 120).optional(),
+    instructions: z.string().trim().max(2000, 'Instructions must be 2000 characters or fewer.').optional(),
+    // The setup (questions, points) can change only before any sheet
+    // has been saved; the controller refuses it after that, so a saved
+    // score is never reinterpreted under different rules.
+    question_count: wholeNumber('Number of questions', 5, 50).optional(),
+    points_each: wholeNumber('Points per question', 1, 10).optional(),
+  })
+  .refine(
+    (value) =>
+      value.title !== undefined ||
+      value.instructions !== undefined ||
+      value.question_count !== undefined ||
+      value.points_each !== undefined,
+    {
+      message: 'Change something first.',
+    }
+  );
+
+// One entry per question, in question order: how many choices it has,
+// which choice is correct (null while the teacher has not entered it
+// yet), and whether it is a True/False question. The controller
+// requires exactly question_count entries; a key with unanswered
+// questions saves as entered, and sheets can only be saved once every
+// question has its answer.
+const examQuestionSchema = z
+  .object({
+    choices: wholeNumber('Choices', 2, 5),
+    // Plain z.number, not wholeNumber: wholeNumber coerces, and
+    // Number(null) is 0, so a question with no answer yet would
+    // silently become answer 0 and the key would look complete.
+    correct: z.union(
+      [
+        z
+          .number({ error: 'Correct answer must be a choice number.' })
+          .int('Correct answer must be a whole number.')
+          .min(0, 'Correct answer must be 0 or more.')
+          .max(4, 'Correct answer must be 4 or less.'),
+        z.null(),
+      ],
+      { error: 'Correct answer must be a choice number or blank.' }
+    ),
+    kind: z.enum(['mcq', 'true_false']),
+  })
+  .refine((value) => value.kind === 'mcq' || value.choices === 2, {
+    path: ['kind'],
+    message: 'True/False questions have exactly 2 choices.',
+  })
+  .refine((value) => value.correct === null || value.correct < value.choices, {
+    path: ['correct'],
+    message: 'The correct answer is past the number of choices for this question.',
+  });
+
+const examKeySchema = z.object({
+  questions: z.array(examQuestionSchema).max(50, 'The answer key has too many entries.'),
+});
+
+const examScanSchema = z.object({
+  learner_id: id,
+  // One entry per question, in question order. selected is null for a
+  // blank answer. uncertain/multiple are the checker's flags, kept so
+  // the teacher can see later which answers needed a second look.
+  answers: z
+    .array(
+      z.object({
+        // Plain z.number, not wholeNumber, for the same reason as the
+        // key: a blank answer sent as null must stay blank, not
+        // become choice 0.
+        selected: z.union(
+          [
+            z
+              .number({ error: 'Answer must be a choice number.' })
+              .int('Answer must be a whole number.')
+              .min(0, 'Answer must be 0 or more.')
+              .max(4, 'Answer must be 4 or less.'),
+            z.null(),
+          ],
+          { error: 'Answer must be a choice number or blank.' }
+        ),
+        uncertain: z.boolean().optional().default(false),
+        multiple: z.boolean().optional().default(false),
+      })
+    )
+    .min(5, 'Give an answer for every question.')
+    .max(50, 'Too many answers.'),
+  source: z.enum(['photo', 'manual']).optional().default('photo'),
+});
+
+const examScanParamsSchema = z.object({ id, scanId: id });
+const examDetailQuerySchema = z.object({
+  format: z.enum(['', 'json', 'csv']).optional().default(''),
+});
+
+// ---------- Lesson plans (Batch 11) ----------
+// One column per section of the ILAW template. The create form fills
+// every section with '' when it is left out; an update leaves a section
+// alone when it is not sent, so the two schemas are built from the same
+// field list with and without defaults.
+const lessonContentFields = (withDefaults) => {
+  const limits = {
+    references: 2000,
+    competency: 8000,
+    objective_knowledge: 2000,
+    objective_skill: 2000,
+    objective_attitude: 2000,
+    objective_values: 2000,
+    learner_context: 4000,
+    pre_lesson: 8000,
+    flow: 12000,
+    individual_activity: 8000,
+    individual_answers: 6000,
+    group_activity: 8000,
+    group_answers: 6000,
+    inclusion_strategy: 4000,
+    practical_applications: 4000,
+    generalizations: 4000,
+    abstraction: 8000,
+    learning_resources: 2000,
+    integration: 2000,
+    formative_assessment: 8000,
+    formative_answer_key: 6000,
+    extended_learning: 6000,
+    extended_answer_key: 6000,
+    reflections: 6000,
+  };
+  return Object.fromEntries(
+    Object.entries(limits).map(([field, max]) => {
+      const schema = z
+        .string()
+        .trim()
+        .max(max, `${field} must be ${max} characters or fewer.`)
+        .optional();
+      return [field, withDefaults ? schema.default('') : schema];
+    })
+  );
+};
+
+const lessonPlanListQuerySchema = z.object({
+  class_id: optionalId,
+  quarter: z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    wholeNumber('Period', 1, 4).optional()
+  ),
+  status: z.enum(['', 'draft', 'ready', 'taught']).optional().default(''),
+  academic_year: optionalAcademicYear,
+  search,
+});
+
+const lessonPlanCreateSchema = z.object({
+  class_id: id,
+  quarter: wholeNumber('Period', 1, 4),
+  week_number: wholeNumber('Week number', 1, 52),
+  session_date: dateString,
+  lesson_title: text('Lesson title', 200),
+  ai_use: z.enum(['none', 'used'], { error: 'Choose whether AI was used.' }).optional().default('none'),
+  ai_declaration: z.string().trim().max(1000, 'The AI declaration must be 1000 characters or fewer.').optional().default(''),
+  checked_by_name: z.string().trim().max(120, 'Checked-by name must be 120 characters or fewer.').optional(),
+  status: z.enum(['draft', 'ready', 'taught'], { error: 'Choose Draft, Ready or Taught.' }).optional().default('draft'),
+  ...lessonContentFields(true),
+});
+
+const lessonPlanUpdateSchema = z
+  .object({
+    class_id: id.optional(),
+    quarter: wholeNumber('Period', 1, 4).optional(),
+    week_number: wholeNumber('Week number', 1, 52).optional(),
+    session_date: z.string().refine(isRealDate, 'Use a real date in the format YYYY-MM-DD.').optional(),
+    lesson_title: text('Lesson title', 200).optional(),
+    ai_use: z.enum(['none', 'used'], { error: 'Choose whether AI was used.' }).optional(),
+    ai_declaration: z.string().trim().max(1000, 'The AI declaration must be 1000 characters or fewer.').optional(),
+    checked_by_name: z.string().trim().max(120, 'Checked-by name must be 120 characters or fewer.').optional(),
+    status: z.enum(['draft', 'ready', 'taught'], { error: 'Choose Draft, Ready or Taught.' }).optional(),
+    ...lessonContentFields(false),
+  })
+  .refine((value) => Object.keys(value).length > 0, { message: 'Change something first.' });
+
+const lessonPlanDuplicateSchema = z.object({
+  week_number: wholeNumber('Week number', 1, 52),
+  session_date: dateString,
 });
 
 const reportCardQuerySchema = viewingYearQuerySchema;
@@ -913,4 +1133,15 @@ module.exports = {
   quizCodeParamSchema,
   quizLookupQuerySchema,
   quizSubmitSchema,
+  examListQuerySchema,
+  examCreateSchema,
+  examUpdateSchema,
+  examKeySchema,
+  examScanSchema,
+  examScanParamsSchema,
+  examDetailQuerySchema,
+  lessonPlanListQuerySchema,
+  lessonPlanCreateSchema,
+  lessonPlanUpdateSchema,
+  lessonPlanDuplicateSchema,
 };

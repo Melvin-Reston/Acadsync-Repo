@@ -1,6 +1,7 @@
 // The frame around every teacher page: numbered sidebar on the left, top bar, then the page.
 // Dashboard, Classes & Sections, Schedules, Attendance, Grades, Consolidation, Report Card,
-// Quizzes, Payments & Invoices and Profile are live; the other items are marked "Soon" and are not
+// Quizzes & Exams, Payments & Invoices and Profile are live; Lesson Plans is parked (see the
+// routes file) and the other items are marked "Soon" and are not
 // links, so nothing pretends to work before its batch arrives.
 import { DatePipe } from '@angular/common';
 import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
@@ -27,7 +28,9 @@ const TITLES: Record<string, string> = {
   '/teacher/grades': 'Grades · Teacher Portal',
   '/teacher/consolidation': 'Academic Consolidation · Teacher Portal',
   '/teacher/report-card': 'Report Card · Teacher Portal',
-  '/teacher/quizzes': 'Quizzes · Teacher Portal',
+  '/teacher/assessments': 'Quizzes & Exams · Teacher Portal',
+  '/teacher/quizzes': 'Quizzes & Exams · Teacher Portal',
+  '/teacher/exams': 'Quizzes & Exams · Teacher Portal',
   '/teacher/payments': 'Payments & Invoices · Teacher Portal',
   '/teacher/profile': 'Profile · Teacher Portal',
 };
@@ -66,7 +69,8 @@ export class TeacherLayoutComponent implements OnDestroy {
         { number: '05', label: 'Grades', path: '/teacher/grades', icon: 'edit' },
         { number: '06', label: 'Consolidation', path: '/teacher/consolidation', icon: 'chart' },
         { number: '07', label: 'Report Card', path: '/teacher/report-card', icon: 'card' },
-        { number: '08', label: 'Quizzes', path: '/teacher/quizzes', icon: 'quiz' },
+        { number: '08', label: 'Quizzes & Exams', path: '/teacher/assessments', icon: 'quiz' },
+        // Lesson Plans parked 2026-11-25: no sidebar item until it returns.
       ],
     },
     {
@@ -81,13 +85,18 @@ export class TeacherLayoutComponent implements OnDestroy {
   protected readonly initials = initials;
 
   constructor() {
-    this.pageTitle.set(TITLES[this.router.url] ?? 'Dashboard · Teacher Portal');
-    this.currentRoute.set(this.router.url);
+    // Titles are looked up by path only: the merged Assessments page
+    // carries its tab in the address (?tab=exams), which must not
+    // change the top-bar title.
+    const pathOf = (url: string): string => url.split('?')[0];
+    this.pageTitle.set(TITLES[pathOf(this.router.url)] ?? 'Dashboard · Teacher Portal');
+    this.currentRoute.set(pathOf(this.router.url));
     this.routerSubscription = this.router.events
       .pipe(filter((event) => event instanceof NavigationEnd))
       .subscribe((event) => {
-        this.pageTitle.set(TITLES[event.urlAfterRedirects] ?? 'Teacher Portal');
-        this.currentRoute.set(event.urlAfterRedirects);
+        const path = pathOf(event.urlAfterRedirects);
+        this.pageTitle.set(TITLES[path] ?? 'Teacher Portal');
+        this.currentRoute.set(path);
       });
     // Loads the years for the AY filter in the top bar.
     this.year.load();

@@ -1,6 +1,14 @@
 /* Online quizzes: the teacher's quiz list, detail, questions and results.
    Warm paper throughout, 8px corners, no green. */
 
+/* Inside the merged Quizzes & Exams page: the New button sits alone
+   under the tabs, right-aligned, where the page head used to be. */
+.embedded-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
 .filters {
   display: flex;
   flex-wrap: wrap;

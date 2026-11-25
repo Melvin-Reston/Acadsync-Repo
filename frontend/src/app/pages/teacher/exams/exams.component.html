@@ -1,0 +1,524 @@
+<div class="no-print">
+  @if (!embedded()) {
+    <div class="page-head">
+      <div>
+        <div class="eyebrow">Paper exams</div>
+        <h1 class="page-title">Exams</h1>
+      </div>
+      <div class="head-actions">
+        <button type="button" class="btn btn-primary" (click)="openCreate()" [disabled]="classes().length === 0">
+          <app-icon name="plus" [size]="16" /> New exam
+        </button>
+      </div>
+    </div>
+  } @else {
+    <div class="embedded-actions">
+      <button type="button" class="btn btn-primary" (click)="openCreate()" [disabled]="classes().length === 0">
+        <app-icon name="plus" [size]="16" /> New exam
+      </button>
+    </div>
+  }
+
+  @if (loadError()) {
+    <p class="error">{{ loadError() }}</p>
+  }
+
+  @if (!detail()) {
+    <div class="filters card card-pad">
+      <div class="field">
+        <label>Class</label>
+        <app-dropdown
+          [ngModel]="classFilter()" (ngModelChange)="onClassFilterChange($event)"
+          [options]="[{ value: '', label: 'All classes' }, ...classOptions()]"
+          placeholder="All classes"
+          countSingular="class"
+          countPlural="classes"
+        />
+      </div>
+    </div>
+
+    @if (loading()) {
+      <p class="muted">Loading exams…</p>
+    } @else if (filteredExams().length === 0) {
+      <div class="empty card card-pad">
+        <p><b>No exams yet.</b></p>
+        <p class="muted">Create an exam, enter its answer key, print one answer sheet per learner, then check each sheet from a photo.</p>
+        <button type="button" class="btn btn-primary" (click)="openCreate()" [disabled]="classes().length === 0">New exam</button>
+      </div>
+    } @else {
+      <div class="card">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Exam</th>
+              <th>Class</th>
+              <th>Period</th>
+              <th class="right">Questions</th>
+              <th class="right">Checked</th>
+              <th>Answer key</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (exam of filteredExams(); track exam.id) {
+              <tr>
+                <td>
+                  <b>Exam {{ exam.exam_number }}</b>
+                  <span class="muted"> · {{ exam.title }}</span>
+                </td>
+                <td>{{ exam.subject_name }} · {{ exam.section_name }}</td>
+                <td>{{ periodLabel(exam) }} {{ exam.quarter }}</td>
+                <td class="right">{{ exam.question_count }}</td>
+                <td class="right">{{ exam.scan_count }}</td>
+                <td>
+                  <span class="pill" [class.accent]="exam.key_complete" [class.amber]="!exam.key_complete">{{
+                    exam.key_complete ? 'Complete' : 'Incomplete'
+                  }}</span>
+                </td>
+                <td class="right nowrap">
+                  <button type="button" class="btn btn-small" (click)="openDetail(exam.id)">Open</button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  } @else if (detail(); as detail) {
+    <button type="button" class="btn btn-small back" (click)="backToList()">
+      <app-icon name="arrow-left" [size]="16" /> All exams
+    </button>
+
+    @if (detailLoading()) {
+      <p class="muted">Loading exam…</p>
+    } @else {
+      <div class="page-head detail-head">
+        <div>
+          <div class="eyebrow">{{ detail.exam.subject_name }} · Grade {{ detail.exam.grade_level }} – {{ detail.exam.section_name }}</div>
+          <h1 class="page-title">Exam {{ detail.exam.exam_number }} · {{ detail.exam.title }}</h1>
+          <p class="muted">
+            {{ detailPeriodLabel() }} {{ detail.exam.quarter }} · {{ detail.exam.academic_year }} ·
+            {{ detail.exam.question_count }} questions · {{ detail.exam.points_each }} point{{ detail.exam.points_each === 1 ? '' : 's' }} each ·
+            {{ detail.exam.total_points }} points in all
+          </p>
+        </div>
+        <div class="head-actions">
+          <span class="pill" [class.accent]="detail.exam.key_complete" [class.amber]="!detail.exam.key_complete">{{
+            detail.exam.key_complete ? 'Answer key complete' : 'Answer key incomplete'
+          }}</span>
+          <button type="button" class="btn btn-danger" (click)="deleteExamConfirm.set(true)" [disabled]="busy()">Delete exam</button>
+        </div>
+      </div>
+
+      <p class="muted grades-note">
+        Checked scores go into the Grades page as an Examinations column labelled “Exam {{ detail.exam.exam_number }}”.
+        <a routerLink="/teacher/grades">Open Grades</a>
+        @if (detail.grading.code !== 'do8_2015') {
+          <span>Under this year's system, a new Examinations column starts with no share of the component — set its share on the Grades page so it counts toward the term grade.</span>
+        }
+      </p>
+
+      <div class="grid">
+        <section class="card card-pad">
+          <h2 class="card-title">Exam details</h2>
+          <div class="field">
+            <label for="edit-title">Title</label>
+            <input id="edit-title" type="text" [ngModel]="editTitle()" (ngModelChange)="editTitle.set($event)" />
+          </div>
+          <div class="field">
+            <label for="edit-instructions">Instructions printed on the sheet (optional)</label>
+            <textarea id="edit-instructions" rows="2" [ngModel]="editInstructions()" (ngModelChange)="editInstructions.set($event)"></textarea>
+          </div>
+          @if (!keyLocked()) {
+            <div class="field-row">
+              <div class="field">
+                <label for="edit-questions">Questions</label>
+                <input id="edit-questions" type="number" min="5" max="50" step="1" [ngModel]="editQuestionCount()" (ngModelChange)="setEditQuestionCount($event)" />
+              </div>
+              <div class="field">
+                <label for="edit-points">Points each</label>
+                <input id="edit-points" type="number" min="1" max="10" step="1" [ngModel]="editPointsEach()" (ngModelChange)="setEditPointsEach($event)" />
+              </div>
+            </div>
+          } @else {
+            <p class="locked">Sheets have been saved for this exam, so the question count and points can no longer be changed. The title and instructions above can still be edited.</p>
+          }
+          @if (detailErrors()['title']) {
+            <span class="field-error">{{ detailErrors()['title'] }}</span>
+          }
+          <button type="button" class="btn btn-primary" (click)="saveDetails()" [disabled]="savingDetail()">Save details</button>
+        </section>
+
+        <section class="card card-pad">
+          <h2 class="card-title">Answer key</h2>
+          <p class="muted">Set how many choices each question has, then its correct answer. A 2-choice question can be True/False instead of A/B.</p>
+          @if (keyLocked()) {
+            <p class="locked">Sheets have been saved, so the answer key can no longer be changed. Delete every checked sheet first if the exam itself was wrong.</p>
+            <ol class="key-readonly">
+              @for (row of keyPageRows(); track row.index) {
+                <li>
+                  <b>Q{{ row.index + 1 }}</b> {{ questionLabels(row.entry)[row.entry.correct ?? -1] ?? '—' }}
+                  <span class="muted">· {{ row.entry.choices }} choices{{ row.entry.kind === 'true_false' ? ' · True/False' : '' }}</span>
+                </li>
+              }
+            </ol>
+            @if (keyDraft().length > keyPageSize) {
+              <app-pagination
+                [page]="keyPage() + 1"
+                [pageSize]="keyPageSize"
+                [total]="keyDraft().length"
+                (pageChange)="setKeyPage($event - 1)"
+              />
+            }
+          } @else {
+            <div class="field">
+              <label for="key-string">Type the key quickly</label>
+              <div class="key-string-row">
+                <input
+                  id="key-string"
+                  type="text"
+                  [ngModel]="keyInput()"
+                  (ngModelChange)="keyInput.set($event)"
+                  placeholder="For example: ABCD…"
+                />
+                <button type="button" class="btn btn-small" (click)="applyKeyString()">Fill the key</button>
+              </div>
+              <p class="muted small">Type one letter per question, in order — A to E, or T and F for a True/False question. It fills the grid below. Set the choices per question first.</p>
+            </div>
+            <div class="key-grid" role="group" aria-label="Answer key">
+              @for (row of keyPageRows(); track row.index) {
+                <div class="key-row">
+                  <b class="key-number">Q{{ row.index + 1 }}</b>
+                  <span class="key-group-label">Answer</span>
+                  <span class="key-choices">
+                    @for (label of questionLabels(row.entry); track $index; let c = $index) {
+                      <button
+                        type="button"
+                        class="btn btn-small key-choice"
+                        [class.btn-primary]="row.entry.correct === c"
+                        (click)="setKeyAnswer(row.index, c)"
+                      >
+                        {{ label }}
+                      </button>
+                    }
+                  </span>
+                  <button type="button" class="icon-btn small" aria-label="Clear answer" (click)="setKeyAnswer(row.index, null)"><app-icon name="x" [size]="16" /></button>
+                  <span class="key-side">
+                    <span class="key-group-label">Choices</span>
+                    <app-dropdown
+                      class="key-count"
+                      [ngModel]="row.entry.choices"
+                      (ngModelChange)="setQuestionChoicesOption(row.index, $event)"
+                      [options]="choiceCountOptions"
+                      placeholder="Choices"
+                      countSingular="choice"
+                      countPlural="choices"
+                    />
+                    @if (row.entry.choices === 2) {
+                      <span class="key-choices">
+                        <button type="button" class="btn btn-small" [class.btn-primary]="row.entry.kind === 'mcq'" (click)="setQuestionKind(row.index, 'mcq')">A / B</button>
+                        <button type="button" class="btn btn-small" [class.btn-primary]="row.entry.kind === 'true_false'" (click)="setQuestionKind(row.index, 'true_false')">True / False</button>
+                      </span>
+                    }
+                  </span>
+                </div>
+              }
+            </div>
+            @if (keyDraft().length > keyPageSize) {
+              <app-pagination
+                [page]="keyPage() + 1"
+                [pageSize]="keyPageSize"
+                [total]="keyDraft().length"
+                (pageChange)="setKeyPage($event - 1)"
+              />
+            }
+            @if (keyError()) {
+              <p class="field-error">{{ keyError() }}</p>
+            }
+            <div class="form-actions">
+              <button type="button" class="btn btn-primary" (click)="saveKey()" [disabled]="savingKey()">Save answer key</button>
+            </div>
+            <p class="muted small">A partial key saves as entered. Sheets can only be checked once every question has an answer.</p>
+          }
+          <h3 class="form-title">How each question went</h3>
+          @if (detail.scans.length === 0) {
+            <p class="muted">No sheets checked yet.</p>
+          } @else {
+            <ul class="stats-list">
+              @for (stat of detail.question_stats; track stat.position) {
+                <li>Q{{ stat.position }}: {{ stat.correct }} of {{ stat.attempts }} right</li>
+              }
+            </ul>
+          }
+        </section>
+      </div>
+
+      <div class="grid">
+        <section class="card card-pad">
+          <h2 class="card-title">Print answer sheets</h2>
+          <p class="muted">One sheet per learner, with their name and Learner ID already printed on it. Print at 100% size, in black, so the corner squares and circles come out sharp.</p>
+          <div class="field">
+            <label>Learner to preview</label>
+            <app-dropdown
+              [ngModel]="previewLearnerId()"
+              (ngModelChange)="onPreviewLearnerChange($event)"
+              [options]="checkLearnerOptions()"
+              placeholder="Choose a learner"
+              countSingular="learner"
+              countPlural="learners"
+            />
+          </div>
+          <div class="form-actions print-actions">
+            <button type="button" class="btn" (click)="printOne()" [disabled]="!previewLearner()"><app-icon name="printer" [size]="16" /> Print this sheet</button>
+            <button type="button" class="btn btn-primary" (click)="printAll()" [disabled]="detail.roster.length === 0"><app-icon name="printer" [size]="16" /> Print all {{ detail.roster.length }} sheets</button>
+          </div>
+          @if (previewLearner(); as learner) {
+            <div class="sheet-preview">
+              <app-exam-sheet [exam]="detail.exam" [learner]="learner" />
+            </div>
+          }
+        </section>
+
+        <section class="card card-pad">
+          <h2 class="card-title">Check a sheet</h2>
+          @if (!detail.exam.key_complete) {
+            <p class="locked">Finish the answer key first. Sheets cannot be checked with an incomplete key.</p>
+          }
+          <div class="field">
+            <label>Learner</label>
+            <app-dropdown
+              [ngModel]="checkLearnerId()"
+              (ngModelChange)="onCheckLearnerChange($event)"
+              [options]="checkLearnerOptions()"
+              placeholder="Choose a learner"
+              countSingular="learner"
+              countPlural="learners"
+            />
+          </div>
+          @if (hasSavedScan()) {
+            <p class="muted">This learner already has a checked sheet. Checking again replaces it.</p>
+            <button type="button" class="btn btn-small" (click)="loadSavedAnswers()">Load the saved answers to correct by hand</button>
+          }
+          <div class="field">
+            <label for="sheet-photo">Photo of the shaded sheet</label>
+            <input id="sheet-photo" type="file" accept="image/*" (change)="onPhotoSelected($event)" [disabled]="!detail.exam.key_complete || checkLearnerId() === null" />
+            <p class="muted small">The photo stays on this device. It is read here and never uploaded. Lay the sheet flat, in good light, and fill the frame with it.</p>
+          </div>
+          @if (reading()) {
+            <p class="muted">Reading the sheet…</p>
+          }
+          @if (readError()) {
+            <p class="field-error">{{ readError() }}</p>
+          }
+          <button type="button" class="btn btn-small" (click)="startManualEntry()" [disabled]="!detail.exam.key_complete || checkLearnerId() === null">
+            Enter the answers by hand instead
+          </button>
+
+          @if (omrResult(); as result) {
+            <div class="preview-wrap">
+              <canvas #previewCanvas class="preview-canvas" aria-label="The sheet photo, straightened, with the read answers circled"></canvas>
+              <p class="muted small">Rings show what the checker read. A dashed ring means it was unsure — check that question below.</p>
+            </div>
+            @for (warning of result.warnings; track $index) {
+              <p class="locked">{{ warning }}</p>
+            }
+            @if (!result.markersFound) {
+              <p class="locked">The corner squares were not found in this photo. The answers below may be wrong — compare them with the photo before saving.</p>
+            }
+          }
+
+          @if (reviewStarted()) {
+            <h3 class="form-title">Review the answers — {{ checkedLearnerName() }}</h3>
+            <p class="muted">Correct anything the checker got wrong. Blank means no circle was shaded.</p>
+            <div class="review-grid" role="group" aria-label="Reviewed answers">
+              @for (answer of reviewAnswers(); track $index; let q = $index) {
+                <div class="review-row" [class.uncertain]="reviewFlags()[q]?.uncertain">
+                  <b class="key-number">Q{{ q + 1 }}</b>
+                  <span class="key-choices">
+                    @for (label of questionLabels(storedQuestion(q)); track $index; let c = $index) {
+                      <button
+                        type="button"
+                        class="btn btn-small key-choice"
+                        [class.btn-primary]="answer === c"
+                        (click)="setReviewAnswer(q, c)"
+                      >
+                        {{ label }}
+                      </button>
+                    }
+                    <button type="button" class="btn btn-small key-choice" [class.btn-primary]="answer === null" (click)="setReviewAnswer(q, null)">Blank</button>
+                  </span>
+                  @if (reviewFlags()[q]?.multiple) {
+                    <span class="flag">Double-shaded</span>
+                  } @else if (reviewFlags()[q]?.uncertain) {
+                    <span class="flag">Unsure</span>
+                  }
+                  @if (detail.exam.key_complete) {
+                    <span class="muted small review-mark">
+                      @if (answer === null) {
+                        —
+                      } @else if (answer === storedQuestion(q).correct) {
+                        Right
+                      } @else {
+                        Wrong
+                      }
+                    </span>
+                  }
+                </div>
+              }
+            </div>
+            @if (reviewScore(); as score) {
+              <p class="score-line"><b>This would score {{ score.score }} out of {{ score.totalPoints }}</b> · {{ score.correct }} of {{ score.total }} right.</p>
+            }
+            @if (scanError()) {
+              <p class="field-error">{{ scanError() }}</p>
+            }
+            <div class="form-actions">
+              <button type="button" class="btn btn-primary" (click)="saveScan()" [disabled]="savingScan()">Save checked sheet</button>
+            </div>
+          }
+        </section>
+      </div>
+
+      <section class="card">
+        <div class="card-head">
+          <h2 class="card-title">Results · {{ detail.scans.length }} of {{ detail.roster.length }} checked</h2>
+          <div class="head-actions">
+            <input class="search" type="search" placeholder="Search learner or ID…" [ngModel]="rosterSearch()" (ngModelChange)="rosterSearch.set($event)" aria-label="Search results" />
+            <button type="button" class="btn btn-small" (click)="downloadResults()"><app-icon name="download" [size]="16" /> Download CSV</button>
+          </div>
+        </div>
+        @if (detail.roster.length === 0) {
+          <p class="muted card-pad">No learners are enrolled in this class yet.</p>
+        } @else {
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Learner</th>
+                <th>Learner ID</th>
+                <th class="right">Score</th>
+                <th>Checked from</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of rosterRows(); track row.id) {
+                <tr>
+                  <td>{{ row.last_name }}, {{ row.first_name }}</td>
+                  <td class="mono">{{ row.learner_id }}</td>
+                  <td class="right">{{ row.scan ? row.scan.score + ' / ' + row.scan.total_points : '—' }}</td>
+                  <td>{{ row.scan ? (row.scan.source === 'photo' ? 'Photo' : 'By hand') : '—' }}</td>
+                  <td class="right nowrap">
+                    @if (row.scan) {
+                      <button
+                        type="button"
+                        class="btn btn-small btn-danger"
+                        (click)="deleteScanId.set(detail.scans.find((s) => s.learner_id === row.id)?.id ?? null)"
+                      >
+                        Remove checked sheet
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </section>
+    }
+  }
+
+  @if (createOpen()) {
+    <app-modal title="New exam" (closed)="createOpen.set(false)">
+      <div class="field">
+        <label>Class</label>
+        <app-dropdown
+          [ngModel]="newClassId()"
+          (ngModelChange)="onNewClassChange($event)"
+          [options]="classOptions()"
+          placeholder="Choose a class"
+          countSingular="class"
+          countPlural="classes"
+        />
+        @if (formErrors()['class_id']) {
+          <span class="field-error">{{ formErrors()['class_id'] }}</span>
+        }
+      </div>
+      <div class="field">
+        <label>Period</label>
+        <app-dropdown
+          [ngModel]="newQuarter()"
+          (ngModelChange)="onNewQuarterChange($event)"
+          [options]="periodOptions()"
+          placeholder="Choose a period"
+          countSingular="period"
+          countPlural="periods"
+        />
+      </div>
+      <div class="field">
+        <label for="new-number">Exam number</label>
+        <input id="new-number" type="number" min="1" max="20" step="1" [ngModel]="newExamNumber()" (ngModelChange)="setNewExamNumber($event)" />
+        @if (formErrors()['exam_number']) {
+          <span class="field-error">{{ formErrors()['exam_number'] }}</span>
+        }
+      </div>
+      <div class="field">
+        <label for="new-title">Title</label>
+        <input id="new-title" type="text" [ngModel]="newTitle()" (ngModelChange)="newTitle.set($event)" placeholder="For example: First Periodical Exam" />
+        @if (formErrors()['title']) {
+          <span class="field-error">{{ formErrors()['title'] }}</span>
+        }
+      </div>
+      <div class="field">
+        <label for="new-instructions">Instructions printed on the sheet (optional)</label>
+        <textarea id="new-instructions" rows="2" [ngModel]="newInstructions()" (ngModelChange)="newInstructions.set($event)"></textarea>
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="new-questions">Questions</label>
+          <input id="new-questions" type="number" min="5" max="50" step="1" [ngModel]="newQuestionCount()" (ngModelChange)="setNewQuestionCount($event)" />
+          <p class="muted small">5 to 50. One page.</p>
+        </div>
+        <div class="field">
+          <label for="new-points">Points each</label>
+          <input id="new-points" type="number" min="1" max="10" step="1" [ngModel]="newPointsEach()" (ngModelChange)="setNewPointsEach($event)" />
+        </div>
+      </div>
+      <p class="muted small">Each question can have 2 to 5 choices. The answer key is entered next, one question at a time — including True/False questions.</p>
+      <div class="form-actions">
+        <button type="button" class="btn" (click)="createOpen.set(false)">Cancel</button>
+        <button type="button" class="btn btn-primary" (click)="createExam()" [disabled]="savingExam()">Create exam</button>
+      </div>
+    </app-modal>
+  }
+
+  @if (deleteExamConfirm() && detail(); as detail) {
+    <app-modal title="Delete this exam?" (closed)="deleteExamConfirm.set(false)">
+      <p>
+        “{{ detail.exam.title }}” and its checked sheets will be deleted, and its Examinations column will be removed from the Grades page.
+        This cannot be undone.
+      </p>
+      <div class="form-actions">
+        <button type="button" class="btn" (click)="deleteExamConfirm.set(false)">Keep it</button>
+        <button type="button" class="btn btn-danger" (click)="confirmDeleteExam()" [disabled]="busy()">Delete exam</button>
+      </div>
+    </app-modal>
+  }
+
+  @if (deleteScanId() !== null) {
+    <app-modal title="Remove this checked sheet?" (closed)="deleteScanId.set(null)">
+      <p>The learner will be unchecked, and their score will be removed from the Grades page.</p>
+      <div class="form-actions">
+        <button type="button" class="btn" (click)="deleteScanId.set(null)">Keep it</button>
+        <button type="button" class="btn btn-danger" (click)="confirmDeleteScan()" [disabled]="busy()">Remove checked sheet</button>
+      </div>
+    </app-modal>
+  }
+</div>
+
+<div class="exam-print" aria-hidden="true">
+  @if (detail(); as detail) {
+    @for (learner of printLearners(); track learner.learner_id) {
+      <app-exam-sheet [exam]="detail.exam" [learner]="learner" />
+    }
+  }
+</div>

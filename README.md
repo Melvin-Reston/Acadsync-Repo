@@ -1,4 +1,4 @@
-# AcadSync — Admin Parts 1 and 2, Teacher Batches 1–8
+# AcadSync — Admin Parts 1 and 2, Teacher Batches 1–10
 
 One project with two folders:
 
@@ -16,6 +16,10 @@ Teacher Batch 4.1 adds the grading-system switch: the grading system is chosen p
 Teacher Batch 6 adds Payments & Invoices for the teacher: the current plan with days left, the active plans with prices, the teacher's own invoices, and the receipt for one invoice — paid by scanning the administrator's QR code, with a screenshot and a reference number sent for confirmation. See [Payments & Invoices](#payments--invoices) and [Upgrading from Teacher Batch 5](#upgrading-from-teacher-batch-5).
 
 Teacher Batch 8 adds the DepEd print forms: the Class Record and Final Grades printouts on the Grades page, the School Form 2 (SF2) daily attendance report on the Attendance page, and the Region, Division and School ID the teacher enters on the Profile page, which print on the forms. See [Teacher Batch 8: DepEd print forms](#teacher-batch-8-deped-print-forms) and [Upgrading from Teacher Batch 7 fix 2](#upgrading-from-teacher-batch-7-fix-2).
+
+Teacher Batch 9 adds online quizzes: the teacher makes a numbered quiz per class and period, adds multiple-choice (2 to 5 choices) and True/False questions with an answer key, publishes it, and sends learners a link. Learners need no account: they enter their Learner ID, answer, and are checked at once. Scores go into the Grades page as a Written Works column labelled with the quiz number.
+
+Teacher Batch 10 adds the paper exam checker: the teacher makes an exam per class and period, enters one answer key — each question with its own 2 to 5 choices, a 2-choice question optionally True/False — prints one answer sheet per learner with the learner's name and Learner ID already on it, then checks each sheet from a photo of the shaded circles. The photo is read in the browser and never uploaded; the teacher reviews and corrects the answers before saving, and the server recomputes the score from its own key into an Examinations column in the Grades page, labelled with the exam number. See [Upgrading from Teacher Batch 9 fix 1](#upgrading-from-teacher-batch-9-fix-1).
 
 Already running Part 1? Go straight to [Upgrading from Part 1](#upgrading-from-part-1).
 
@@ -437,12 +441,128 @@ npm start
 
 No new `.env` settings are required.
 
+## Upgrading from Teacher Batch 11 fix 2
+
+This zip is built on top of Teacher Batch 11 fix 1 (the merged Quizzes & Exams page). Unzip it **last**, over any newer install. Your `.env` file and everything in your database are kept. You do not run the seed again.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip the Teacher Batch 11 fix 2 zip **over your existing `acadsync` folder** and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run migrate
+npm run dev
+```
+
+`npm run migrate` should print `Database is already up to date.` There is no new migration in this fix: nothing in the database changes, and any lesson plans already saved stay saved.
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. **Lesson Plans** is no longer in the sidebar — the sidebar now ends at **Payments & Invoices** (09) and **Profile** (10), and the old Lesson Plans address opens the Dashboard instead. The SF2 printout now carries the DepEd seal and logo at the top, like the Grades print forms. Everything else works as before.
+
+No new `.env` settings are required.
+
+## Upgrading from Teacher Batch 11 fix 1
+
+This zip is built on top of Teacher Batch 11 (lesson plans). Unzip it **last**, over any newer install — unzipping an older zip over it would split Quizzes and Exams back into two sidebar items. Your `.env` file and everything in your database are kept. You do not run the seed again.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip the Teacher Batch 11 fix 1 zip **over your existing `acadsync` folder** and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run migrate
+npm run dev
+```
+
+`npm run migrate` should print `Database is already up to date.` There is no new migration in this fix: nothing in the database changes.
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. The sidebar now has one item, **Quizzes & Exams**, with a **Quizzes** tab and an **Exams** tab. Everything inside each tab works exactly as before — quizzes, the link to send learners, exams, the answer key, printed sheets and checking from a photo. The open tab is in the address (`?tab=quizzes` or `?tab=exams`), so a refresh keeps the tab you were on, and the old addresses still work.
+
+No new `.env` settings are required.
+
+## Upgrading from Teacher Batch 10 fix 1
+
+This zip is built on top of Teacher Batch 10 and its fix 1 (the paged answer key editor). Unzip it **last**, over any newer install — unzipping an older zip over it would remove the lesson plans. Your `.env` file and everything in your database are kept. You do not run the seed again.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip the Teacher Batch 11 zip **over your existing `acadsync` folder** and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run migrate
+npm run dev
+```
+
+`npm run migrate` should print `Applied 016_lesson_plans.sql`. It adds the lesson plans table. Nothing else changes.
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. Teachers now have **Lesson Plans** in the sidebar: create a plan for a class and period, fill in the ILAW sections (Intentions, Learning Experiences, Assessment, Ways Forward), and print it in the DepEd layout. The school header, teacher name and grade/section on the printout come from the teacher's Profile and class; the Region, Division, School ID and school head print blank until they are filled in on the Profile page. Every plan carries a Declaration of AI Use (DO 3, s. 2026, Annex A): choose "No AI tools were used" or "AI was used" and describe how. Marking a plan Ready needs the competency, at least one objective, the lesson flow, and the formative assessment. A plan can be copied into a new week and date as a fresh draft.
+
+No new `.env` settings are required. Nothing is generated by AI in this version: the teacher writes the plan, and AcadSync formats and prints it.
+
+## Upgrading from Teacher Batch 9 fix 1
+
+This zip is built on top of Teacher Batch 9 and its fix 1 (the one-screen teacher login). Unzip it **last**, over any newer install — unzipping an older zip over it would remove the exam checker. Your `.env` file and everything in your database are kept. You do not run the seed again.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip the Teacher Batch 10 zip **over your existing `acadsync` folder** and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run migrate
+npm run dev
+```
+
+`npm run migrate` should print `Applied 015_exams.sql`. It adds the exams and their checked sheets. Nothing else changes.
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. Teachers now have **Exams** in the sidebar: create an exam, set each question's choices and correct answer in the answer key, print one answer sheet per learner (name and Learner ID already printed, at 100% size, in black), then check each sheet from a photo — or enter the answers by hand when a photo cannot be read. Checked scores appear in the Grades page as an Examinations column labelled with the exam number.
+
+No new `.env` settings are required. A sheet photo is never uploaded: it is read in the browser, and only the reviewed answers are saved.
+
 ## Teacher Batch 8: DepEd print forms
 
 1. **School details for DepEd forms** — on the **Profile** page, under Personal details, three optional fields: **Region**, **Division** and **School ID**. They print on the DepEd forms below, and stay blank on the forms when unset. Nothing else on the profile changes, and the teaching assignment stays read-only.
 2. **Class Record print** — on the **Grades** page, **Print class record** prints the current sheet in the DepEd Class Record format: the seal and DepEd logo, Region / Division / School ID / School Name / School Year, Grade Level / Section / Teacher / Subject, the Highest Possible Score row, then Written Works, Performance Tasks and Examinations (with the ST1 / ST2 / Term Exam sub-columns and their weighted scores under DO 015, or the single Quarterly Assessment block under DO 8), then Initial Grade, Term/Quarter Grade and Descriptor. Learners are grouped Male then Female, numbered separately. The printout shows the sheet as it is right now, including blanks — it is the working record. It prints landscape, in black and white.
 3. **Final Grades tab** — next to the term tabs on the **Grades** page. It shows every filed term side by side with the Final Grade, Descriptor and Remark (Passed at 75 or above, Failed below it, blank when there is no final grade yet). The data follows the same rule as the Final column: filed submissions only, and the final grade appears only once every term is filed. **Print final grades** prints it in the DepEd Class Record – Final Grades format, with the same header and Male/Female grouping.
-4. **SF2 tab** — on the **Attendance** page, next to Daily roll. Pick a month (June to April of the school year) to preview the **School Form 2 Daily Attendance Report of Learners**: Monday–Friday days only, names in alphabetical order, X for Absent, L for Late, E for Excused, blank for Present, with Absent and Present totals from the saved daily rolls only. A day today or earlier with no attendance record for the learner marks X and counts absent; a day after today stays blank and counts in neither total. **Print SF2** prints the form, landscape, in black and white, with no logos. The Remarks column stays blank for handwriting.
+4. **SF2 tab** — on the **Attendance** page, next to Daily roll. Pick a month (June to April of the school year) to preview the **School Form 2 Daily Attendance Report of Learners**: Monday–Friday days only, names in alphabetical order, X for Absent, L for Late, E for Excused, blank for Present, with Absent and Present totals from the saved daily rolls only. A day today or earlier with no attendance record for the learner marks X and counts absent; a day after today stays blank and counts in neither total. **Print SF2** prints the form, landscape, in black and white, with the DepEd seal and logo at the top, like the Grades print forms. The Remarks column stays blank for handwriting.
 5. **SF2 header (Batch 8 fix 1)** — the SF2 table header now follows the DepEd form exactly, in the preview and the printout: No., NAME (Last Name, First Name, Middle Name), the "(1st row for date)" row, the dates row, the day-letter row, Total for the Month split into Absent and Present, and the full Remarks wording. The names, marks and totals are unchanged.
 6. **SF2 footer, ordering and data-only printing (Batch 8 fix 2)** — learners are listed Male first, then Female, each group alphabetical, numbered continuously, with a **Combined TOTAL Per Day** row as the last row of the table. Below the table, in the preview and the printout, the form's last part: the Guidelines with the three formulas, the codes for checking attendance, the reasons/causes list, the month summary table (registered learners, average daily attendance and percentage of attendance computed from the saved rolls; enrolment as of the 1st Friday, late enrolment, dropped out and transferred stay blank for handwriting), and the certification with the adviser name and the school head name. The **School Head** field sits with the other school details on the Profile page and prints on the "Attested by" line when filled in. The header fields (School ID, Name of School, Section, Month, Grade Level) are aligned on one grid. Every printout — SF2, Class Record, Final Grades and Report Card — is data only: no browser-added date, page title, link or page number.
 7. **Gender TOTAL rows and footer flow (Batch 8 fix 3)** — after the last male learner and after the last female learner the table has a **TOTAL Per Day** row for that gender (`<=== MALE | TOTAL Per Day ===>`, `<=== FEMALE | TOTAL Per Day ===>`); the **Combined TOTAL Per Day** row stays last. The footer (Guidelines, codes, reasons, summary table, certification) now flows directly after the table instead of starting on a new page. The blank-means-present totals rule that came with this fix was replaced by fix 5 (item 9 below). This change is SF2 only — the Report Card and the daily roll are unchanged.
@@ -894,6 +1014,18 @@ The grading system is a switch, one per academic year — changing next year's s
 - **What is filled in**: nothing on the card is typed from scratch except the teacher's comments (below). The learner's name, learner ID, grade level and section come from the enrolment list; the school name comes from the teacher's school record and appears only on the printed card, never in the app. The **Learning Progress** table lists one row per subject the advisory section has in Consolidation — the real subjects with submitted grades, in the same order — with one column per period (Terms 1–3 under DO 015, Quarters 1–4 under DO 8). The Final Grade for a subject is the mean of its period grades, rounded to a whole number; the General Average is the mean of the Final Grades and only shows once every subject has a final grade. Remarks are **Passed** at 75 and above, **Failed** below. A period or subject with no submitted grade shows —, never an invented number. The **Attendance** table on the back counts school days from the real attendance records for the learner's classes, June to April: a day counts as present when marked Present or Late in at least one class that day, otherwise excused when excused in at least one class, otherwise absent. A month with no records shows —. The performance descriptors under the table follow the active grading system for the school year.
 - **Teacher's comments**: the only typed content on the card. On the back, each term (or quarter under DO 8) has a box where the adviser types a comment and clicks **Save comment**. The button stays disabled until the text differs from what is saved, and a blank comment clears the saved one. Saved comments print as plain text on the card; a term with no comment prints as ruled lines for handwriting. Everything else on the back — the Dear Parents letter, parent signatures, Certificate of Transfer and Cancellation of Eligibility to Transfer — prints as-is for handwriting.
 - **Views and printing**: pick **Single student card** or **All students in advisory** (roster order), then **Front**, **Back** or **Both sides**. **Print card** (or Ctrl/⌘+P) prints at A5, 100%, margins None — one card per printed page, front then back, with the sidebar, top bar and all controls hidden. Print-all prints one front + back card per learner, each with that learner's name filled in.
+
+### Lesson Plans
+
+> Parked for now (Teacher Batch 11 fix 2, 2026-11-25): Lesson Plans is not in the sidebar and its address opens the Dashboard. The page, its API and its saved plans are still in the project, so bringing it back is a small change. Everything below describes the page as it works when it returns.
+
+**Lesson Plans** (http://localhost:4200/teacher/lesson-plans) writes one ILAW lesson plan per class, period, week and session date, in the DepEd template: Intentions (Learning Competency, Learning Objectives in Knowledge / Skill / Attitude / Values, Learner Context), Learning Experiences (Pre-lesson, Flow, Individual and Group Activities with their answer keys, Inclusion Strategy, Practical Applications, Generalizations, Abstraction, Learning Resources, Opportunities for Integration), Assessment (Formative Assessment with its answer key), and Ways Forward (Extended Learning with its answer key, Reflections). The teacher writes every section; nothing is generated.
+
+- **Header**: the class, period (Terms 1–3 under DO 015, Quarters 1–4 under DO 8), week number, session date and lesson title. The printout's school header (Region, Division, school name and city/region), teacher name, grade and section, and the Prepared by / Checked by lines come from the teacher's Profile and the class; the Checked-by name defaults to the school head from the Profile and can be changed per plan.
+- **Declaration of AI Use**: every plan carries one, as DO 3, s. 2026, Annex A asks. "No AI tools were used" stores the standard sentence; "AI was used" needs the teacher's own description of the tool and what it was used for.
+- **Status**: Draft, Ready or Taught. Marking a plan Ready needs the competency, at least one objective, the pre-lesson or the flow, and the formative assessment; the server refuses Ready until those are present and says which ones are missing. Leaving the editor, switching to another page, or closing the tab with unsaved changes asks first.
+- **Copy and delete**: **Copy** duplicates every section into a new draft for a week and date the teacher chooses. **Delete** removes the plan; it cannot be undone.
+- **Printing**: **Print** shows the plan as it will print, then **Print** (or Ctrl/⌘+P) prints at A4, 100%, margins None. The printout is strictly black and white, plain white paper, with 10mm margins on every side and no browser-added date, title, URL or page number. Empty sections print as —, never as invented content.
 
 ### What the admin sees
 

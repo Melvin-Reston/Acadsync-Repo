@@ -1,0 +1,131 @@
+/* One printed answer sheet: strictly black and white, plain white paper.
+   The sheet is one A4 page. Sizes use cqw (percent of the sheet's own
+   width), so the header, markers and circles scale together at any
+   preview width and in print, and never crowd the answer grid. Markers
+   and circles are positioned in percentages from core/omr.ts, so the
+   printer and the reader share the same geometry. */
+.exam-sheet {
+  container-type: inline-size;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 210 / 297;
+  background: #fff;
+  color: #000;
+  border: 1px solid #000;
+  overflow: hidden;
+  font-family: Arial, Helvetica, sans-serif;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+
+.exam-sheet * {
+  color: #000;
+}
+
+.marker {
+  position: absolute;
+  width: 5.2cqw;
+  height: 5.2cqw;
+  transform: translate(-50%, -50%);
+  background: #000;
+}
+
+.sheet-head {
+  position: absolute;
+  left: 9%;
+  right: 9%;
+  top: 6.5%;
+  text-align: center;
+}
+
+.sheet-kicker {
+  margin: 0 0 0.4cqw;
+  font-size: 1.4cqw;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.sheet-title {
+  margin: 0;
+  font-size: 2.6cqw;
+  line-height: 1.2;
+}
+
+.sheet-sub {
+  margin: 0.3cqw 0 0;
+  font-size: 1.55cqw;
+}
+
+.sheet-learner {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5cqw;
+  margin-top: 1cqw;
+  padding: 0.8cqw 1.2cqw;
+  border: 0.2cqw solid #000;
+  text-align: left;
+  font-size: 1.7cqw;
+}
+
+.sheet-instructions {
+  margin: 0.8cqw 0 0;
+  font-size: 1.55cqw;
+}
+
+.sheet-grid {
+  position: absolute;
+  inset: 0;
+}
+
+.choice-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 1.55cqw;
+  font-weight: 700;
+  text-align: center;
+}
+
+/* The small T or F above a True/False row's circles. */
+.bubble-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 1.4cqw;
+  font-weight: 700;
+  text-align: center;
+}
+
+.question-number {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  font-size: 1.7cqw;
+  font-weight: 700;
+  text-align: right;
+}
+
+.bubble {
+  position: absolute;
+  width: 3.3cqw;
+  height: 3.3cqw;
+  transform: translate(-50%, -50%);
+  border: 0.25cqw solid #000;
+  border-radius: 50%;
+  background: #fff;
+}
+
+.sheet-foot {
+  position: absolute;
+  left: 9%;
+  right: 9%;
+  bottom: 2.5%;
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5cqw;
+  font-size: 1.3cqw;
+}
+
+@media print {
+  .exam-sheet {
+    border: 0;
+  }
+}

@@ -789,6 +789,10 @@ export interface GradeColumn {
   // a column typed in by hand on the Grades page.
   quiz_id?: number | null;
   quiz_title?: string | null;
+  // A column filled by a checked paper exam: the exam that owns it, or
+  // null for a column typed in by hand on the Grades page.
+  exam_id?: number | null;
+  exam_title?: string | null;
 }
 
 export interface GradeWeights {
@@ -1064,6 +1068,157 @@ export interface QuizSubmitResult {
   submitted_at: string;
   learner_name: string;
   message: string;
+}
+
+// ---------- Paper exam checker (Batch 10) ----------
+// Choices per question, one answer key for the whole exam, and one
+// printed answer sheet per learner. The photo of a sheet is read in
+// the browser and never uploaded: only the reviewed answers reach the
+// server, and the server recomputes the score from its key.
+export type ExamQuestionKind = 'mcq' | 'true_false';
+
+export interface ExamQuestion {
+  choices: number;
+  correct: number | null;
+  kind: ExamQuestionKind;
+}
+
+export interface Exam {
+  id: number;
+  teacher_id: number;
+  class_id: number;
+  quarter: number;
+  exam_number: number;
+  title: string;
+  instructions: string;
+  question_count: number;
+  points_each: number;
+  questions: ExamQuestion[];
+  key_complete: boolean;
+  total_points: number;
+  grade_column_id: number | null;
+  created_at: string;
+  updated_at: string;
+  subject_name: string;
+  grade_level: number;
+  section_name: string;
+  academic_year: string;
+  scan_count: number;
+}
+
+export interface ExamScanAnswer {
+  selected: number | null;
+  uncertain: boolean;
+  multiple: boolean;
+}
+
+export interface ExamRosterRow {
+  id: number;
+  first_name: string;
+  last_name: string;
+  learner_id: string;
+  sex: 'Male' | 'Female';
+  scan: { score: number; total_points: number; source: 'photo' | 'manual'; updated_at: string } | null;
+}
+
+export interface ExamScanRow {
+  id: number;
+  learner_id: number;
+  first_name: string;
+  last_name: string;
+  learner_code: string;
+  score: number;
+  total_points: number;
+  answers: ExamScanAnswer[];
+  source: 'photo' | 'manual';
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExamDetail {
+  exam: Exam;
+  grading: GradingInfo;
+  roster: ExamRosterRow[];
+  scans: ExamScanRow[];
+  question_stats: { position: number; attempts: number; correct: number }[];
+}
+
+// ---------- Lesson plans (Batch 11) ----------
+// One ILAW lesson plan: the header is filled from the teacher's record
+// and class, and every section of the DepEd template is one text field.
+// Answer keys sit beside the activity they belong to. The AI declaration
+// is required on every plan (DO 3, s. 2026, Annex A).
+export type LessonPlanStatus = 'draft' | 'ready' | 'taught';
+export type LessonPlanAiUse = 'none' | 'used';
+
+export interface LessonPlan {
+  id: number;
+  teacher_id: number;
+  class_id: number;
+  quarter: number;
+  week_number: number;
+  session_date: string;
+  lesson_title: string;
+  references: string;
+  ai_use: LessonPlanAiUse;
+  ai_declaration: string;
+  competency: string;
+  objective_knowledge: string;
+  objective_skill: string;
+  objective_attitude: string;
+  objective_values: string;
+  learner_context: string;
+  pre_lesson: string;
+  flow: string;
+  individual_activity: string;
+  individual_answers: string;
+  group_activity: string;
+  group_answers: string;
+  inclusion_strategy: string;
+  practical_applications: string;
+  generalizations: string;
+  abstraction: string;
+  learning_resources: string;
+  integration: string;
+  formative_assessment: string;
+  formative_answer_key: string;
+  extended_learning: string;
+  extended_answer_key: string;
+  reflections: string;
+  checked_by_name: string | null;
+  status: LessonPlanStatus;
+  created_at: string;
+  updated_at: string;
+  subject_name: string;
+  grade_level: number;
+  section_name: string;
+  academic_year: string;
+  room: string;
+  period_label: string;
+}
+
+// The editor form: the header plus every section, with the checked-by
+// name as plain text (blank means the school head from the Profile).
+export type LessonPlanForm = Omit<LessonPlan, 'id' | 'teacher_id' | 'created_at' | 'updated_at' | 'subject_name' | 'grade_level' | 'section_name' | 'academic_year' | 'room' | 'period_label'> & {
+  checked_by_name: string;
+};
+
+// The school header for the printout, from the teacher's own record —
+// null until the teacher fills it in on their Profile page.
+export interface LessonPlanHeader {
+  teacher_name: string | null;
+  region: string | null;
+  division: string | null;
+  deped_school_id: string | null;
+  school_head_name: string | null;
+  school_name: string | null;
+  school_city_region: string | null;
+}
+
+export interface LessonPlanDetail {
+  plan: LessonPlan;
+  grading: GradingInfo;
+  header: LessonPlanHeader;
 }
 
 export interface ConsolidationLearner {

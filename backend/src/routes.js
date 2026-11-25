@@ -22,6 +22,8 @@ const attendance = require('./controllers/attendance.controller');
 const grades = require('./controllers/grades.controller');
 const reportCard = require('./controllers/reportCard.controller');
 const quizzes = require('./controllers/quizzes.controller');
+const exams = require('./controllers/exams.controller');
+const lessonPlans = require('./controllers/lessonPlans.controller');
 const { requireTeacher } = require('./middleware/teacherAuth');
 const { uploadSingle } = require('./utils/uploads');
 
@@ -182,6 +184,38 @@ teacher.post(
   validate(s.quizAttemptParamsSchema, 'params'),
   quizzes.resetAttempt
 );
+
+// Paper exam checker (Batch 10): the teacher's exams, their answer keys,
+// and the checked sheets. The photo itself is read in the browser and
+// never uploaded; saving a sheet recomputes its score from the stored
+// key and writes it into an Examinations column in the Grades page.
+teacher.get('/exams', validate(s.examListQuerySchema, 'query'), exams.listExams);
+teacher.post('/exams', validate(s.examCreateSchema), exams.createExam);
+teacher.get('/exams/:id', idParam, validate(s.examDetailQuerySchema, 'query'), exams.getExam);
+teacher.patch('/exams/:id', idParam, validate(s.examUpdateSchema), exams.updateExam);
+teacher.put('/exams/:id/key', idParam, validate(s.examKeySchema), exams.saveKey);
+teacher.delete('/exams/:id', idParam, exams.deleteExam);
+teacher.post('/exams/:id/scans', idParam, validate(s.examScanSchema), exams.saveScan);
+teacher.delete(
+  '/exams/:id/scans/:scanId',
+  validate(s.examScanParamsSchema, 'params'),
+  exams.deleteScan
+);
+
+// Lesson plans (Batch 11): the teacher's ILAW plans. The printout is
+// rendered by the browser from the detail read, so there is no separate
+// print address; the detail carries the school header the printout needs.
+teacher.get('/lesson-plans', validate(s.lessonPlanListQuerySchema, 'query'), lessonPlans.listLessonPlans);
+teacher.post('/lesson-plans', validate(s.lessonPlanCreateSchema), lessonPlans.createLessonPlan);
+teacher.get('/lesson-plans/:id', idParam, lessonPlans.getLessonPlan);
+teacher.patch('/lesson-plans/:id', idParam, validate(s.lessonPlanUpdateSchema), lessonPlans.updateLessonPlan);
+teacher.post(
+  '/lesson-plans/:id/duplicate',
+  idParam,
+  validate(s.lessonPlanDuplicateSchema),
+  lessonPlans.duplicateLessonPlan
+);
+teacher.delete('/lesson-plans/:id', idParam, lessonPlans.deleteLessonPlan);
 
 // Report Card (Batch 5): the adviser's section, one card per learner, filled
 // from the consolidated grades and the attendance records.

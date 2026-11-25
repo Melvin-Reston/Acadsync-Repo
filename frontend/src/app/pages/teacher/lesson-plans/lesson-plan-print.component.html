@@ -1,0 +1,205 @@
+<section class="lesson-sheet" aria-label="Lesson plan printout">
+  <header class="lp-header">
+    <p class="lp-republic">Republic of the Philippines</p>
+    <p class="lp-deped">Department of Education</p>
+    @if (header().region || header().division) {
+      <p class="lp-region">
+        @if (header().region) { REGION {{ header().region }} }
+        @if (header().region && header().division) { &nbsp;·&nbsp; }
+        @if (header().division) { {{ header().division }} DIVISION }
+      </p>
+    }
+    @if (header().school_name || header().school_city_region) {
+      <p class="lp-school">
+        @if (header().school_name) { <strong>{{ header().school_name }}</strong> }
+        @if (header().school_name && header().school_city_region) { &nbsp; }
+        @if (header().school_city_region) { {{ header().school_city_region }} }
+      </p>
+    }
+  </header>
+
+  <div class="lp-lesson-name">
+    <p class="lp-lesson-label">Name of Lesson</p>
+    <h1>{{ plan().lesson_title }}</h1>
+  </div>
+
+  <table class="lp-head-table">
+    <tbody>
+      <tr>
+        <th>Learning Area/s</th>
+        <td>{{ plan().subject_name }} {{ plan().grade_level }}</td>
+      </tr>
+      <tr>
+        <th>Designed by Teacher/s</th>
+        <td>{{ header().teacher_name ?? '' }}</td>
+      </tr>
+      <tr>
+        <th>Designed for which Grade Level &amp; Section</th>
+        <td>G{{ plan().grade_level }} {{ plan().section_name }}</td>
+      </tr>
+      <tr>
+        <th>No. of Session / Date</th>
+        <td>
+          {{ formatDate(plan().session_date) }} · Week {{ plan().week_number }} ·
+          {{ plan().period_label }} {{ plan().quarter }} · SY {{ plan().academic_year }}
+        </td>
+      </tr>
+      <tr>
+        <th>References <span class="lp-head-note">(books, websites, toolkits, etc.)</span></th>
+        <td class="lp-text">{{ hasText(plan().references) ? plan().references : '—' }}</td>
+      </tr>
+      <tr>
+        <th>
+          Declaration of AI use
+          <span class="lp-head-note">Cite how AI was used in the formulation of the lesson plan. See DO 3, s. 2026, Annex A.</span>
+        </th>
+        <td class="lp-text">{{ plan().ai_declaration }}</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <section class="lp-section">
+    <h2>Intentions</h2>
+    <p class="lp-guidance">
+      Meaningful learning experiences are anchored on how we frame them. Start by deciding what you want
+      your learners to master by the end of the lesson – keep it clear and simple.
+    </p>
+    <div class="lp-block">
+      <h3>Learning Competency</h3>
+      <p class="lp-text">{{ hasText(plan().competency) ? plan().competency : '—' }}</p>
+    </div>
+    <div class="lp-block">
+      <h3>Learning Objective</h3>
+      @if (objectives().length > 0) {
+        <p class="lp-text">At the end of the lesson, the learners are expected to:</p>
+        <ol class="lp-objectives">
+          @for (objective of objectives(); track objective.label) {
+            <li><strong>{{ objective.label }}:</strong> {{ objective.text }}</li>
+          }
+        </ol>
+      } @else {
+        <p class="lp-text">—</p>
+      }
+    </div>
+    <div class="lp-block">
+      <h3>Learner Context</h3>
+      <p class="lp-text">{{ hasText(plan().learner_context) ? plan().learner_context : '—' }}</p>
+    </div>
+  </section>
+
+  <section class="lp-section">
+    <h2>Learning Experiences</h2>
+    <p class="lp-guidance">
+      A learning experience is like a thoughtfully designed journey. Each activity and interaction builds
+      towards meaningful understanding and growth.
+    </p>
+    <div class="lp-block">
+      <h3>Pre-lesson</h3>
+      <p class="lp-text">{{ hasText(plan().pre_lesson) ? plan().pre_lesson : '—' }}</p>
+    </div>
+    <div class="lp-block">
+      <h3>Flow</h3>
+      <p class="lp-text">{{ hasText(plan().flow) ? plan().flow : '—' }}</p>
+    </div>
+    <div class="lp-block">
+      <h3>Individual Activity</h3>
+      <p class="lp-text">{{ hasText(plan().individual_activity) ? plan().individual_activity : '—' }}</p>
+      @if (hasText(plan().individual_answers)) {
+        <p class="lp-answer"><strong>Answer Key:</strong></p>
+        <p class="lp-text">{{ plan().individual_answers }}</p>
+      }
+    </div>
+    <div class="lp-block">
+      <h3>Group Activity</h3>
+      <p class="lp-text">{{ hasText(plan().group_activity) ? plan().group_activity : '—' }}</p>
+      @if (hasText(plan().group_answers)) {
+        <p class="lp-answer"><strong>Answer Key:</strong></p>
+        <p class="lp-text">{{ plan().group_answers }}</p>
+      }
+    </div>
+    <div class="lp-block">
+      <h3>Inclusion Strategy</h3>
+      <p class="lp-text">{{ hasText(plan().inclusion_strategy) ? plan().inclusion_strategy : '—' }}</p>
+    </div>
+    <div class="lp-block">
+      <h3>Finding Practical Applications of Concepts and Skills in Daily Living</h3>
+      <p class="lp-text">{{ hasText(plan().practical_applications) ? plan().practical_applications : '—' }}</p>
+    </div>
+    <div class="lp-block">
+      <h3>Making Generalizations</h3>
+      <p class="lp-text">{{ hasText(plan().generalizations) ? plan().generalizations : '—' }}</p>
+    </div>
+    <div class="lp-block">
+      <h3>Abstraction</h3>
+      <p class="lp-text">{{ hasText(plan().abstraction) ? plan().abstraction : '—' }}</p>
+    </div>
+    <div class="lp-block">
+      <h3>Learning Resources</h3>
+      <p class="lp-text">{{ hasText(plan().learning_resources) ? plan().learning_resources : '—' }}</p>
+    </div>
+    <div class="lp-block">
+      <h3>Opportunities for Integration</h3>
+      <p class="lp-text">{{ hasText(plan().integration) ? plan().integration : '—' }}</p>
+    </div>
+  </section>
+
+  <section class="lp-section">
+    <h2>Assessment</h2>
+    <p class="lp-guidance">
+      Assessment reveals what learners have gained and what they still need help with. These are helpful
+      in providing you with information to guide your future instruction.
+    </p>
+    <div class="lp-block">
+      <h3>Formative Assessment</h3>
+      <p class="lp-text">{{ hasText(plan().formative_assessment) ? plan().formative_assessment : '—' }}</p>
+      @if (hasText(plan().formative_answer_key)) {
+        <p class="lp-answer"><strong>Answer Key:</strong></p>
+        <p class="lp-text">{{ plan().formative_answer_key }}</p>
+      }
+    </div>
+  </section>
+
+  <section class="lp-section">
+    <h2>Ways Forward</h2>
+    <p class="lp-guidance">
+      Meaningful learning can also happen beyond the classroom – for both learner and teacher. Pause and
+      reflect on what happened today.
+    </p>
+    <div class="lp-block">
+      <h3>Extended Learning Opportunities</h3>
+      <p class="lp-text">{{ hasText(plan().extended_learning) ? plan().extended_learning : '—' }}</p>
+      @if (hasText(plan().extended_answer_key)) {
+        <p class="lp-answer"><strong>Answer Key:</strong></p>
+        <p class="lp-text">{{ plan().extended_answer_key }}</p>
+      }
+    </div>
+    <div class="lp-block">
+      <h3>Reflections</h3>
+      <p class="lp-text">{{ hasText(plan().reflections) ? plan().reflections : '—' }}</p>
+    </div>
+  </section>
+
+  <footer class="lp-footer">
+    @if (header().school_name) {
+      <p class="lp-school-foot">
+        {{ header().school_name }}
+        @if (header().deped_school_id) { – {{ header().deped_school_id }} }
+      </p>
+    }
+    @if (header().school_city_region) {
+      <p class="lp-school-foot">{{ header().school_city_region }}</p>
+    }
+    <div class="lp-signatures">
+      <div class="lp-sig">
+        <p class="lp-sig-name">{{ header().teacher_name ?? '' }}</p>
+        <p class="lp-sig-line"></p>
+        <p class="lp-sig-role">Prepared by</p>
+      </div>
+      <div class="lp-sig">
+        <p class="lp-sig-name">{{ checkedBy() ?? '' }}</p>
+        <p class="lp-sig-line"></p>
+        <p class="lp-sig-role">Checked by</p>
+      </div>
+    </div>
+  </footer>
+</section>

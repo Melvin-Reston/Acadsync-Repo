@@ -1,0 +1,438 @@
+@if (mode() === 'list') {
+  <div class="page-head">
+    <div>
+      <div class="eyebrow">Lesson plans</div>
+      <h1 class="page-title">Lesson Plans</h1>
+    </div>
+    <div class="head-actions">
+      <button type="button" class="btn btn-primary" (click)="openNew()" [disabled]="classes().length === 0">
+        <app-icon name="plus" [size]="16" /> New lesson plan
+      </button>
+    </div>
+  </div>
+
+  @if (loadError()) {
+    <p class="error">{{ loadError() }}</p>
+  }
+
+  <div class="filters card card-pad">
+    <div class="field">
+      <label>Class</label>
+      <app-dropdown
+        [ngModel]="classFilter() ?? ''"
+        (ngModelChange)="onClassFilterChange($event)"
+        [options]="[{ value: '', label: 'All classes' }, ...classOptions()]"
+        placeholder="All classes"
+        countSingular="class"
+        countPlural="classes"
+      />
+    </div>
+    <div class="field">
+      <label>Period</label>
+      <app-dropdown
+        [ngModel]="quarterFilter() ?? ''"
+        (ngModelChange)="onQuarterFilterChange($event)"
+        [options]="[{ value: '', label: 'All periods' }, ...periodOptionsForFilter()]"
+        placeholder="All periods"
+        countSingular="period"
+        countPlural="periods"
+      />
+    </div>
+    <div class="field">
+      <label>Status</label>
+      <app-dropdown
+        [ngModel]="statusFilter()"
+        (ngModelChange)="onStatusFilterChange($event)"
+        [options]="[
+          { value: '', label: 'All statuses' },
+          { value: 'draft', label: 'Draft' },
+          { value: 'ready', label: 'Ready' },
+          { value: 'taught', label: 'Taught' },
+        ]"
+        placeholder="All statuses"
+        countSingular="status"
+        countPlural="statuses"
+      />
+    </div>
+    <div class="field">
+      <label>Search</label>
+      <input
+        type="search"
+        class="input"
+        placeholder="Search a title or reference"
+        [ngModel]="searchQuery()"
+        (ngModelChange)="searchQuery.set($event)"
+      />
+    </div>
+  </div>
+
+  @if (loading()) {
+    <p class="muted">Loading lesson plans…</p>
+  } @else if (filteredPlans().length === 0) {
+    <div class="empty card card-pad">
+      <p><b>No lesson plans yet.</b></p>
+      <p class="muted">
+        @if (classes().length === 0) {
+          Add a class first, then write its lesson plan.
+        } @else {
+          Create a lesson plan for a class, fill in the ILAW sections, and print it in the DepEd layout.
+        }
+      </p>
+      <button type="button" class="btn btn-primary" (click)="openNew()" [disabled]="classes().length === 0">
+        New lesson plan
+      </button>
+    </div>
+  } @else {
+    <div class="card">
+      <table class="table">
+        <thead>
+          <tr>
+            <th>Lesson</th>
+            <th>Class</th>
+            <th>Period</th>
+            <th>Week</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (plan of filteredPlans(); track plan.id) {
+            <tr>
+              <td>
+                <b>{{ plan.lesson_title }}</b>
+                @if (plan.ai_use === 'used') {
+                  <span class="muted"> · AI used</span>
+                }
+              </td>
+              <td>{{ plan.subject_name }} · {{ plan.section_name }}</td>
+              <td>{{ periodLabel(plan) }} {{ plan.quarter }}</td>
+              <td>{{ plan.week_number }}</td>
+              <td>{{ formatDate(plan.session_date) }}</td>
+              <td>
+                <span
+                  class="pill"
+                  [class.accent]="plan.status === 'ready'"
+                  [class.amber]="plan.status === 'draft'"
+                  [class.plain]="plan.status === 'taught'"
+                  >{{ statusLabel(plan.status) }}</span
+                >
+              </td>
+              <td class="right nowrap">
+                <button type="button" class="btn btn-small" (click)="openEdit(plan)">Edit</button>
+                <button type="button" class="btn btn-small" (click)="openPrint(plan)">Print</button>
+                <button type="button" class="btn btn-small" (click)="openDuplicate(plan)">Copy</button>
+                <button type="button" class="btn btn-small" (click)="deleteTarget.set(plan)">Delete</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+} @else if (mode() === 'edit') {
+  <button type="button" class="btn btn-small back" (click)="backToList()">
+    <app-icon name="arrow-left" [size]="16" /> All lesson plans
+  </button>
+
+  <div class="page-head detail-head">
+    <div>
+      <div class="eyebrow">{{ formPeriodLabel() }} · Week {{ form().week_number }} · {{ formatDate(form().session_date) }}</div>
+      <h1 class="page-title">{{ editingId() ? form().lesson_title || 'Lesson plan' : 'New lesson plan' }}</h1>
+      @if (dirty()) {
+        <p class="muted">Save the plan to see the print preview.</p>
+      }
+    </div>
+    <div class="head-actions">
+      @if (editingId() && form().status === 'draft') {
+        <button type="button" class="btn" (click)="saveAndMarkReady()" [disabled]="saving()">Save &amp; mark Ready</button>
+      }
+      @if (editingId() && form().status === 'ready') {
+        <button type="button" class="btn" (click)="markTaught()" [disabled]="saving()">Mark as Taught</button>
+        <button type="button" class="btn" (click)="backToDraft()" [disabled]="saving()">Back to Draft</button>
+      }
+      @if (editingId() && form().status === 'taught') {
+        <button type="button" class="btn" (click)="backToDraft()" [disabled]="saving()">Back to Draft</button>
+      }
+      <button type="button" class="btn" (click)="openPrintForEditing()" [disabled]="!editingId() || dirty()">
+        <app-icon name="printer" [size]="16" /> Print preview
+      </button>
+      <button type="button" class="btn btn-primary" (click)="save()" [disabled]="saving()">
+        <app-icon name="check" [size]="16" /> Save
+      </button>
+    </div>
+  </div>
+
+  @if (detailLoading()) {
+    <p class="muted">Loading lesson plan…</p>
+  }
+
+  @if (formErrorList().length > 0) {
+    <div class="alert" role="alert">
+      @for (entry of formErrorList(); track entry[0]) {
+        <p>{{ entry[1] }}</p>
+      }
+    </div>
+  }
+
+  <section class="card card-pad" aria-label="Lesson plan header">
+    <h2 class="card-title">Lesson details</h2>
+    <div class="form-grid">
+      <div class="field">
+        <label>Class</label>
+        <app-dropdown
+          [ngModel]="form().class_id"
+          (ngModelChange)="onFormClassChange($event)"
+          [options]="classOptions()"
+          placeholder="Choose a class"
+          countSingular="class"
+          countPlural="classes"
+        />
+        @if (formErrors()['class_id']) {
+          <p class="field-error">{{ formErrors()['class_id'] }}</p>
+        }
+      </div>
+      <div class="field">
+        <label>{{ formPeriodLabel() }}</label>
+        <app-dropdown
+          [ngModel]="form().quarter"
+          (ngModelChange)="onQuarterChange($event)"
+          [options]="periodOptions()"
+          placeholder="Choose a period"
+          countSingular="period"
+          countPlural="periods"
+        />
+        @if (formErrors()['quarter']) {
+          <p class="field-error">{{ formErrors()['quarter'] }}</p>
+        }
+      </div>
+      <div class="field">
+        <label>Week number</label>
+        <input
+          type="number"
+          class="input"
+          min="1"
+          max="52"
+          [ngModel]="form().week_number"
+          (ngModelChange)="setField('week_number', $event)"
+        />
+        @if (formErrors()['week_number']) {
+          <p class="field-error">{{ formErrors()['week_number'] }}</p>
+        }
+      </div>
+      <div class="field">
+        <label>Session date</label>
+        <input
+          type="date"
+          class="input"
+          [ngModel]="form().session_date"
+          (ngModelChange)="setField('session_date', $event)"
+        />
+        @if (formErrors()['session_date']) {
+          <p class="field-error">{{ formErrors()['session_date'] }}</p>
+        }
+      </div>
+      <div class="field full">
+        <label>Name of Lesson</label>
+        <input
+          type="text"
+          class="input"
+          placeholder="For example: Different Forms, Same Value: Representing Rational Numbers"
+          [ngModel]="form().lesson_title"
+          (ngModelChange)="setField('lesson_title', $event)"
+          [class.invalid]="!!formErrors()['lesson_title']"
+        />
+        @if (formErrors()['lesson_title']) {
+          <p class="field-error">{{ formErrors()['lesson_title'] }}</p>
+        }
+      </div>
+      <div class="field full">
+        <label>References (books, websites, toolkits, etc.)</label>
+        <textarea
+          class="textarea"
+          rows="3"
+          [ngModel]="form().references"
+          (ngModelChange)="setField('references', $event)"
+        ></textarea>
+      </div>
+      <div class="field">
+        <label>Checked by</label>
+        <input
+          type="text"
+          class="input"
+          placeholder="School head"
+          [ngModel]="form().checked_by_name"
+          (ngModelChange)="setField('checked_by_name', $event)"
+        />
+        <p class="muted field-hint">Blank means the school head from your Profile.</p>
+      </div>
+      <div class="field">
+        <label>Status</label>
+        <p>
+          <span
+            class="pill"
+            [class.accent]="form().status === 'ready'"
+            [class.amber]="form().status === 'draft'"
+            [class.plain]="form().status === 'taught'"
+            >{{ statusLabel(form().status) }}</span
+          >
+        </p>
+        <p class="muted field-hint">Ready needs the competency, an objective, the lesson flow, and the formative assessment.</p>
+      </div>
+      <div class="field full">
+        <label>Declaration of AI use</label>
+        <div class="radio-row">
+          <label class="radio">
+            <input type="radio" name="ai-use" [checked]="form().ai_use === 'none'" (change)="onAiUseChange('none')" />
+            No AI tools were used
+          </label>
+          <label class="radio">
+            <input type="radio" name="ai-use" [checked]="form().ai_use === 'used'" (change)="onAiUseChange('used')" />
+            AI was used
+          </label>
+        </div>
+        <textarea
+          class="textarea"
+          rows="3"
+          [ngModel]="form().ai_declaration"
+          (ngModelChange)="setField('ai_declaration', $event)"
+          [class.invalid]="!!formErrors()['ai_declaration']"
+          [placeholder]="
+            form().ai_use === 'used'
+              ? 'Name the AI tool, what it was used for, and that you reviewed and adapted the output.'
+              : 'The standard sentence is stored when this is left blank.'
+          "
+        ></textarea>
+        @if (form().ai_use === 'none') {
+          <p class="muted field-hint">
+            When saved blank, the plan carries: “No AI tools were used in the formulation of this lesson plan. (DO 3, s. 2026,
+            Annex A)”
+          </p>
+        } @else {
+          <p class="muted field-hint">Say how AI was used, as DO 3, s. 2026, Annex A asks.</p>
+        }
+        @if (formErrors()['ai_declaration']) {
+          <p class="field-error">{{ formErrors()['ai_declaration'] }}</p>
+        }
+      </div>
+    </div>
+  </section>
+
+  @for (section of sections; track section.title) {
+    <section class="card card-pad lp-editor-section" [attr.aria-label]="section.title">
+      <h2 class="card-title">{{ section.title }}</h2>
+      @for (field of section.fields; track field.key) {
+        <div class="field">
+          <label>{{ field.label }}</label>
+          <textarea
+            class="textarea"
+            [attr.rows]="field.rows"
+            [ngModel]="textField(field.key)"
+            (ngModelChange)="setField(field.key, $event)"
+            [class.invalid]="!!formErrors()[field.key]"
+          ></textarea>
+          @if (field.hint) {
+            <p class="muted field-hint">{{ field.hint }}</p>
+          }
+          @if (formErrors()[field.key]) {
+            <p class="field-error">{{ formErrors()[field.key] }}</p>
+          }
+        </div>
+      }
+    </section>
+  }
+
+  @if (dirty()) {
+    <div class="save-bar card">
+      <p><b>Unsaved changes.</b> <span class="muted">Save before leaving, or they will be lost.</span></p>
+      <div class="save-bar-actions">
+        <button type="button" class="btn" (click)="discardChanges()">Discard changes</button>
+        <button type="button" class="btn" (click)="saveAndMarkReady()" [disabled]="saving()">Save &amp; mark Ready</button>
+        <button type="button" class="btn btn-primary" (click)="save()" [disabled]="saving()">Save</button>
+      </div>
+    </div>
+  }
+
+  @if (editingId()) {
+    <div class="form-actions">
+      <button type="button" class="btn btn-danger" (click)="deleteTarget.set(plans().find((item) => item.id === editingId()) ?? null)">
+        Delete lesson plan
+      </button>
+    </div>
+  }
+} @else if (mode() === 'print') {
+  <div class="no-print">
+    <button type="button" class="btn btn-small back" (click)="backToList()">
+      <app-icon name="arrow-left" [size]="16" /> All lesson plans
+    </button>
+
+    <div class="page-head detail-head">
+      <div>
+        <div class="eyebrow">Print preview</div>
+        <h1 class="page-title">{{ detail()?.plan.lesson_title ?? 'Lesson plan' }}</h1>
+        <p class="muted">Print with Ctrl / ⌘ + P — paper A4, scale 100%, margins None.</p>
+      </div>
+      <div class="head-actions">
+        @if (detail()) {
+          <button type="button" class="btn" (click)="openEdit(detail()!.plan)">Edit</button>
+        }
+        <button type="button" class="btn btn-primary" (click)="print()" [disabled]="!detail()">
+          <app-icon name="printer" [size]="16" /> Print
+        </button>
+      </div>
+    </div>
+
+    @if (detailLoading()) {
+      <p class="muted">Loading lesson plan…</p>
+    }
+  </div>
+
+  @if (detail()) {
+    <app-lesson-plan-print [detail]="detail()!" />
+  }
+}
+
+@if (deleteTarget(); as target) {
+  <app-modal title="Delete this lesson plan?" (closed)="deleteTarget.set(null)">
+    <p>“{{ target.lesson_title }}” will be deleted. This cannot be undone.</p>
+    <div class="form-actions">
+      <button type="button" class="btn" (click)="deleteTarget.set(null)">Keep it</button>
+      <button type="button" class="btn btn-danger" (click)="confirmDelete()" [disabled]="busy()">Delete lesson plan</button>
+    </div>
+  </app-modal>
+}
+
+@if (duplicateTarget(); as target) {
+  <app-modal title="Copy this lesson plan?" (closed)="duplicateTarget.set(null)">
+    <p>
+      Every section of “{{ target.lesson_title }}” is copied into a new draft. Choose the week and date for the copy.
+    </p>
+    <div class="form-grid">
+      <div class="field">
+        <label>Week number</label>
+        <input
+          type="number"
+          class="input"
+          min="1"
+          max="52"
+          [ngModel]="duplicateWeek()"
+          (ngModelChange)="duplicateWeek.set($event)"
+        />
+        @if (formErrors()['week_number']) {
+          <p class="field-error">{{ formErrors()['week_number'] }}</p>
+        }
+      </div>
+      <div class="field">
+        <label>Session date</label>
+        <input type="date" class="input" [ngModel]="duplicateDate()" (ngModelChange)="duplicateDate.set($event)" />
+        @if (formErrors()['session_date']) {
+          <p class="field-error">{{ formErrors()['session_date'] }}</p>
+        }
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="button" class="btn" (click)="duplicateTarget.set(null)">Cancel</button>
+      <button type="button" class="btn btn-primary" (click)="confirmDuplicate()" [disabled]="busy()">Copy as a draft</button>
+    </div>
+  </app-modal>
+}

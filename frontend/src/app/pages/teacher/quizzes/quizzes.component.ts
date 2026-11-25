@@ -2,7 +2,7 @@
 // class and one period, carries numbered questions with an answer key,
 // and is shared by a link. Publishing writes the learners' scores into a
 // Written Works column in the Grades page, labelled with the quiz number.
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ClassesService } from '../../../core/classes.service';
@@ -43,6 +43,10 @@ export class TeacherQuizzesComponent {
   private readonly classesService = inject(ClassesService);
   private readonly toast = inject(ToastService);
   protected readonly year = inject(ViewingYearService);
+
+  // Inside the merged Quizzes & Exams page the wrapper owns the page
+  // head and the tabs, so this component hides its own head there.
+  readonly embedded = input(false);
 
   protected readonly loading = signal(true);
   protected readonly loadError = signal('');

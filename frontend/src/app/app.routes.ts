@@ -118,10 +118,41 @@ export const routes: Routes = [
           ),
       },
       {
-        path: 'quizzes',
-        title: 'Quizzes · AcadSync Teacher',
+        path: 'assessments',
+        title: 'Quizzes & Exams · AcadSync Teacher',
         loadComponent: () =>
-          import('./pages/teacher/quizzes/quizzes.component').then((m) => m.TeacherQuizzesComponent),
+          import('./pages/teacher/assessments/assessments.component').then(
+            (m) => m.TeacherAssessmentsComponent,
+          ),
+      },
+      // The old addresses still open the right tab of the merged page.
+      {
+        path: 'quizzes',
+        title: 'Quizzes & Exams · AcadSync Teacher',
+        data: { tab: 'quizzes' },
+        loadComponent: () =>
+          import('./pages/teacher/assessments/assessments.component').then(
+            (m) => m.TeacherAssessmentsComponent,
+          ),
+      },
+      {
+        path: 'exams',
+        title: 'Quizzes & Exams · AcadSync Teacher',
+        data: { tab: 'exams' },
+        loadComponent: () =>
+          import('./pages/teacher/assessments/assessments.component').then(
+            (m) => m.TeacherAssessmentsComponent,
+          ),
+      },
+      // Lesson Plans is parked for now (2026-11-25): the page, its
+      // API and its table stay in the tree, but there is no sidebar
+      // item and the old address lands on the Dashboard instead of the
+      // page. Restoring it is this redirect plus the sidebar item in
+      // the teacher layout, and the route block below it in Batch 11.
+      {
+        path: 'lesson-plans',
+        redirectTo: 'dashboard',
+        pathMatch: 'full',
       },
       {
         path: 'payments',

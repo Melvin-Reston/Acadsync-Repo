@@ -87,6 +87,7 @@ export class ClassesService {
     search?: string;
     grade?: number | null;
     academic_year?: string;
+    page_size?: number;
   }): Observable<{ items: ClassItem[] }> {
     return this.http.get<{ items: ClassItem[] }>(`${this.api}/classes`, {
       params: toParams(filters),

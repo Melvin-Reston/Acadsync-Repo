@@ -1,0 +1,35 @@
+<div class="page-head no-print">
+  <div>
+    <div class="eyebrow">Assessments</div>
+    <h1 class="page-title">Quizzes &amp; Exams</h1>
+  </div>
+</div>
+
+<div class="tabs no-print" role="tablist" aria-label="Assessments">
+  <button
+    type="button"
+    class="tab"
+    role="tab"
+    [attr.aria-selected]="tab() === 'quizzes'"
+    [class.active]="tab() === 'quizzes'"
+    (click)="selectTab('quizzes')"
+  >
+    Quizzes
+  </button>
+  <button
+    type="button"
+    class="tab"
+    role="tab"
+    [attr.aria-selected]="tab() === 'exams'"
+    [class.active]="tab() === 'exams'"
+    (click)="selectTab('exams')"
+  >
+    Exams
+  </button>
+</div>
+
+@if (tab() === 'quizzes') {
+  <app-teacher-quizzes [embedded]="true" />
+} @else {
+  <app-teacher-exams [embedded]="true" />
+}

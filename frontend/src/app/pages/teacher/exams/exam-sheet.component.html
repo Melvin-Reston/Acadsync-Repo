@@ -1,0 +1,42 @@
+<div class="exam-sheet" aria-label="Answer sheet">
+  @for (marker of layout().markers; track $index) {
+    <span class="marker" [style.left.%]="marker.left" [style.top.%]="marker.top" aria-hidden="true"></span>
+  }
+  <header class="sheet-head">
+    <p class="sheet-kicker">Answer Sheet · Exam {{ exam().exam_number }}</p>
+    <h2 class="sheet-title">{{ exam().title }}</h2>
+    <p class="sheet-sub">{{ exam().subject_name }} · Grade {{ exam().grade_level }} – {{ exam().section_name }} · {{ exam().academic_year }}</p>
+    <div class="sheet-learner">
+      <span><b>Name:</b> {{ learner().last_name }}, {{ learner().first_name }}</span>
+      <span><b>Learner ID:</b> {{ learner().learner_id }}</span>
+    </div>
+    <p class="sheet-instructions">
+      Shade <b>one</b> circle fully for each number. {{ exam().instructions }}
+    </p>
+  </header>
+  <div class="sheet-grid">
+    @for (label of columnLabels(); track $index) {
+      <span class="choice-label" [style.left.%]="label.left" [style.top.%]="label.top">{{ label.label }}</span>
+    }
+    @for (label of bubbleLabels(); track $index) {
+      <span class="bubble-label" [style.left.%]="label.left" [style.top.%]="label.top">{{ label.label }}</span>
+    }
+    @for (number of numbers(); track number.question) {
+      <span class="question-number" [style.left.%]="number.left" [style.top.%]="number.top">{{ number.question + 1 }}</span>
+    }
+    @for (bubble of layout().bubbles; track $index) {
+      <span
+        class="bubble"
+        [style.left.%]="bubble.left"
+        [style.top.%]="bubble.top"
+        [attr.data-question]="bubble.question"
+        [attr.data-choice]="bubble.choice"
+        aria-hidden="true"
+      ></span>
+    }
+  </div>
+  <footer class="sheet-foot">
+    <span>Exam {{ exam().exam_number }} · {{ learner().learner_id }} · {{ exam().question_count }} questions</span>
+    <span>Print at 100% size.</span>
+  </footer>
+</div>
