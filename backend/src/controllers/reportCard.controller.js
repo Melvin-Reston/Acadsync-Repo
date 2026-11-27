@@ -69,7 +69,7 @@ function ageOnJune1(birthdate, year) {
 }
 
 // The whole card set for one advisory section: the school name for the
-// printed card, the subjects with filed grades, each learner's period
+// printed card, the section's subjects (filed or not), each learner's period
 // grades, final grades and general average, the attendance months, and the
 // saved teacher's comments.
 async function buildReportCards(client, adviser, requestedYear) {
@@ -80,11 +80,14 @@ async function buildReportCards(client, adviser, requestedYear) {
   const roster = await sectionRoster(client, adviser, classIds);
   const months = schoolYearMonths(year);
 
-  const school = await client.query('SELECT name, principal_contact FROM schools WHERE id = $1', [adviser.school_id]);
+  const school = await client.query('SELECT name, principal_contact, seal_path FROM schools WHERE id = $1', [adviser.school_id]);
   const schoolName = school.rows[0] ? school.rows[0].name : '';
   // The School Head's printed name comes from the school's own record
   // (its Principal / contact field), not from the teacher's profile.
   const schoolHeadName = school.rows[0] ? school.rows[0].principal_contact || '' : '';
+  // Whether the school has uploaded a seal (Dashboard): the image itself
+  // is fetched from its own endpoint, never as a path in this response.
+  const hasSchoolSeal = Boolean(school.rows[0] && school.rows[0].seal_path);
 
   // Every filing for the section's classes this year, by class and period.
   const submissions = new Map(); // class id -> Map(period -> { submitted_at, profile })
@@ -122,15 +125,14 @@ async function buildReportCards(client, adviser, requestedYear) {
   }
   attachManualSubjects(subjectEntries, await loadManualSubjects(client, adviser, year));
 
-  // The period grades for each subject, per learner. A subject only appears
-  // on the card when at least one period has been filed for it — the card
-  // lists the real subjects with submitted grades, never a subject with
-  // nothing filed.
+  // The period grades for each subject, per learner. Every subject taught
+  // to the section appears on the card, even when no grade has been filed
+  // for it yet — its cells stay blank until a filing arrives, so the card
+  // already names the learning areas the learner is taking.
   const subjectCards = []; // { subject_name, teacher_name, grades: Map(roster key -> [qg per period]) }
   for (const subject of subjectEntries) {
     const key = subject.subject_name.trim().toLowerCase();
     const periodGradesByPeriod = new Map(); // period -> Map(roster key -> qg or null)
-    let filedPeriods = 0;
     for (const period of profile.periods) {
       const filedClassId = subject.class_ids.find(
         (classId) => submissions.has(classId) && submissions.get(classId).has(period)
@@ -138,18 +140,15 @@ async function buildReportCards(client, adviser, requestedYear) {
       // A real filed submission takes precedence for the period; the
       // manual grades fill periods with no real submission.
       if (filedClassId !== undefined) {
-        filedPeriods += 1;
         const submission = submissions.get(filedClassId).get(period);
         periodGradesByPeriod.set(
           period,
           await computeSubjectPeriodGrades(client, filedClassId, period, submission.profile, roster)
         );
       } else if (subject.manual && manualHasGrades(subject.manual, period)) {
-        filedPeriods += 1;
         periodGradesByPeriod.set(period, manualPeriodGrades(subject.manual, period, roster));
       }
     }
-    if (filedPeriods === 0) continue;
     const grades = new Map(); // roster key -> [qg per period, in profile order]
     for (const rosterKey of roster.keys()) {
       grades.set(
@@ -288,6 +287,7 @@ async function buildReportCards(client, adviser, requestedYear) {
     },
     school_name: schoolName,
     school_head_name: schoolHeadName,
+    has_school_seal: hasSchoolSeal,
     academic_year: year,
     grading: grading.gradingInfo(profile, year),
     descriptors: deped.descriptorTable(profile.code),

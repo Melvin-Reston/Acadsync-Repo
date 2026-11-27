@@ -542,21 +542,28 @@ describe('Manual subjects', () => {
 
     const cards = await api().get('/api/teacher/report-card').set(bearer(adviserToken));
     assert.equal(cards.status, 200, JSON.stringify(cards.body));
-    // Only the manual subject has filed grades, so it is the only subject
-    // on the card — the unfiled real subjects stay off it.
+    // Every subject the section takes is on the card, filed or not: the
+    // manual subject carries its grades, the unfiled real subjects show
+    // blank rows. The general average stays blank until every subject on
+    // the card has a final grade, so the unfiled subjects hold it back.
     assert.deepEqual(
       cards.body.subjects.map((subject) => subject.subject_name),
-      ['Values Education']
+      ['Empowerment Technologies', 'Sacraments', 'Values Education']
     );
-    assert.equal(cards.body.subjects[0].teacher_name, 'Ms. No Account');
+    assert.equal(cards.body.subjects[2].teacher_name, 'Ms. No Account');
     const alexCard = cards.body.learners.find((row) => row.learner_id === alex.learner_id);
     const row = alexCard.subjects.find((subject) => subject.subject_name === 'Values Education');
     assert.deepEqual(row.period_grades, [85, 90, 92]);
     assert.equal(row.final_grade, 89);
     assert.equal(row.remarks, 'Passed');
-    assert.equal(alexCard.general_average, 89);
-    assert.equal(alexCard.general_average_remarks, 'Passed');
+    for (const subject of alexCard.subjects) {
+      if (subject.subject_name === 'Values Education') continue;
+      assert.deepEqual(subject.period_grades, [null, null, null]);
+      assert.equal(subject.final_grade, null);
+    }
+    assert.equal(alexCard.general_average, null);
+    assert.equal(alexCard.general_average_remarks, null);
     const isaCard = cards.body.learners.find((row) => row.learner_id === isa.learner_id);
-    assert.equal(isaCard.general_average, 80);
+    assert.equal(isaCard.general_average, null);
   });
 });

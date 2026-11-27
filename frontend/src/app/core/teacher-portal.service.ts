@@ -6,9 +6,14 @@ import { environment } from '../../environments/environment';
 import { Plan, PublicSchool, SchoolForm, TeacherAnnouncement, TeacherDashboard, TeacherHoliday, TeacherInvoicePayment, TeacherInvoiceRow, TeacherMe, TeacherSelf, TeacherSubscription, TodayClass } from './models';
 
 export interface PaymentInfo {
+  label: string;
   account_name: string;
   instructions: string;
   has_qr: boolean;
+  qr2_label: string;
+  qr2_account_name: string;
+  qr2_instructions: string;
+  has_qr2: boolean;
 }
 
 export interface TeacherPaymentForm {
@@ -149,9 +154,28 @@ export class TeacherPortalService {
     return this.http.get<PaymentInfo>(`${this.api}/payment-info`);
   }
 
+  // The school's seal image itself (fetched with the teacher token, not by a plain link).
+  schoolSealImage(): Observable<Blob> {
+    return this.http.get(`${this.api}/school/seal`, { responseType: 'blob' });
+  }
+
+  // Uploads (or removes) the school's seal. Sent as a form because it
+  // carries an image; remove=true sends no file and clears the seal.
+  updateSchoolSeal(file: File | null, remove = false): Observable<{ teacher: TeacherSelf; message: string }> {
+    const body = new FormData();
+    if (file) body.append('seal_image', file);
+    if (remove) body.append('remove_seal', 'true');
+    return this.http.put<{ teacher: TeacherSelf; message: string }>(`${this.api}/school/seal`, body);
+  }
+
   // The QR code image itself (fetched with the teacher token, not by a plain link).
   paymentQr(): Observable<Blob> {
     return this.http.get(`${this.api}/payment-info/qr`, { responseType: 'blob' });
+  }
+
+  // The second QR code image itself, when one is set.
+  paymentQr2(): Observable<Blob> {
+    return this.http.get(`${this.api}/payment-info/qr2`, { responseType: 'blob' });
   }
 
   // Send a QR payment for an invoice: screenshot and reference number.

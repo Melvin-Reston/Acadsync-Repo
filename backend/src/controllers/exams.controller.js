@@ -300,6 +300,254 @@ async function getExam(req, res) {
   });
 }
 
+// ---------- Teacher: Test Item Analysis (Batch 12) ----------
+//
+// The analysis is computed here, from the saved checked sheets, every
+// time it is read — it is never stored. Checking or re-checking a
+// sheet therefore updates the analysis by itself, with no separate
+// "generate" step and no second copy of the answers to go stale.
+//
+// Grouping follows the method printed on the teacher's Test Item
+// Analysis sheet: the checked papers are ranked by total score and
+// split at the median, upper group above it, lower group below it.
+// A tie at the median is split by name order (last name, first name,
+// Learner ID) so the same sheets always give the same groups — the
+// sheet's "assigned by chance" cannot be reproduced on demand. With
+// an odd number of takers the upper group takes the extra paper.
+// Difficulty uses only the two groups, as on the sheet:
+//   p = (correct in upper + correct in lower) / (upper size + lower size)
+// Discrimination is the difference of the two groups' correct rates:
+//   D = upper correct / upper size - lower correct / lower size
+// which is the sheet's (upper - lower) / group size when the groups
+// are equal. A distractor is judged on two rules from the sheet:
+// it should be chosen by at least 5% of takers, and by more
+// lower-group than upper-group learners.
+function round2(value) {
+  const rounded = Math.round(value * 100) / 100;
+  return rounded === 0 ? 0 : rounded;
+}
+
+function difficultyBand(p) {
+  if (p >= 0.81) return { label: 'Very Easy', action: 'Reject/Revise' };
+  if (p >= 0.61) return { label: 'Easy', action: 'Retain' };
+  if (p >= 0.41) return { label: 'Moderately Difficult', action: 'Retain' };
+  if (p >= 0.21) return { label: 'Difficult', action: 'Retain' };
+  return { label: 'Very Difficult', action: 'Reject/Revise' };
+}
+
+function discriminationBand(d) {
+  if (d === null) return { label: '—', action: '—' };
+  if (d >= 0.5) return { label: 'Very Good Item', action: 'Retain' };
+  if (d >= 0.4) return { label: 'Good Item; Very Usable', action: 'Retain' };
+  if (d >= 0.3) return { label: 'Fair Quality; Usable Item', action: 'Retain' };
+  if (d >= 0.2) return { label: 'Potentially Poor Item', action: 'Revise' };
+  return { label: 'Potentially Very Poor', action: 'Reject' };
+}
+
+function optionLabel(index, kind) {
+  if (kind === 'true_false') return index === 0 ? 'True' : 'False';
+  return String.fromCharCode(65 + index);
+}
+
+// GET /api/teacher/exams/:id/item-analysis
+// The exam, the school header for the printout, the two groups, one
+// row per question, and the summary counts — all from the saved
+// checked sheets. No migration: exam_scans.answers already holds one
+// reviewed answer per question per learner.
+async function getItemAnalysis(req, res) {
+  const { id } = req.valid.params;
+  const exam = await findExam(id, req.teacher.id);
+  const profile = await grading.getClassGradingProfile(db, exam.class_id);
+
+  const headerResult = await db.query(
+    `SELECT t.first_name, t.last_name, t.region, t.division, t.deped_school_id,
+            t.school_head_name, s.name AS school_name, s.city_region AS school_city_region
+       FROM teachers t JOIN schools s ON s.id = t.school_id WHERE t.id = $1`,
+    [req.teacher.id]
+  );
+  const headerRow = headerResult.rows[0] || {};
+  const header = {
+    teacher_name: headerRow.first_name ? `${headerRow.first_name} ${headerRow.last_name}` : null,
+    school_name: headerRow.school_name || null,
+    school_city_region: headerRow.school_city_region || null,
+    region: headerRow.region || null,
+    division: headerRow.division || null,
+    deped_school_id: headerRow.deped_school_id || null,
+    school_head_name: headerRow.school_head_name || null,
+  };
+
+  const rosterResult = await db.query('SELECT COUNT(*)::int AS count FROM class_learners WHERE class_id = $1', [exam.class_id]);
+  const rosterSize = rosterResult.rows[0].count;
+
+  const scansResult = await db.query(
+    `SELECT sc.learner_id, l.first_name, l.last_name, l.learner_id AS learner_code,
+            sc.score::text AS score, sc.answers
+       FROM exam_scans sc JOIN learners l ON l.id = sc.learner_id
+      WHERE sc.exam_id = $1`,
+    [id]
+  );
+  const takers = scansResult.rows
+    .map((row) => ({
+      learner_id: row.learner_id,
+      first_name: row.first_name,
+      last_name: row.last_name,
+      learner_code: row.learner_code,
+      score: Number(row.score),
+      answers: Array.isArray(row.answers) ? row.answers : [],
+    }))
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      const name = `${a.last_name} ${a.first_name}`.localeCompare(`${b.last_name} ${b.first_name}`);
+      if (name !== 0) return name;
+      return String(a.learner_code).localeCompare(String(b.learner_code)) || a.learner_id - b.learner_id;
+    });
+  const takerCount = takers.length;
+  const upperSize = Math.ceil(takerCount / 2);
+  const upper = takers.slice(0, upperSize);
+  const lower = takers.slice(upperSize);
+  const groupSize = upperSize + lower.length;
+  const total = totalPoints(exam);
+  const meanScore = takerCount === 0 ? null : round2(takers.reduce((sum, taker) => sum + taker.score, 0) / takerCount);
+  const meanPercent = meanScore === null ? null : round2((meanScore / total) * 100);
+
+  const items = [];
+  const difficultyCounts = {
+    'Very Easy': 0,
+    Easy: 0,
+    'Moderately Difficult': 0,
+    Difficult: 0,
+    'Very Difficult': 0,
+  };
+  const discriminationCounts = {
+    'Very Good Item': 0,
+    'Good Item; Very Usable': 0,
+    'Fair Quality; Usable Item': 0,
+    'Potentially Poor Item': 0,
+    'Potentially Very Poor': 0,
+  };
+  const distractorCounts = { retain: 0, rephrase: 0, replace: 0 };
+
+  exam.questions.forEach((question, index) => {
+    const countSelected = (group, choice) =>
+      group.filter((taker) => {
+        const answer = taker.answers[index];
+        return answer && answer.selected === choice;
+      }).length;
+    const upperCorrect = countSelected(upper, question.correct);
+    const lowerCorrect = countSelected(lower, question.correct);
+    const totalCorrect = upperCorrect + lowerCorrect;
+    const blankCount = takers.filter((taker) => {
+      const answer = taker.answers[index];
+      return !answer || answer.selected === null || answer.selected === undefined;
+    }).length;
+    const difficulty = groupSize === 0 ? null : round2(totalCorrect / groupSize);
+    const diffBand = difficulty === null ? { label: '—', action: '—' } : difficultyBand(difficulty);
+    const discrimination =
+      lower.length === 0 ? null : round2(upperCorrect / upperSize - lowerCorrect / lower.length);
+    const discBand = discriminationBand(discrimination);
+    if (difficulty !== null) difficultyCounts[diffBand.label] += 1;
+    if (discrimination !== null) discriminationCounts[discBand.label] += 1;
+
+    const distractors = Array.from({ length: question.choices }, (_, choice) => {
+      const upperCount = countSelected(upper, choice);
+      const lowerCount = countSelected(lower, choice);
+      const optionTotal = upperCount + lowerCount;
+      const plausibilityRatio = groupSize === 0 ? 0 : optionTotal / groupSize;
+      const isCorrect = Number.isInteger(question.correct) && choice === question.correct;
+      let remark;
+      let action;
+      if (isCorrect) {
+        remark = 'Correct Answer';
+        action = 'Correct Answer';
+      } else if (optionTotal === 0) {
+        remark = 'Replace or rewrite: non-functioning distractor';
+        action = 'Replace or rewrite';
+      } else if (plausibilityRatio < 0.05) {
+        remark = 'Replace or rewrite: Option is too obvious, absurd, or unappealing.';
+        action = 'Replace or rewrite';
+      } else if (upperCount > lowerCount) {
+        remark = 'Rephrase or check for trick wording: Option is misleading, double-keyed, or rewards partial misinterpretations.';
+        action = 'Rephrase or check';
+      } else if (lowerCount > upperCount) {
+        remark = 'Retain: Good distractor';
+        action = 'Retain';
+      } else {
+        remark = 'Retain: Plausible and meaningful distractor';
+        action = 'Retain';
+      }
+      if (!isCorrect) {
+        if (action === 'Retain') distractorCounts.retain += 1;
+        else if (action === 'Rephrase or check') distractorCounts.rephrase += 1;
+        else distractorCounts.replace += 1;
+      }
+      return {
+        option_index: choice,
+        label: optionLabel(choice, question.kind),
+        is_correct: isCorrect,
+        upper: upperCount,
+        lower: lowerCount,
+        total: optionTotal,
+        plausibility: round2(plausibilityRatio),
+        direction: upperCount - lowerCount,
+        remark,
+        action,
+      };
+    });
+
+    items.push({
+      position: index + 1,
+      kind: question.kind,
+      choices: question.choices,
+      correct: question.correct,
+      correct_label: Number.isInteger(question.correct) ? optionLabel(question.correct, question.kind) : '—',
+      upper_correct: upperCorrect,
+      lower_correct: lowerCorrect,
+      total_correct: totalCorrect,
+      blank_count: blankCount,
+      difficulty,
+      difficulty_label: diffBand.label,
+      difficulty_action: diffBand.action,
+      discrimination,
+      discrimination_label: discBand.label,
+      discrimination_action: discBand.action,
+      negative: discrimination !== null && discrimination < 0,
+      distractors,
+    });
+  });
+
+  const difficulties = items.map((item) => item.difficulty).filter((value) => value !== null);
+  const maxDifficulty = difficulties.length ? Math.max(...difficulties) : null;
+  const minDifficulty = difficulties.length ? Math.min(...difficulties) : null;
+
+  res.json({
+    exam,
+    grading: grading.gradingInfo(profile, exam.academic_year),
+    header,
+    roster_size: rosterSize,
+    takers: takerCount,
+    groups: {
+      method: 'median',
+      upper_size: upperSize,
+      lower_size: lower.length,
+      tie_note:
+        'Papers are ranked by total score and split at the median. A tie at the median is split by name order, so the same checked sheets always give the same groups.',
+    },
+    ready: takerCount >= 2,
+    mean_score: meanScore,
+    mean_percent: meanPercent,
+    total_points: total,
+    items,
+    summary: {
+      difficulty_counts: difficultyCounts,
+      discrimination_counts: discriminationCounts,
+      distractor_counts: distractorCounts,
+      negative_items: items.filter((item) => item.negative).map((item) => item.position),
+      most_learned: maxDifficulty === null ? [] : items.filter((item) => item.difficulty === maxDifficulty).map((item) => item.position),
+      least_learned: minDifficulty === null ? [] : items.filter((item) => item.difficulty === minDifficulty).map((item) => item.position),
+    },
+  });
+}
+
 // PATCH /api/teacher/exams/:id  { title, instructions, and — before any
 // sheet is saved — question_count, points_each }
 // Growing the question count pads the key with default 4-choice
@@ -479,6 +727,7 @@ module.exports = {
   listExams,
   createExam,
   getExam,
+  getItemAnalysis,
   updateExam,
   saveKey,
   deleteExam,

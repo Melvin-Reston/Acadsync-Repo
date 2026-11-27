@@ -330,24 +330,236 @@ describe('Teacher QR payment', () => {
   });
 });
 
+// ---------- The screenshot is kept after review ----------
+
+describe('Payment screenshot kept after review', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+
+  async function screenshotPath(paymentId) {
+    const row = await pool.query('SELECT screenshot_path FROM payments WHERE id = $1', [paymentId]);
+    assert.equal(row.rowCount, 1);
+    return row.rows[0].screenshot_path;
+  }
+
+  function storedFile(storedPath) {
+    return storedPath ? path.join(config.uploadDir, storedPath) : null;
+  }
+
+  test('a confirmed payment keeps its screenshot for re-checking', async () => {
+    const { invoice, token } = await teacherWithUnpaidInvoice();
+    const submitted = await submitAsTeacher(token, invoice.id);
+    assert.equal(submitted.status, 201, JSON.stringify(submitted.body));
+    const paymentId = submitted.body.payment.id;
+
+    // While pending, the admin can see the screenshot.
+    const pending = await api().get(`/api/payments/${paymentId}`).set(bearer(adminToken));
+    assert.equal(pending.body.payment.has_screenshot, true);
+    assert.equal((await api().get(`/api/payments/${paymentId}/screenshot`).set(bearer(adminToken))).status, 200);
+    const before = await screenshotPath(paymentId);
+    const file = storedFile(before);
+    assert.ok(file && fs.existsSync(file), 'screenshot file should exist while pending');
+
+    const confirmed = await api().post(`/api/payments/${paymentId}/confirm`).set(bearer(adminToken));
+    assert.equal(confirmed.status, 200, JSON.stringify(confirmed.body));
+    assert.equal(confirmed.body.payment.has_screenshot, true);
+
+    // The image and its path stay with the confirmed payment.
+    assert.equal(await screenshotPath(paymentId), before);
+    assert.equal(fs.existsSync(file), true, 'screenshot file should still exist after confirm');
+    assert.equal((await api().get(`/api/payments/${paymentId}/screenshot`).set(bearer(adminToken))).status, 200);
+    const again = await api().get(`/api/payments/${paymentId}`).set(bearer(adminToken));
+    assert.equal(again.body.payment.status, 'confirmed');
+    assert.equal(again.body.payment.reference_number, 'GCASH-1001');
+  });
+
+  test('a rejected payment keeps its screenshot for re-checking', async () => {
+    const { invoice, token } = await teacherWithUnpaidInvoice();
+    const submitted = await submitAsTeacher(token, invoice.id);
+    assert.equal(submitted.status, 201, JSON.stringify(submitted.body));
+    const paymentId = submitted.body.payment.id;
+
+    const rejected = await api()
+      .post(`/api/payments/${paymentId}/reject`)
+      .set(bearer(adminToken))
+      .send({ reason: 'The screenshot is unreadable.' });
+    assert.equal(rejected.status, 200, JSON.stringify(rejected.body));
+    assert.equal(rejected.body.payment.has_screenshot, true);
+
+    const file = storedFile(await screenshotPath(paymentId));
+    assert.ok(file && fs.existsSync(file), 'screenshot file should still exist after reject');
+    assert.equal((await api().get(`/api/payments/${paymentId}/screenshot`).set(bearer(adminToken))).status, 200);
+  });
+});
+
+// ---------- A second payment QR code ----------
+
+describe('Second payment QR code', () => {
+  async function paymentInfo(token) {
+    const response = await api().get('/api/teacher/payment-info').set(bearer(token));
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    return response.body;
+  }
+
+  async function savePayment(token, build) {
+    const request = api().put('/api/settings/payment').set(bearer(token));
+    build(request);
+    return request;
+  }
+
+  test('the second QR code starts unset, and its image address answers 404', async () => {
+    const { token } = await teacherWithUnpaidInvoice();
+    const info = await paymentInfo(token);
+    assert.equal(info.has_qr2, false);
+    assert.equal(info.qr2_label, '');
+    assert.equal(info.qr2_account_name, '');
+    assert.equal(info.qr2_instructions, '');
+
+    const teacherQr2 = await api().get('/api/teacher/payment-info/qr2').set(bearer(token));
+    assert.equal(teacherQr2.status, 404);
+    const adminQr2 = await api().get('/api/settings/payment/qr2').set(bearer(adminToken));
+    assert.equal(adminQr2.status, 404);
+  });
+
+  test('both QR codes can be uploaded in one save, and both are shown to teachers', async () => {
+    const { token } = await teacherWithUnpaidInvoice();
+
+    const saved = await savePayment(adminToken, (request) =>
+      request
+        .field('label', 'GCash')
+        .field('account_name', 'AcadSync GCash')
+        .field('instructions', 'Pay with GCash.')
+        .attach('qr_image', PNG, 'gcash.png')
+        .field('qr2_label', 'BPI')
+        .field('qr2_account_name', 'AcadSync BPI')
+        .field('qr2_instructions', 'Pay with BPI.')
+        .attach('qr_image2', PNG, 'bpi.png'),
+    );
+    assert.equal(saved.status, 200, JSON.stringify(saved.body));
+    assert.equal(saved.body.payment.has_qr, true);
+    assert.equal(saved.body.payment.label, 'GCash');
+    assert.equal(saved.body.payment.account_name, 'AcadSync GCash');
+    assert.equal(saved.body.payment.has_qr2, true);
+    assert.equal(saved.body.payment.qr2_label, 'BPI');
+    assert.equal(saved.body.payment.qr2_account_name, 'AcadSync BPI');
+    assert.equal(saved.body.payment.qr2_instructions, 'Pay with BPI.');
+
+    const info = await paymentInfo(token);
+    assert.equal(info.has_qr, true);
+    assert.equal(info.label, 'GCash');
+    assert.equal(info.has_qr2, true);
+    assert.equal(info.qr2_label, 'BPI');
+
+    for (const path of ['/api/teacher/payment-info/qr', '/api/teacher/payment-info/qr2']) {
+      const image = await api().get(path).set(bearer(token));
+      assert.equal(image.status, 200);
+      assert.match(image.headers['content-type'], /image\/png/);
+    }
+    const adminQr2 = await api().get('/api/settings/payment/qr2').set(bearer(adminToken));
+    assert.equal(adminQr2.status, 200);
+    assert.match(adminQr2.headers['content-type'], /image\/png/);
+  });
+
+  test('saving with no new image keeps both QR codes', async () => {
+    await teacherWithUnpaidInvoice();
+    const saved = await savePayment(adminToken, (request) =>
+      request
+        .field('label', 'GCash')
+        .field('account_name', 'AcadSync GCash')
+        .field('instructions', 'Pay with GCash.')
+        .field('qr2_label', 'BPI')
+        .field('qr2_account_name', 'AcadSync BPI')
+        .field('qr2_instructions', 'Pay with BPI.'),
+    );
+    assert.equal(saved.status, 200, JSON.stringify(saved.body));
+    assert.equal(saved.body.payment.has_qr, true);
+    assert.equal(saved.body.payment.has_qr2, true);
+  });
+
+  test('removing the second QR code leaves the first one in place', async () => {
+    const { token } = await teacherWithUnpaidInvoice();
+    const saved = await savePayment(adminToken, (request) =>
+      request
+        .field('label', 'GCash')
+        .field('account_name', 'AcadSync GCash')
+        .field('instructions', 'Pay with GCash.')
+        .field('qr2_label', 'BPI')
+        .field('qr2_account_name', 'AcadSync BPI')
+        .field('qr2_instructions', 'Pay with BPI.')
+        .field('remove_qr2', 'true'),
+    );
+    assert.equal(saved.status, 200, JSON.stringify(saved.body));
+    assert.equal(saved.body.payment.has_qr, true);
+    assert.equal(saved.body.payment.has_qr2, false);
+
+    const first = await api().get('/api/teacher/payment-info/qr').set(bearer(token));
+    assert.equal(first.status, 200);
+    const second = await api().get('/api/teacher/payment-info/qr2').set(bearer(token));
+    assert.equal(second.status, 404);
+  });
+
+  test('removing the first QR code leaves the second one in place', async () => {
+    const { token } = await teacherWithUnpaidInvoice();
+    const saved = await savePayment(adminToken, (request) =>
+      request
+        .field('label', 'GCash')
+        .field('account_name', 'AcadSync GCash')
+        .field('instructions', 'Pay with GCash.')
+        .field('remove_qr', 'true')
+        .field('qr2_label', 'BPI')
+        .field('qr2_account_name', 'AcadSync BPI')
+        .field('qr2_instructions', 'Pay with BPI.')
+        .attach('qr_image2', PNG, 'bpi.png'),
+    );
+    assert.equal(saved.status, 200, JSON.stringify(saved.body));
+    assert.equal(saved.body.payment.has_qr, false);
+    assert.equal(saved.body.payment.has_qr2, true);
+
+    const first = await api().get('/api/teacher/payment-info/qr').set(bearer(token));
+    assert.equal(first.status, 404);
+    const second = await api().get('/api/teacher/payment-info/qr2').set(bearer(token));
+    assert.equal(second.status, 200);
+  });
+
+  test('a file that is not an image is refused for the second QR code, and nothing changes', async () => {
+    const { token } = await teacherWithUnpaidInvoice();
+    const before = await paymentInfo(token);
+    assert.equal(before.has_qr, false);
+    assert.equal(before.has_qr2, true);
+
+    const refused = await savePayment(adminToken, (request) =>
+      request
+        .field('qr2_label', 'BPI')
+        .field('qr2_account_name', 'AcadSync BPI')
+        .field('qr2_instructions', 'Pay with BPI.')
+        .attach('qr_image2', NOT_AN_IMAGE, 'proof.txt'),
+    );
+    assert.equal(refused.status, 400);
+    assert.ok(refused.body.errors?.qr_image2);
+
+    const after = await paymentInfo(token);
+    assert.equal(after.has_qr, false);
+    assert.equal(after.has_qr2, true);
+    assert.equal(after.qr2_account_name, 'AcadSync BPI');
+  });
+});
+
 // ---------- The teacher-initiated plan change ----------
 
 describe('Teacher plan change', () => {
-  test('Pro to Free: the old subscription ends and the unpaid invoice is voided', async () => {
+  test('changing from Pro to Free is refused: Free is once ever, only as the first plan', async () => {
     const { invoice, token } = await teacherWithUnpaidInvoice();
     const response = await api().post('/api/teacher/subscription/change-plan').set(bearer(token)).send({ plan_id: freePlan.id });
-    assert.equal(response.status, 201, JSON.stringify(response.body));
-    assert.equal(response.body.subscription.plan_name, 'Teacher Free');
-    assert.equal(response.body.subscription.status, 'active');
+    assert.equal(response.status, 400, JSON.stringify(response.body));
+    assert.equal(response.body.code, 'FREE_ALREADY_USED');
 
-    const oldInvoice = await api().get(`/api/invoices/${invoice.id}`).set(bearer(adminToken));
-    assert.equal(oldInvoice.body.invoice.status, 'void');
-    assert.equal(oldInvoice.body.invoice.void_reason, 'Plan changed to Teacher Free');
-
-    assert.deepEqual((await myInvoices(token)).filter((item) => item.status === 'unpaid'), []);
+    // Nothing changed: the invoice is still unpaid and the Pro subscription is still current.
+    const current = await mySubscription(token);
+    assert.equal(current.status, 'past_due');
+    assert.deepEqual((await myInvoices(token)).filter((item) => item.status === 'unpaid').map((item) => item.id), [invoice.id]);
   });
 
-  test('Free to Pro the first time starts the 30-day trial, with no invoice', async () => {
+  test('Free to Pro the first time starts the trial to the end of the free window, with no invoice', async () => {
     const teacher = await createTeacher();
     await subscribe(teacher.id, freePlan.id, false);
     const token = await teacherToken(teacher);
@@ -358,26 +570,68 @@ describe('Teacher plan change', () => {
     assert.equal(response.body.subscription.plan_name, 'Teacher Pro');
     const trialDays = (new Date(response.body.subscription.trial_ends_at) - new Date(response.body.subscription.started_at)) / 86400000;
     assert.equal(Math.round(trialDays), 30);
+    // The trial ends when the window the Free plan started ends, not 30 days after the switch.
+    const window = await pool.query('SELECT trial_ends_at FROM teachers WHERE id = $1', [teacher.id]);
+    assert.equal(new Date(response.body.subscription.trial_ends_at).getTime(), new Date(window.rows[0].trial_ends_at).getTime());
     assert.deepEqual(await myInvoices(token), []);
   });
 
-  test('a Pro trial is given once: a second Pro subscription pays straight away', async () => {
+  test('switching to Pro part-way through the window only gets what is left of it', async () => {
     const teacher = await createTeacher();
-    await subscribe(teacher.id, proPlan.id, true);
+    const free = await subscribe(teacher.id, freePlan.id, false);
     const token = await teacherToken(teacher);
 
-    const toFree = await api().post('/api/teacher/subscription/change-plan').set(bearer(token)).send({ plan_id: freePlan.id });
-    assert.equal(toFree.status, 201, JSON.stringify(toFree.body));
+    // Eleven days into the window: the Free period started 11 days ago and
+    // the window ends 19 days from now.
+    await pool.query(`UPDATE subscriptions SET started_at = NOW() - INTERVAL '11 days', current_period_start = NOW() - INTERVAL '11 days' WHERE id = $1`, [free.id]);
+    await pool.query(`UPDATE teachers SET trial_ends_at = NOW() + INTERVAL '19 days' WHERE id = $1`, [teacher.id]);
 
-    const backToPro = await api().post('/api/teacher/subscription/change-plan').set(bearer(token)).send({ plan_id: proPlan.id });
-    assert.equal(backToPro.status, 201, JSON.stringify(backToPro.body));
-    assert.equal(backToPro.body.subscription.status, 'past_due');
-    assert.equal(backToPro.body.subscription.plan_name, 'Teacher Pro');
+    const response = await api().post('/api/teacher/subscription/change-plan').set(bearer(token)).send({ plan_id: proPlan.id });
+    assert.equal(response.status, 201, JSON.stringify(response.body));
+    assert.equal(response.body.subscription.status, 'trial');
+    const window = await pool.query('SELECT trial_ends_at FROM teachers WHERE id = $1', [teacher.id]);
+    assert.equal(new Date(response.body.subscription.trial_ends_at).getTime(), new Date(window.rows[0].trial_ends_at).getTime());
+    const remaining = (new Date(response.body.subscription.trial_ends_at) - Date.now()) / 86400000;
+    assert.ok(remaining > 18 && remaining < 20, `19 days left, got ${remaining}`);
+    assert.deepEqual(await myInvoices(token), []);
+  });
+
+  test('once the window has ended, switching to Pro pays straight away', async () => {
+    const teacher = await createTeacher();
+    const free = await subscribe(teacher.id, freePlan.id, false);
+    const token = await teacherToken(teacher);
+
+    await pool.query(`UPDATE teachers SET trial_ends_at = NOW() - INTERVAL '1 minute' WHERE id = $1`, [teacher.id]);
+    await pool.query(`UPDATE subscriptions SET current_period_end = NOW() + INTERVAL '1 day' WHERE id = $1`, [free.id]);
+
+    const response = await api().post('/api/teacher/subscription/change-plan').set(bearer(token)).send({ plan_id: proPlan.id });
+    assert.equal(response.status, 201, JSON.stringify(response.body));
+    assert.equal(response.body.subscription.status, 'past_due');
+    assert.equal(response.body.subscription.trial_ends_at, null);
 
     const invoices = await myInvoices(token);
     assert.equal(invoices.length, 1);
     assert.equal(invoices[0].status, 'unpaid');
     assert.equal(invoices[0].amount, '100.00');
+  });
+
+  test('Teacher Free cannot be chosen again after it ends, by the teacher or the admin', async () => {
+    const teacher = await createTeacher();
+    const free = await subscribe(teacher.id, freePlan.id, false);
+    const token = await teacherToken(teacher);
+
+    // The window and the Free period both end.
+    await pool.query(`UPDATE teachers SET trial_ends_at = NOW() - INTERVAL '1 minute' WHERE id = $1`, [teacher.id]);
+    await pool.query(`UPDATE subscriptions SET current_period_end = NOW() - INTERVAL '1 minute' WHERE id = $1`, [free.id]);
+    assert.equal((await mySubscription(token)).status, 'expired');
+
+    const again = await api().post('/api/teacher/subscription').set(bearer(token)).send({ plan_id: freePlan.id });
+    assert.equal(again.status, 400, JSON.stringify(again.body));
+    assert.equal(again.body.code, 'FREE_ALREADY_USED');
+
+    const byAdmin = await api().post('/api/subscriptions').set(bearer(adminToken)).send({ teacher_id: teacher.id, plan_id: freePlan.id, with_trial: false });
+    assert.equal(byAdmin.status, 400, JSON.stringify(byAdmin.body));
+    assert.equal(byAdmin.body.code, 'FREE_ALREADY_USED');
   });
 
   test('changing to the same plan is refused', async () => {
@@ -411,8 +665,11 @@ describe('Teacher plan change', () => {
     const token = await teacherToken(teacher);
     assert.equal(subscription.status, 'trial');
 
-    // The trial ends: the next billing check makes it payable.
+    // The trial ends: the next billing check makes it payable. Both the
+    // subscription's trial date and the teacher's free window move into
+    // the past, as they would when the window really ends.
     await pool.query(`UPDATE subscriptions SET trial_ends_at = NOW() - INTERVAL '1 minute' WHERE id = $1`, [subscription.id]);
+    await pool.query(`UPDATE teachers SET trial_ends_at = NOW() - INTERVAL '1 minute' WHERE id = $1`, [teacher.id]);
     const pastDue = await mySubscription(token);
     assert.equal(pastDue.status, 'past_due');
     assert.equal((await myInvoices(token)).length, 1);

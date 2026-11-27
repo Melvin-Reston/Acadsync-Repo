@@ -32,7 +32,8 @@ export class SettingsComponent implements OnDestroy {
   protected profile = { full_name: '', email: '' };
   protected password = { current: '', next: '', confirm: '' };
   protected account = { full_name: '', email: '', is_active: true };
-  protected payment = { account_name: '', instructions: '' };
+  protected payment = { label: '', account_name: '', instructions: '' };
+  protected payment2 = { label: '', account_name: '', instructions: '' };
 
   protected readonly academicYear = signal('');
   protected readonly gradingProfile = signal('');
@@ -51,11 +52,17 @@ export class SettingsComponent implements OnDestroy {
   protected readonly confirmReset = signal(false);
   protected readonly temporaryPassword = signal('');
 
-  // Payment QR code
+  // Payment QR codes: the first and the optional second (for example, an
+  // e-wallet and a bank). One save carries both, so saving one never
+  // wipes the other.
   protected readonly hasQr = signal(false);
   protected readonly qrUrl = signal('');
   protected readonly qrFile = signal<File | null>(null);
   protected readonly confirmRemoveQr = signal(false);
+  protected readonly hasQr2 = signal(false);
+  protected readonly qr2Url = signal('');
+  protected readonly qr2File = signal<File | null>(null);
+  protected readonly confirmRemoveQr2 = signal(false);
 
   constructor() {
     const admin = this.auth.admin();
@@ -149,11 +156,12 @@ export class SettingsComponent implements OnDestroy {
     return `${profile.label} · ${periods} · ${profile.third_label}`;
   }
 
-  // ---------- Payment QR code ----------
+  // ---------- Payment QR codes ----------
   // Checks the chosen image before it is sent. The server checks it again.
-  protected onQrChosen(event: Event): void {
+  protected onQrChosen(event: Event, second = false): void {
     const file = (event.target as HTMLInputElement).files?.[0] ?? null;
-    this.qrFile.set(null);
+    if (second) this.qr2File.set(null);
+    else this.qrFile.set(null);
     this.errorIn.set(null);
     this.errors.set({});
     if (!file) {
@@ -169,52 +177,84 @@ export class SettingsComponent implements OnDestroy {
     if (problem) {
       this.errorIn.set('payment');
       this.error.set('');
-      this.errors.set({ qr_image: problem });
+      this.errors.set({ [second ? 'qr_image2' : 'qr_image']: problem });
       return;
     }
 
-    this.qrFile.set(file);
-    this.setQrUrl(URL.createObjectURL(file));
+    if (second) this.qr2File.set(file);
+    else this.qrFile.set(file);
+    this.setQrUrl(URL.createObjectURL(file), second);
   }
 
-  protected savePayment(removeQr = false): void {
+  protected savePayment(removeQr = false, removeQr2 = false): void {
     this.confirmRemoveQr.set(false);
+    this.confirmRemoveQr2.set(false);
     this.start('payment');
     this.system
-      .updatePaymentSettings({ ...this.payment, qr_image: removeQr ? null : this.qrFile(), remove_qr: removeQr })
+      .updatePaymentSettings({
+        ...this.payment,
+        qr_image: removeQr ? null : this.qrFile(),
+        remove_qr: removeQr,
+        qr2_label: this.payment2.label,
+        qr2_account_name: this.payment2.account_name,
+        qr2_instructions: this.payment2.instructions,
+        qr_image2: removeQr2 ? null : this.qr2File(),
+        remove_qr2: removeQr2,
+      })
       .subscribe({
         next: (response) => {
           this.showPayment(response.payment);
-          this.finish(removeQr ? 'Payment QR code removed.' : 'Payment details saved.');
+          this.finish(removeQr || removeQr2 ? 'Payment QR code removed.' : 'Payment details saved.');
         },
         error: (error) => this.fail('payment', error),
       });
   }
 
   private showPayment(payment: PaymentSettings): void {
-    this.payment = { account_name: payment.account_name, instructions: payment.instructions };
+    this.payment = {
+      label: payment.label || '',
+      account_name: payment.account_name,
+      instructions: payment.instructions,
+    };
+    this.payment2 = {
+      label: payment.qr2_label || '',
+      account_name: payment.qr2_account_name || '',
+      instructions: payment.qr2_instructions || '',
+    };
     this.hasQr.set(payment.has_qr);
+    this.hasQr2.set(payment.has_qr2);
     this.qrFile.set(null);
-    this.setQrUrl('');
+    this.qr2File.set(null);
+    this.setQrUrl('', false);
+    this.setQrUrl('', true);
 
-    // The image is only sent to signed-in admins, so it is fetched with the token.
+    // The images are only sent to signed-in admins, so they are fetched with the token.
     if (payment.has_qr) {
       this.system.paymentQrImage().subscribe({
-        next: (blob) => this.setQrUrl(URL.createObjectURL(blob)),
+        next: (blob) => this.setQrUrl(URL.createObjectURL(blob), false),
+        error: () => undefined,
+      });
+    }
+    if (payment.has_qr2) {
+      this.system.paymentQr2Image().subscribe({
+        next: (blob) => this.setQrUrl(URL.createObjectURL(blob), true),
         error: () => undefined,
       });
     }
   }
 
-  private setQrUrl(url: string): void {
-    if (this.qrUrl()) {
-      URL.revokeObjectURL(this.qrUrl());
+  private setQrUrl(url: string, second = false): void {
+    const current = second ? this.qr2Url() : this.qrUrl();
+    if (current) {
+      URL.revokeObjectURL(current);
     }
-    this.qrUrl.set(url);
+    if (second) this.qr2Url.set(url);
+    else this.qrUrl.set(url);
   }
 
   ngOnDestroy(): void {
-    this.setQrUrl('');
+    this.setQrUrl('', false);
+    this.setQrUrl('', true);
   }
 
   // ---------- Admin account (Super User only) ----------

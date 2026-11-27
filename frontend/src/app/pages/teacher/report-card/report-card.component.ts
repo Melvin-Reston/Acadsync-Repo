@@ -5,7 +5,7 @@
 // only thing typed on the card, and the only thing saved from this page.
 // The card itself is strictly black and white, on plain white paper, in any
 // mode; the controls around it follow the warm paper system.
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, OnDestroy, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ReportCardService } from '../../../core/report-card.service';
@@ -25,12 +25,16 @@ type CardView = 'front' | 'back' | 'both';
   templateUrl: './report-card.component.html',
   styleUrl: './report-card.component.css',
 })
-export class TeacherReportCardComponent {
+export class TeacherReportCardComponent implements OnDestroy {
   private readonly reportCard = inject(ReportCardService);
   protected readonly year = inject(ViewingYearService);
   private readonly toast = inject(ToastService);
 
   protected readonly view = signal<ReportCardView | null>(null);
+  // The school seal as a local image address, loaded from the sealed
+  // endpoint when the card says the school has one. Revoked when the
+  // view reloads and when the page is left, so the blob never leaks.
+  protected readonly schoolSealUrl = signal<string | null>(null);
   protected readonly loading = signal(true);
   protected readonly error = signal('');
   // The academic year a load is already in flight for: the viewing-year
@@ -97,6 +101,27 @@ export class TeacherReportCardComponent {
     });
   }
 
+  ngOnDestroy(): void {
+    this.revokeSchoolSeal();
+  }
+
+  private revokeSchoolSeal(): void {
+    const url = this.schoolSealUrl();
+    if (url) URL.revokeObjectURL(url);
+    this.schoolSealUrl.set(null);
+  }
+
+  private loadSchoolSeal(hasSeal: boolean): void {
+    this.revokeSchoolSeal();
+    if (!hasSeal) return;
+    this.reportCard.schoolSeal().subscribe({
+      next: (blob) => this.schoolSealUrl.set(URL.createObjectURL(blob)),
+      // The card still prints without the seal if the image cannot be
+      // fetched; the placeholder slot stays in its place.
+      error: () => this.schoolSealUrl.set(null),
+    });
+  }
+
   protected load(): void {
     const yearKey = this.year.selectedYear() ?? '';
     if (yearKey === this.loadingYear) return;
@@ -106,6 +131,7 @@ export class TeacherReportCardComponent {
       next: (view) => {
         this.loadingYear = null;
         this.view.set(view);
+        this.loadSchoolSeal(view.has_school_seal);
         if (view.learners.length > 0 && !this.selectedLearnerId()) {
           this.selectedLearnerId.set(view.learners[0].learner_id);
         }
@@ -137,6 +163,7 @@ export class TeacherReportCardComponent {
         adviser: { grade: 0, section: '', name: '' },
         school_name: '',
         school_head_name: '',
+        has_school_seal: false,
         academic_year: '',
         grading: {
           code: 'do015_adjusted',

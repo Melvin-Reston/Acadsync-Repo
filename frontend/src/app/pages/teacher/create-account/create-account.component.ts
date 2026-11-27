@@ -189,6 +189,7 @@ export class TeacherCreateAccountComponent {
             present_address: this.presentAddress,
             school_id: this.schoolId as number,
             school_name: this.schools().find((school) => school.id === this.schoolId)?.name ?? null,
+            has_school_seal: false,
             is_restricted: false,
             is_adviser: false,
             advisory_grade: null,

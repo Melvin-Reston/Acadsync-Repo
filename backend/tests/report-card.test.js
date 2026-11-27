@@ -66,7 +66,8 @@ before(async () => {
 
   // Grades: Sacraments and Music and Arts filed for all three terms,
   // Intro to Algebra filed for Term 1 only, Empowerment Technologies
-  // never filed — so it must not appear on the card at all.
+  // never filed — so it must still appear on the card, with blank grades,
+  // like every subject the section takes.
   await fileSubject(melvinToken, sacramentsClass.id, [1, 2, 3]);
   await fileSubject(johnToken, musicClass.id, [1, 2, 3]);
   await fileSubject(elmerToken, algebraClass.id, [1]);
@@ -318,13 +319,19 @@ describe('Report card data', () => {
     assert.equal(cards.months[0].key, '2026-06');
   });
 
-  test('only subjects with filed grades appear, in consolidation order', async () => {
+  test('every subject the section takes appears, filed or not, in consolidation order', async () => {
     const cards = await getCards(melvinToken);
     assert.deepEqual(
       cards.subjects.map((subject) => subject.subject_name),
-      ['Intro to Algebra', 'Music and Arts', 'Sacraments']
+      ['Empowerment Technologies', 'Intro to Algebra', 'Music and Arts', 'Sacraments']
     );
-    assert.equal(cards.subjects[1].teacher_name, 'Maniago, John');
+    assert.equal(cards.subjects[2].teacher_name, 'Maniago, John');
+    // The never-filed subject shows blank grades and no final grade.
+    const alex = cardFor(cards, 'STU-2026-1048');
+    const etech = subjectRow(alex, 'Empowerment Technologies');
+    assert.deepEqual(etech.period_grades, [null, null, null]);
+    assert.equal(etech.final_grade, null);
+    assert.equal(etech.remarks, null);
   });
 
   test('learners come in roster order, last name first', async () => {

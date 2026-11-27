@@ -193,12 +193,12 @@
     </form>
   </section>
 
-  <!-- Payment QR code: shown to teachers when they pay -->
+  <!-- Payment QR codes: shown to teachers when they pay -->
   <section class="card">
     <div class="card-head">
-      <h2 class="card-title">Payment QR code</h2>
-      <span class="pill" [class.accent]="hasQr()" [class.plain]="!hasQr()">
-        {{ hasQr() ? 'Uploaded' : 'Not set' }}
+      <h2 class="card-title">Payment QR codes</h2>
+      <span class="pill" [class.accent]="hasQr() || hasQr2()" [class.plain]="!hasQr() && !hasQr2()">
+        {{ hasQr() || hasQr2() ? 'Uploaded' : 'Not set' }}
       </span>
     </div>
     <form class="card-pad" (ngSubmit)="savePayment()" novalidate>
@@ -209,68 +209,173 @@
         </div>
       }
 
-      <div class="qr-row">
-        <div class="qr-box">
-          @if (qrUrl()) {
-            <img [src]="qrUrl()" alt="Payment QR code" />
-          } @else {
-            <span class="muted">No QR code</span>
-          }
-        </div>
+      <div class="qr-section">
+        <h3 class="qr-section-title">First QR code</h3>
         <div class="field">
-          <label for="qr-image">{{ hasQr() ? 'Replace image' : 'QR code image' }}</label>
+          <label for="qr-label">Label</label>
           <input
-            id="qr-image"
-            name="qr_image"
-            type="file"
+            id="qr-label"
+            name="label"
             class="input"
-            accept="image/png,image/jpeg,image/webp"
-            [class.invalid]="errorIn() === 'payment' && errors()['qr_image']"
-            (change)="onQrChosen($event)"
+            autocomplete="off"
+            placeholder="e.g. GCash"
+            [class.invalid]="errorIn() === 'payment' && errors()['label']"
+            [(ngModel)]="payment.label"
           />
-          <span class="hint">PNG, JPG or WEBP, up to 2 MB.</span>
-          @if (errorIn() === 'payment' && errors()['qr_image']) {
-            <span class="field-error">{{ errors()['qr_image'] }}</span>
+          @if (errorIn() === 'payment' && errors()['label']) {
+            <span class="field-error">{{ errors()['label'] }}</span>
           }
         </div>
-      </div>
 
-      <div class="field">
-        <label for="qr-name">Account name</label>
-        <input
-          id="qr-name"
-          name="account_name"
-          class="input"
-          autocomplete="off"
-          [class.invalid]="errorIn() === 'payment' && errors()['account_name']"
-          [(ngModel)]="payment.account_name"
-        />
-        @if (errorIn() === 'payment' && errors()['account_name']) {
-          <span class="field-error">{{ errors()['account_name'] }}</span>
+        <div class="qr-row">
+          <div class="qr-box">
+            @if (qrUrl()) {
+              <img [src]="qrUrl()" alt="First payment QR code" />
+            } @else {
+              <span class="muted">No QR code</span>
+            }
+          </div>
+          <div class="field">
+            <label for="qr-image">{{ hasQr() ? 'Replace image' : 'QR code image' }}</label>
+            <input
+              id="qr-image"
+              name="qr_image"
+              type="file"
+              class="input"
+              accept="image/png,image/jpeg,image/webp"
+              [class.invalid]="errorIn() === 'payment' && errors()['qr_image']"
+              (change)="onQrChosen($event)"
+            />
+            <span class="hint">PNG, JPG or WEBP, up to 2 MB.</span>
+            @if (errorIn() === 'payment' && errors()['qr_image']) {
+              <span class="field-error">{{ errors()['qr_image'] }}</span>
+            }
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="qr-name">Account name</label>
+          <input
+            id="qr-name"
+            name="account_name"
+            class="input"
+            autocomplete="off"
+            [class.invalid]="errorIn() === 'payment' && errors()['account_name']"
+            [(ngModel)]="payment.account_name"
+          />
+          @if (errorIn() === 'payment' && errors()['account_name']) {
+            <span class="field-error">{{ errors()['account_name'] }}</span>
+          }
+        </div>
+
+        <div class="field">
+          <label for="qr-instructions">Instructions</label>
+          <textarea
+            id="qr-instructions"
+            name="instructions"
+            class="textarea"
+            rows="4"
+            [class.invalid]="errorIn() === 'payment' && errors()['instructions']"
+            [(ngModel)]="payment.instructions"
+          ></textarea>
+          @if (errorIn() === 'payment' && errors()['instructions']) {
+            <span class="field-error">{{ errors()['instructions'] }}</span>
+          }
+        </div>
+
+        @if (hasQr()) {
+          <div class="form-actions">
+            <button type="button" class="btn btn-danger" (click)="confirmRemoveQr.set(true)">
+              Remove first QR code
+            </button>
+          </div>
         }
       </div>
 
-      <div class="field">
-        <label for="qr-instructions">Instructions</label>
-        <textarea
-          id="qr-instructions"
-          name="instructions"
-          class="textarea"
-          rows="4"
-          [class.invalid]="errorIn() === 'payment' && errors()['instructions']"
-          [(ngModel)]="payment.instructions"
-        ></textarea>
-        @if (errorIn() === 'payment' && errors()['instructions']) {
-          <span class="field-error">{{ errors()['instructions'] }}</span>
+      <div class="qr-section">
+        <h3 class="qr-section-title">Second QR code <span class="muted">(optional)</span></h3>
+        <div class="field">
+          <label for="qr2-label">Label</label>
+          <input
+            id="qr2-label"
+            name="qr2_label"
+            class="input"
+            autocomplete="off"
+            placeholder="e.g. BPI"
+            [class.invalid]="errorIn() === 'payment' && errors()['qr2_label']"
+            [(ngModel)]="payment2.label"
+          />
+          @if (errorIn() === 'payment' && errors()['qr2_label']) {
+            <span class="field-error">{{ errors()['qr2_label'] }}</span>
+          }
+        </div>
+
+        <div class="qr-row">
+          <div class="qr-box">
+            @if (qr2Url()) {
+              <img [src]="qr2Url()" alt="Second payment QR code" />
+            } @else {
+              <span class="muted">No QR code</span>
+            }
+          </div>
+          <div class="field">
+            <label for="qr2-image">{{ hasQr2() ? 'Replace image' : 'QR code image' }}</label>
+            <input
+              id="qr2-image"
+              name="qr_image2"
+              type="file"
+              class="input"
+              accept="image/png,image/jpeg,image/webp"
+              [class.invalid]="errorIn() === 'payment' && errors()['qr_image2']"
+              (change)="onQrChosen($event, true)"
+            />
+            <span class="hint">PNG, JPG or WEBP, up to 2 MB.</span>
+            @if (errorIn() === 'payment' && errors()['qr_image2']) {
+              <span class="field-error">{{ errors()['qr_image2'] }}</span>
+            }
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="qr2-name">Account name</label>
+          <input
+            id="qr2-name"
+            name="qr2_account_name"
+            class="input"
+            autocomplete="off"
+            [class.invalid]="errorIn() === 'payment' && errors()['qr2_account_name']"
+            [(ngModel)]="payment2.account_name"
+          />
+          @if (errorIn() === 'payment' && errors()['qr2_account_name']) {
+            <span class="field-error">{{ errors()['qr2_account_name'] }}</span>
+          }
+        </div>
+
+        <div class="field">
+          <label for="qr2-instructions">Instructions</label>
+          <textarea
+            id="qr2-instructions"
+            name="qr2_instructions"
+            class="textarea"
+            rows="4"
+            [class.invalid]="errorIn() === 'payment' && errors()['qr2_instructions']"
+            [(ngModel)]="payment2.instructions"
+          ></textarea>
+          @if (errorIn() === 'payment' && errors()['qr2_instructions']) {
+            <span class="field-error">{{ errors()['qr2_instructions'] }}</span>
+          }
+        </div>
+
+        @if (hasQr2()) {
+          <div class="form-actions">
+            <button type="button" class="btn btn-danger" (click)="confirmRemoveQr2.set(true)">
+              Remove second QR code
+            </button>
+          </div>
         }
       </div>
 
       <div class="form-actions">
-        @if (hasQr()) {
-          <button type="button" class="btn btn-danger" (click)="confirmRemoveQr.set(true)">
-            Remove QR code
-          </button>
-        }
         <button type="submit" class="btn btn-primary" [disabled]="saving() === 'payment'">
           {{ saving() === 'payment' ? 'Saving…' : 'Save payment details' }}
         </button>
@@ -398,10 +503,20 @@
 
 @if (confirmRemoveQr()) {
   <app-modal title="Remove QR code" (closed)="confirmRemoveQr.set(false)">
-    <p>Remove the payment QR code? Teachers will not see a QR code until a new one is uploaded.</p>
+    <p>Remove the first payment QR code? Teachers will not see it until a new one is uploaded.</p>
     <div class="form-actions">
       <button type="button" class="btn" (click)="confirmRemoveQr.set(false)">Cancel</button>
       <button type="button" class="btn btn-danger" (click)="savePayment(true)">Remove QR code</button>
+    </div>
+  </app-modal>
+}
+
+@if (confirmRemoveQr2()) {
+  <app-modal title="Remove second QR code" (closed)="confirmRemoveQr2.set(false)">
+    <p>Remove the second payment QR code? Teachers will not see it until a new one is uploaded.</p>
+    <div class="form-actions">
+      <button type="button" class="btn" (click)="confirmRemoveQr2.set(false)">Cancel</button>
+      <button type="button" class="btn btn-danger" (click)="savePayment(false, true)">Remove QR code</button>
     </div>
   </app-modal>
 }

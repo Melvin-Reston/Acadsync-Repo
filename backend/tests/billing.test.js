@@ -806,7 +806,9 @@ describe('Payment QR code', () => {
     const settings = await api().get('/api/settings').set(bearer(adminToken));
     assert.equal(settings.body.payment.has_qr, false);
     assert.equal(settings.body.payment.account_name, '');
+    assert.equal(settings.body.payment.has_qr2, false);
     assert.ok(!('qr_path' in settings.body.payment));
+    assert.ok(!('qr2_path' in settings.body.payment));
     assert.equal((await api().get('/api/settings/payment/qr').set(bearer(adminToken))).status, 404);
   });
 
@@ -854,7 +856,16 @@ describe('Payment QR code', () => {
 
     const info = await api().get('/api/teacher/payment-info').set(bearer(token));
     assert.equal(info.status, 200);
-    assert.deepEqual(info.body, { account_name: 'Second Name', instructions: '', has_qr: true });
+    assert.deepEqual(info.body, {
+      label: '',
+      account_name: 'Second Name',
+      instructions: '',
+      has_qr: true,
+      qr2_label: '',
+      qr2_account_name: '',
+      qr2_instructions: '',
+      has_qr2: false,
+    });
     const image = await api().get('/api/teacher/payment-info/qr').set(bearer(token));
     assert.equal(image.status, 200);
     assert.equal(image.headers['content-type'], 'image/png');

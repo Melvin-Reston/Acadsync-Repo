@@ -116,6 +116,17 @@
   margin: 4px 0 0;
 }
 
+.qr-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.qr-grid .qr-box {
+  margin-bottom: 0;
+}
+
 .receipt {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -285,5 +296,9 @@
 
   .receipt {
     position: static;
+  }
+
+  .qr-grid {
+    grid-template-columns: 1fr;
   }
 }

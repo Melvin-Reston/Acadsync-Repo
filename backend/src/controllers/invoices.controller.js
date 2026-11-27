@@ -310,6 +310,9 @@ async function lockPendingPayment(id, client) {
 }
 
 // POST /api/payments/:id/confirm
+// Confirming keeps the screenshot: the image stays with the payment record so
+// the proof can be re-checked later. The payment record itself (reference
+// number, amount, who confirmed it and when) is kept as well.
 async function confirmPayment(req, res) {
   const { id } = req.valid.params;
 

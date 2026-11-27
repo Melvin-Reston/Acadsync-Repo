@@ -49,6 +49,7 @@ export class TeacherPaymentsComponent {
   protected readonly invoices = signal<TeacherInvoiceRow[]>([]);
   protected readonly paymentInfo = signal<PaymentInfo | null>(null);
   protected readonly qrUrl = signal<string | null>(null);
+  protected readonly qr2Url = signal<string | null>(null);
   protected readonly loading = signal(true);
   protected readonly error = signal('');
   protected readonly formErrors = signal<FieldErrors>({});
@@ -134,6 +135,7 @@ export class TeacherPaymentsComponent {
         this.invoices.set(result.invoices.items);
         this.paymentInfo.set(result.paymentInfo);
         if (result.paymentInfo.has_qr) this.loadQr();
+        if (result.paymentInfo.has_qr2) this.loadQr2();
       },
       error: (error) => {
         this.loading.set(false);
@@ -153,6 +155,36 @@ export class TeacherPaymentsComponent {
     });
   }
 
+  private loadQr2(): void {
+    this.portal.paymentQr2().subscribe({
+      next: (blob) => {
+        const old = this.qr2Url();
+        if (old) URL.revokeObjectURL(old);
+        this.qr2Url.set(URL.createObjectURL(blob));
+      },
+      error: () => this.qr2Url.set(null),
+    });
+  }
+
+  // At least one QR code is set. A teacher pays with either one; the
+  // screenshot and reference number sent for confirmation are the same.
+  protected readonly hasAnyQr = computed(() => {
+    const info = this.paymentInfo();
+    return Boolean(info?.has_qr || info?.has_qr2);
+  });
+
+  // The label the administrator gave a QR code, or "Payment option 1/2"
+  // when both are set and a label is blank. With a single QR code and no
+  // label, there is nothing to distinguish, so no heading is shown.
+  protected qrLabel(second = false): string {
+    const info = this.paymentInfo();
+    if (!info) return '';
+    const label = second ? info.qr2_label : info.label;
+    if (label) return label;
+    if (info.has_qr && info.has_qr2) return second ? 'Payment option 2' : 'Payment option 1';
+    return '';
+  }
+
   // What happens next with the teacher's plan, in plain words.
   protected nextStep(): string {
     const subscription = this.subscription();
@@ -169,6 +201,9 @@ export class TeacherPaymentsComponent {
       return `Invoice ${invoice.invoice_number} for ${peso(invoice.amount)} is unpaid, due ${this.date(invoice.due_date)}. If it is not paid by then, the subscription expires.`;
     }
     if (subscription.status === 'active') {
+      if (Number(subscription.price) === 0) {
+        return `Your free period ends ${this.date(subscription.current_period_end)}. After that, Teacher Pro is a paid plan.`;
+      }
       return subscription.billing_cycle === 'one_time'
         ? `Ends ${this.date(subscription.current_period_end)}.`
         : `Renews ${this.date(subscription.current_period_end)}.`;
@@ -203,6 +238,27 @@ export class TeacherPaymentsComponent {
 
   protected isCurrentPlan(plan: Plan): boolean {
     return this.subscription()?.plan_id === plan.id && this.hasCurrentSubscription();
+  }
+
+  protected isFreeSubscription(subscription: { price: string }): boolean {
+    return Number(subscription.price) === 0;
+  }
+
+  // Whether a trial is still available to this teacher: the one free
+  // window (from their first subscription) has not ended yet. A teacher
+  // with no subscription yet has the whole window ahead of them.
+  protected trialAvailable(): boolean {
+    const end = this.subscription()?.window_ends_at;
+    return !end || new Date(end).getTime() > Date.now();
+  }
+
+  // Teacher Free can only ever be the first plan: once the teacher has
+  // had any subscription, Free is no longer offered, unless it is the
+  // plan they are on now. The backend refuses it too.
+  protected showPlan(plan: Plan): boolean {
+    if (Number(plan.price) !== 0) return true;
+    if (this.isCurrentPlan(plan)) return true;
+    return !this.subscription();
   }
 
   // Open the receipt for one invoice, and scroll it into view.

@@ -54,3 +54,15 @@
   object-fit: contain;
   background: #ffffff;
 }
+
+.qr-section + .qr-section {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.qr-section-title {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0 0 12px;
+}

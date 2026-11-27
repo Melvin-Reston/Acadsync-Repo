@@ -86,8 +86,8 @@
   } @else if (view()!.subjects.length === 0) {
     <div class="card no-print">
       <div class="empty">
-        <p><b>No grades filed for this section yet.</b></p>
-        <p>When a subject teacher files grades for Grade {{ view()!.adviser.grade }} {{ view()!.adviser.section }}, the subjects will appear on the cards.</p>
+        <p><b>No subjects for this section yet.</b></p>
+        <p>When classes are added for Grade {{ view()!.adviser.grade }} {{ view()!.adviser.section }}, the subjects will appear on the cards, with blank grades until a subject teacher files them.</p>
       </div>
     </div>
   }
@@ -101,8 +101,12 @@
           <article class="sheet" aria-label="Report card front">
             <div class="rep">
               <div class="seals" aria-hidden="true">
-                <div class="seal">DepEd<br />Seal</div>
-                <div class="seal">School<br />Seal</div>
+                <div class="seal seal-img"><img src="/deped-seal.png" alt="" /></div>
+                @if (schoolSealUrl()) {
+                  <div class="seal seal-img"><img [src]="schoolSealUrl()" alt="" /></div>
+                } @else {
+                  <div class="seal">School<br />Seal</div>
+                }
               </div>
               <p>Republic of the Philippines</p>
               <p class="dept">Department of Education</p>
@@ -128,7 +132,7 @@
               <div class="info-row"><label>Sex:</label><span>{{ learner.sex }}</span></div>
               <div class="info-row col-a"><label>Grade:</label><span>{{ view()!.adviser.grade }}</span></div>
               <div class="info-row"><label>Section:</label><span>{{ view()!.adviser.section }}</span></div>
-              <div class="info-row"><label>Track (SHS only):</label><span class="blank">&nbsp;</span></div>
+              <div class="info-row track"><label>Track (SHS only):</label><span class="blank">&nbsp;</span></div>
             </div>
 
             <p class="letter"><b>Dear Parents,</b> This Performance Report presents your child’s progress and achievement in the different learning areas. The school welcomes you to reach out should you wish to know more about your child’s learning and performance.</p>

@@ -1,0 +1,272 @@
+/* Test Item Analysis: warm paper on screen, strictly black and white
+   in print, like the other DepEd forms. The tables are wide, so the
+   print page is the landscape DepEd form page with 10mm of the
+   report's own padding on every side. */
+.tia-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.tia-picker {
+  flex: 1 1 320px;
+  max-width: 520px;
+}
+
+.tia-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.tia-controls .muted {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.tia-report {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+}
+
+.tia-head {
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.tia-head p {
+  margin: 0;
+}
+
+.tia-republic,
+.tia-dept {
+  font-size: 13px;
+}
+
+.tia-line {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.tia-school {
+  font-size: 14px;
+}
+
+.tia-title {
+  margin: 10px 0 2px;
+  font-size: 18px;
+  letter-spacing: 0.04em;
+}
+
+.tia-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px 16px;
+  margin: 0 0 12px;
+  padding: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.tia-meta div {
+  display: flex;
+  flex-direction: column;
+}
+
+.tia-meta dt {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.tia-meta dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.tia-caution {
+  padding: 10px 12px;
+  border: 1px solid var(--amber);
+  background: var(--amber-tint);
+  border-radius: var(--radius);
+  color: var(--ink);
+}
+
+.tia-negative {
+  border-color: var(--red);
+  background: var(--red-tint);
+}
+
+.tia-section {
+  margin: 20px 0 8px;
+  font-size: 15px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.tia-table th,
+.tia-table td {
+  white-space: nowrap;
+}
+
+.tia-table td:last-child,
+.tia-table th:last-child {
+  white-space: normal;
+}
+
+.tia-table .negative-row td {
+  background: var(--red-tint);
+}
+
+.tia-table .correct-row td {
+  color: var(--muted);
+}
+
+.tia-table .total-row td {
+  font-weight: 700;
+}
+
+.tia-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.tia-learned {
+  margin: 12px 0 0;
+}
+
+.tia-legends {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.tia-legends h4 {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.tia-legends p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+.tia-signatures {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-top: 36px;
+  text-align: center;
+}
+
+.tia-sign-name {
+  min-height: 22px;
+  margin: 0;
+  font-weight: 700;
+  border-bottom: 1px solid var(--ink);
+}
+
+.tia-sign-role {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+@media (max-width: 720px) {
+  .tia-summary,
+  .tia-legends {
+    grid-template-columns: 1fr;
+  }
+
+  .tia-signatures {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+}
+
+@media print {
+  .tia-report {
+    display: block;
+    page: deped-form;
+    color: #000;
+    background: #fff;
+    border: 0;
+    border-radius: 0;
+    padding: 10mm;
+    font-size: 10px;
+    line-height: 1.35;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+
+  .tia-title {
+    font-size: 14px;
+  }
+
+  .tia-meta {
+    background: #fff;
+    border: 1px solid #000;
+    border-radius: 0;
+    padding: 8px;
+  }
+
+  .tia-meta dt {
+    color: #000;
+  }
+
+  .tia-report .muted,
+  .tia-report .tia-line {
+    color: #000;
+  }
+
+  .tia-table th,
+  .tia-table td {
+    border: 1px solid #000;
+    padding: 3px 4px;
+    font-size: 9px;
+  }
+
+  .tia-table .negative-row td,
+  .tia-table .correct-row td {
+    background: #fff;
+    color: #000;
+  }
+
+  .tia-caution {
+    border: 1px solid #000;
+    background: #fff;
+    border-radius: 0;
+  }
+
+  .tia-sign-name {
+    border-bottom-color: #000;
+  }
+
+  .tia-sign-role {
+    color: #000;
+  }
+
+  .tia-legends p {
+    color: #000;
+  }
+
+  .tia-table {
+    page-break-inside: auto;
+  }
+
+  .tia-table tr {
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+}

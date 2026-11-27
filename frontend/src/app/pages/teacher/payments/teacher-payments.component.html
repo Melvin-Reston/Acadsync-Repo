@@ -45,6 +45,17 @@
             </dd>
           </div>
         }
+        @if (sub.status === 'active' && isFreeSubscription(sub)) {
+          <div>
+            <dt>Free period ends</dt>
+            <dd>
+              {{ sub.current_period_end | date: 'MMM d, y' }}
+              @if (daysLeft() !== null) {
+                <span class="muted">· {{ daysLeft() }} {{ daysLeft() === 1 ? 'day' : 'days' }} left</span>
+              }
+            </dd>
+          </div>
+        }
         <div>
           <dt>Period ends</dt>
           <dd>
@@ -99,6 +110,7 @@
     } @else {
       <div class="plan-list">
         @for (plan of plans(); track plan.id) {
+          @if (showPlan(plan)) {
           <article class="plan-card" [class.current]="isCurrentPlan(plan)">
             <div class="plan-head">
               <b>{{ plan.name }}</b>
@@ -110,7 +122,7 @@
               }
             </div>
             <div class="plan-price">{{ planPrice(plan) }}</div>
-            @if (plan.trial_days > 0) {
+            @if (plan.trial_days > 0 && trialAvailable()) {
               <p class="plan-trial">{{ plan.trial_days }}-day trial first</p>
             }
             @if (plan.features.length > 0) {
@@ -140,6 +152,7 @@
               }
             }
           </article>
+          }
         }
       </div>
     }
@@ -160,27 +173,58 @@
           <div class="pay-steps">
             @if (canPay(invoice)) {
               <h3 class="step-title">Pay this invoice</h3>
-              @if (paymentInfo()?.has_qr && qrUrl()) {
-                <div class="qr-box">
-                  <img [src]="qrUrl()" alt="Payment QR code" />
-                  <div>
-                    <b>Scan to pay {{ peso(invoice.amount) }}</b>
-                    @if (paymentInfo()?.account_name) {
-                      <p class="muted">{{ paymentInfo()?.account_name }}</p>
-                    }
-                    <p class="muted">Pay the exact amount. A part payment is not accepted.</p>
-                  </div>
+              @if (hasAnyQr()) {
+                <div class="qr-grid">
+                  @if (paymentInfo()?.has_qr) {
+                    <div class="qr-box">
+                      @if (qrUrl()) {
+                        <img [src]="qrUrl()" alt="First payment QR code" />
+                      } @else {
+                        <p class="muted">The QR code could not be loaded. Try again later.</p>
+                      }
+                      <div>
+                        @if (qrLabel()) {
+                          <b>{{ qrLabel() }}</b>
+                        }
+                        <p><b>Scan to pay {{ peso(invoice.amount) }}</b></p>
+                        @if (paymentInfo()?.account_name) {
+                          <p class="muted">{{ paymentInfo()?.account_name }}</p>
+                        }
+                        <p class="muted">Pay the exact amount. A part payment is not accepted.</p>
+                        @if (paymentInfo()?.instructions) {
+                          <p class="muted">{{ paymentInfo()?.instructions }}</p>
+                        }
+                      </div>
+                    </div>
+                  }
+                  @if (paymentInfo()?.has_qr2) {
+                    <div class="qr-box">
+                      @if (qr2Url()) {
+                        <img [src]="qr2Url()" alt="Second payment QR code" />
+                      } @else {
+                        <p class="muted">The QR code could not be loaded. Try again later.</p>
+                      }
+                      <div>
+                        @if (qrLabel(true)) {
+                          <b>{{ qrLabel(true) }}</b>
+                        }
+                        <p><b>Scan to pay {{ peso(invoice.amount) }}</b></p>
+                        @if (paymentInfo()?.qr2_account_name) {
+                          <p class="muted">{{ paymentInfo()?.qr2_account_name }}</p>
+                        }
+                        <p class="muted">Pay the exact amount. A part payment is not accepted.</p>
+                        @if (paymentInfo()?.qr2_instructions) {
+                          <p class="muted">{{ paymentInfo()?.qr2_instructions }}</p>
+                        }
+                      </div>
+                    </div>
+                  }
                 </div>
-              } @else if (paymentInfo()?.has_qr) {
-                <p class="muted">The QR code could not be loaded. Try again later.</p>
               } @else {
                 <p class="muted">No payment QR code has been set yet. Ask the administrator.</p>
               }
-              @if (paymentInfo()?.instructions) {
-                <p class="muted">{{ paymentInfo()?.instructions }}</p>
-              }
               <ol class="steps">
-                <li>Scan the QR code with your e-wallet or banking app and pay {{ peso(invoice.amount) }} exactly.</li>
+                <li>Scan a QR code with your e-wallet or banking app and pay {{ peso(invoice.amount) }} exactly.</li>
                 <li>Save a screenshot of the payment confirmation.</li>
                 <li>Enter the reference number and upload the screenshot, then send it.</li>
                 <li>The administrator checks it. The invoice shows “Waiting for confirmation” until then.</li>
@@ -217,7 +261,7 @@
                   }
                 </div>
                 <div class="form-actions">
-                  <button type="submit" class="btn btn-primary" [disabled]="submittingPayment() || !paymentInfo()?.has_qr">
+                  <button type="submit" class="btn btn-primary" [disabled]="submittingPayment() || !hasAnyQr()">
                     {{ submittingPayment() ? 'Sending…' : 'Send payment for confirmation' }}
                   </button>
                 </div>

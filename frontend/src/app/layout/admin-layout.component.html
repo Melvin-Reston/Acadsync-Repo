@@ -79,7 +79,7 @@
 
     <main class="content">
       @if (auth.admin()?.must_change_password) {
-        <div class="alert warn" role="status">
+        <div class="alert warn no-print" role="status">
           <app-icon name="key" [size]="16" />
           <span>
             You are using a temporary password.

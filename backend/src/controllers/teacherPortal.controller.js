@@ -19,12 +19,13 @@ const { publicTeacher } = require('./teacherAuth.controller');
 async function findSelf(teacherId, client = db) {
   const result = await client.query(
     `SELECT t.id, t.first_name, t.last_name, t.email, t.mobile, t.present_address, t.username,
-            t.school_id, s.name AS school_name, s.city_region AS school_city_region,
+            t.school_id, s.name AS school_name, s.city_region AS school_city_region, s.seal_path,
             t.region, t.division, t.deped_school_id, t.school_head_name,
             t.classes_start_date::text AS classes_start_date,
             t.classes_end_date::text AS classes_end_date,
             t.must_change_password, t.is_restricted, t.restriction_reason,
             t.is_adviser, t.advisory_grade, t.advisory_section, t.created_at,
+            t.trial_ends_at AS window_ends_at,
             sub.id AS subscription_id, sub.plan_id, sub.plan_name, sub.price AS plan_price,
             sub.billing_cycle, sub.status AS subscription_status, sub.trial_ends_at,
             sub.current_period_start, sub.current_period_end
@@ -56,6 +57,9 @@ function subscriptionOf(self) {
     billing_cycle: self.billing_cycle,
     status: self.subscription_status,
     trial_ends_at: self.trial_ends_at,
+    // The end of the teacher's one free window (from their first
+    // subscription), whether or not the current subscription is a trial.
+    window_ends_at: self.window_ends_at || null,
     current_period_start: self.current_period_start,
     current_period_end: self.current_period_end,
   };
@@ -182,6 +186,52 @@ async function updateMe(req, res) {
   }
   const self = await findSelf(req.teacher.id);
   res.json({ teacher: publicTeacher(self) });
+}
+
+// PUT /api/teacher/school/seal  (form: seal_image?, remove_seal?)
+// Uploads (or removes) the school's seal, printed on the right side of
+// the Report Card front, opposite the DepEd seal. The seal belongs to
+// the school, so every teacher of the school shares the one uploaded
+// here; uploading a new seal replaces the old file. Images are capped
+// at 2 MB by the upload middleware, like every other image upload.
+async function updateSchoolSeal(req, res) {
+  const self = await findSelf(req.teacher.id);
+  const before = await db.query('SELECT seal_path FROM schools WHERE id = $1', [self.school_id]);
+  const beforePath = before.rows[0] ? before.rows[0].seal_path : null;
+  const remove = req.body && (req.body.remove_seal === 'true' || req.body.remove_seal === true);
+  const newPath = req.file ? await saveImage(req.file, 'seals', 'seal_image') : null;
+
+  try {
+    if (newPath) {
+      await db.query('UPDATE schools SET seal_path = $1, updated_at = NOW() WHERE id = $2', [newPath, self.school_id]);
+    } else if (remove) {
+      await db.query('UPDATE schools SET seal_path = NULL, updated_at = NOW() WHERE id = $1', [self.school_id]);
+    } else {
+      throw badRequest('Choose an image to upload.', {
+        code: 'VALIDATION_ERROR',
+        errors: { seal_image: 'Choose an image to upload.' },
+      });
+    }
+  } catch (error) {
+    await deleteImage(newPath);
+    throw error;
+  }
+
+  if (beforePath && beforePath !== newPath) await deleteImage(beforePath);
+  const updated = await findSelf(req.teacher.id);
+  res.json({
+    teacher: publicTeacher(updated),
+    message: newPath ? 'School seal uploaded.' : 'School seal removed.',
+  });
+}
+
+// GET /api/teacher/school/seal  (the school's seal image, for the signed-in teacher)
+async function getSchoolSeal(req, res) {
+  const self = await findSelf(req.teacher.id);
+  const result = await db.query('SELECT seal_path FROM schools WHERE id = $1', [self.school_id]);
+  const sealPath = result.rows[0] ? result.rows[0].seal_path : null;
+  if (!sealPath) throw notFound('No school seal has been uploaded yet.');
+  await sendImage(res, sealPath);
 }
 
 // PATCH /api/teacher/me/adviser  (adviser status, grade and section)
@@ -323,7 +373,9 @@ async function getTodayClasses(req, res) {
 // POST /api/teacher/subscription/change-plan  { plan_id }  (Change plan: ends the current
 // subscription and starts a new one on the chosen plan, following the same billing rules the
 // admin's change-plan uses — unpaid invoices are voided, and a payment waiting for confirmation
-// blocks the change. A Pro trial is given once, so a teacher who already had one pays straight away.)
+// blocks the change. The free window is never restarted: a trial on the new plan only runs to
+// the end of the window the teacher's first subscription started, and Teacher Free can never
+// be chosen again once the teacher has had any subscription.)
 async function changeMyPlan(req, res) {
   const { plan_id } = req.valid.body;
 
@@ -344,10 +396,12 @@ async function changeMyPlan(req, res) {
 
     await voidUnpaidInvoices(old.id, `Plan changed to ${plan.name}`, client);
     await billing.endSubscription(client, old, 'cancelled', new Date(), `Changed plan to ${plan.name}`);
+    // A trial is only what is left of the teacher's free window; the
+    // window itself (teachers.trial_ends_at) is never restarted here.
     const created = await billing.createSubscription(client, {
       teacherId: req.teacher.id,
       plan,
-      withTrial: !(await billing.hasHadTrial(client, req.teacher.id)),
+      withTrial: true,
     });
     await logSystemActivity(
       {
@@ -378,11 +432,12 @@ async function createMySubscription(req, res) {
 
   const subscription = await db.withTransaction(async (client) => {
     await assertNoCurrentSubscription(req.teacher.id, client);
-    // A trial is given once: a teacher who already had one pays straight away.
+    // A trial is only what is left of the teacher's free window; the
+    // window itself (teachers.trial_ends_at) is never restarted here.
     const created = await billing.createSubscription(client, {
       teacherId: req.teacher.id,
       plan,
-      withTrial: !(await billing.hasHadTrial(client, req.teacher.id)),
+      withTrial: true,
     });
     await logSystemActivity(
       {
@@ -429,17 +484,33 @@ async function listMyAnnouncements(req, res) {
   res.json({ items: await fetchAnnouncements(req.teacher.id) });
 }
 
-// GET /api/teacher/payment-info  (account name, instructions and whether a QR code is set)
+// GET /api/teacher/payment-info  (labels, account names, instructions and whether each QR code is set)
 async function getPaymentInfo(req, res) {
   const settings = await readPaymentSettings();
-  res.json({ account_name: settings.account_name, instructions: settings.instructions, has_qr: settings.has_qr });
+  res.json({
+    label: settings.label,
+    account_name: settings.account_name,
+    instructions: settings.instructions,
+    has_qr: settings.has_qr,
+    qr2_label: settings.qr2_label,
+    qr2_account_name: settings.qr2_account_name,
+    qr2_instructions: settings.qr2_instructions,
+    has_qr2: settings.has_qr2,
+  });
 }
 
-// GET /api/teacher/payment-info/qr  (the QR code image)
+// GET /api/teacher/payment-info/qr  (the first QR code image)
 async function getPaymentQr(req, res) {
   const settings = await readPaymentSettings();
   if (!settings.qr_path) throw notFound('No payment QR code has been set yet.');
   await sendImage(res, settings.qr_path);
+}
+
+// GET /api/teacher/payment-info/qr2  (the second QR code image)
+async function getSecondPaymentQr(req, res) {
+  const settings = await readPaymentSettings();
+  if (!settings.qr2_path) throw notFound('No second payment QR code has been set yet.');
+  await sendImage(res, settings.qr2_path);
 }
 
 // GET /api/teacher/invoices  (the signed-in teacher's own invoices)
@@ -526,12 +597,15 @@ module.exports = {
   listMyAnnouncements,
   getPaymentInfo,
   getPaymentQr,
+  getSecondPaymentQr,
   listMyInvoices,
   getMyInvoice,
   submitPayment,
   getMe,
   updateMe,
   updateAdviser,
+  updateSchoolSeal,
+  getSchoolSeal,
   changePassword,
   listHolidays,
   addHoliday,

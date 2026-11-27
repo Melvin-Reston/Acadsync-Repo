@@ -19,6 +19,8 @@ Teacher Batch 8 adds the DepEd print forms: the Class Record and Final Grades pr
 
 Teacher Batch 9 adds online quizzes: the teacher makes a numbered quiz per class and period, adds multiple-choice (2 to 5 choices) and True/False questions with an answer key, publishes it, and sends learners a link. Learners need no account: they enter their Learner ID, answer, and are checked at once. Scores go into the Grades page as a Written Works column labelled with the quiz number.
 
+Teacher Batch 12 adds Test Item Analysis for the paper exams: a third tab in Quizzes & Exams that is computed from the saved checked sheets, so checking or re-checking a sheet updates it by itself. Papers are split at the median into an upper and a lower group, and each item gets a difficulty index, a discrimination index, and a distractor analysis for every option, with the bands and remarks from the Test Item Analysis sheet, plus summary counts and the signature lines on the printout. Online quizzes are not included. See [Upgrading from Teacher Batch 11 fix 7](#upgrading-from-teacher-batch-11-fix-7).
+
 Teacher Batch 10 adds the paper exam checker: the teacher makes an exam per class and period, enters one answer key — each question with its own 2 to 5 choices, a 2-choice question optionally True/False — prints one answer sheet per learner with the learner's name and Learner ID already on it, then checks each sheet from a photo of the shaded circles. The photo is read in the browser and never uploaded; the teacher reviews and corrects the answers before saving, and the server recomputes the score from its own key into an Examinations column in the Grades page, labelled with the exam number. See [Upgrading from Teacher Batch 9 fix 1](#upgrading-from-teacher-batch-9-fix-1).
 
 Already running Part 1? Go straight to [Upgrading from Part 1](#upgrading-from-part-1).
@@ -438,6 +440,170 @@ npm start
 ```
 
 5. Open http://localhost:4200 and sign in as before. Nothing is lost; the new printouts are listed under [Teacher Batch 8: DepEd print forms](#teacher-batch-8-deped-print-forms).
+
+No new `.env` settings are required.
+
+## Upgrading from Teacher Batch 11 fix 7
+
+This zip is built on top of Teacher Batch 11 fix 7 (payment screenshots are kept after confirmation). Unzip it **last**, over any newer install. Your `.env` file and everything in your database are kept. You do not run the seed again, and there is no new migration to run.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip the Teacher Batch 12 zip **over your existing `acadsync` folder** and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run dev
+```
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. Open **Quizzes & Exams**, then the **Test Item Analysis** tab. Pick an exam: the analysis is computed from the checked sheets already saved for that exam, so an exam with no checked sheets yet shows a note instead, and checking or re-checking a sheet in the Exams tab updates the analysis by itself. The printout follows the Test Item Analysis sheet — difficulty, discrimination and distractor analysis, summary counts, and the Prepared / Checked / Noted lines — with the Region, Division, School ID and School Head name from your Profile page in the header. The analysis needs at least two checked sheets, so the papers can be split into an upper and a lower group at the median; with only a few sheets, treat a Reject/Revise call as a prompt to look at the item. Online quizzes do not have an analysis in this batch.
+
+No new `.env` settings are required.
+
+## Upgrading from Teacher Batch 12
+
+This zip is Teacher Batch 13 (one free window per teacher, Teacher Free once ever). It is built on top of Teacher Batch 12 (Test Item Analysis). Unzip it **last**, over any newer install. Your `.env` file and everything in your database are kept. You do not run the seed again. **There is a new migration to run** (step 3) — it adds the free-window end date to every teacher and fills it in from their earliest subscription, so teachers who already started keep the window they already started.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip the Teacher Batch 13 zip **over your existing `acadsync` folder** and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run migrate
+npm run dev
+```
+
+You should see `Applied 018_trial_window.sql`. If it says the database is already up to date, the migration was already applied and nothing more is needed.
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. On the teacher Payments page, a teacher on Teacher Free now sees **Free period ends** with the date their free window ends, and switching to Teacher Pro keeps that same date as the trial end — switching plans never starts a fresh free period. Teacher Free is no longer offered to a teacher who has already had any subscription.
+
+No new `.env` settings are required.
+
+## Upgrading from Teacher Batch 11 fix 6
+
+This zip is built on top of Teacher Batch 11 fix 6 (screenshot deleted on approval). Unzip it **last**, over any newer install. Your `.env` file and everything in your database are kept. You do not run the seed again, and there is no new migration to run.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip the Teacher Batch 11 fix 7 zip **over your existing `acadsync` folder** and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run dev
+```
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. This reverses fix 6: a screenshot of the payment is still required before the payment can be sent, it still shows on the admin **Payments & Invoices** page while the payment waits for confirmation, and now it stays there after you confirm it too, so a confirmed payment can still be re-checked later. The payment record itself is unchanged — reference number, amount, date paid, and who confirmed it and when. Screenshots of payments confirmed while fix 6 was installed, whose images were deleted at approval, cannot be brought back; approvals from now on keep the image.
+
+No new `.env` settings are required.
+
+## Upgrading from Teacher Batch 11 fix 5
+
+> The deletion in this section was reversed by fix 7: confirming a payment no longer deletes its screenshot. Apply fix 7 last instead.
+
+This zip is built on top of Teacher Batch 11 fix 5 (two payment QR codes). Unzip it **last**, over any newer install. Your `.env` file and everything in your database are kept. You do not run the seed again, and there is no new migration to run.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip the Teacher Batch 11 fix 6 zip **over your existing `acadsync` folder** and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run dev
+```
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. Nothing about how a teacher pays changes: a screenshot of the payment is still required before the payment can be sent, and it still shows on the admin **Payments & Invoices** page while the payment waits for confirmation. What changes is what happens when you confirm it: the screenshot image is deleted and the payment record no longer points at it, so a confirmed payment shows no screenshot afterwards. The payment record itself stays — reference number, amount, date paid, and who confirmed it and when. A rejected payment keeps its screenshot, so you can still re-check it, and a payment you record by hand keeps any screenshot you attached to it. Screenshots attached to payments confirmed before this upgrade stay where they are; only approvals from now on delete the image.
+
+No new `.env` settings are required.
+
+## Upgrading from Teacher Batch 11 fix 4
+
+This zip is built on top of Teacher Batch 11 fix 4 (Report Card Track column). Unzip it **last**, over any newer install. Your `.env` file and everything in your database are kept. You do not run the seed again, and there is no new migration to run — the second QR code is stored under new keys in the existing settings table, so an install with only the first QR code keeps working exactly as before.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip the Teacher Batch 11 fix 5 zip **over your existing `acadsync` folder** and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run dev
+```
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. In **Settings**, **Payment QR codes** now has a first and an optional second QR code, each with its own label (for example GCash and BPI), account name and instructions, and each can be removed on its own. One **Save payment details** saves both. On the teacher **Payments & Invoices** page, the receipt shows both QR codes side by side (stacked on a phone); the teacher scans either one, pays the exact invoice amount, and sends the screenshot and reference number exactly as before. Keep a copy of each QR image file: the images are saved in the backend `uploads` folder, which a host like Render Free wipes on redeploy.
+
+No new `.env` settings are required.
+
+## Upgrading from Teacher Batch 11 fix 3
+
+This zip is built on top of Teacher Batch 11 fix 2 (Lesson Plans parked, SF2 logos). Unzip it **last**, over any newer install. Your `.env` file and everything in your database are kept. You do not run the seed again.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip the Teacher Batch 11 fix 3 zip **over your existing `acadsync` folder** and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run migrate
+npm run dev
+```
+
+`npm run migrate` should print `Applied 017_school_seal.sql`. It adds one optional field to the school record for the uploaded school seal. Nothing else changes.
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. The Report Card front now carries the DepEd seal on the left and, once you upload one, your school seal on the right; every subject the advisory section takes shows on the card even before its grades are filed. On the Dashboard, in **My Assignment** under the School ID, **School seal** lets you upload the seal (PNG, JPG or WEBP, up to 2 MB). The seal image is saved in the backend `uploads` folder, like the payment QR code, so keep a copy of the file in case the host wipes that folder.
 
 No new `.env` settings are required.
 
@@ -917,7 +1083,7 @@ Teachers use their own portal at http://localhost:4200/teacher/login. It is sepa
 2. **Profile & Assignment**: first name, surname, email, mobile number, school (chosen from the schools already in the system) and present address (optional). If their school is not listed, **School not in the list? Add a school** opens a form for the school name, category (Primary/Secondary), type (Public/Private), city or region, and principal/contact. The new school is added at once and can be picked straight away. The admin can review it later under **Schools**.
 3. **Credentials**: the username is made from the email address (for example `maria.santos` from `maria.santos@example.com`). If that username is already taken a number is added. The password needs at least 8 characters with a letter and a number, and a strength meter shows how strong it is.
 4. **Security & Terms**: the teacher agrees to the terms and the privacy notice, then the account is created.
-5. **Choose Plan**: the plans come from **Plans & Packages** in the admin console. **Teacher Free** is ₱0.00 for 1 month only and makes no invoice. **Teacher Pro** is ₱100.00 / month with a 1-month trial first; when the trial ends an invoice of ₱100.00 is made (see [How billing works](#how-billing-works)). Choosing a plan creates the subscription straight away.
+5. **Choose Plan**: the plans come from **Plans & Packages** in the admin console. **Teacher Free** is ₱0.00 for 1 month only, once ever as the first plan, and makes no invoice. **Teacher Pro** is ₱100.00 / month with a trial only while the teacher's one 30-day free window is still running; when the trial ends an invoice of ₱100.00 is made (see [How billing works](#how-billing-works)). Choosing a plan creates the subscription straight away.
 6. **Get Started**: a short checklist, then **Go to Dashboard**.
 
 ### How a teacher signs in
@@ -1011,7 +1177,7 @@ The grading system is a switch, one per academic year — changing next year's s
 
 **Report Card** (http://localhost:4200/teacher/report-card) prints the DepEd School Form 9 for the signed-in teacher's advisory section (the grade and section set on the Dashboard). A teacher with no advisory assignment sees an empty state telling them to set it on the Dashboard; a teacher who is not the adviser of a section cannot open that section's cards. The card itself is strictly black and white, plain white paper, in any mode.
 
-- **What is filled in**: nothing on the card is typed from scratch except the teacher's comments (below). The learner's name, learner ID, grade level and section come from the enrolment list; the school name comes from the teacher's school record and appears only on the printed card, never in the app. The **Learning Progress** table lists one row per subject the advisory section has in Consolidation — the real subjects with submitted grades, in the same order — with one column per period (Terms 1–3 under DO 015, Quarters 1–4 under DO 8). The Final Grade for a subject is the mean of its period grades, rounded to a whole number; the General Average is the mean of the Final Grades and only shows once every subject has a final grade. Remarks are **Passed** at 75 and above, **Failed** below. A period or subject with no submitted grade shows —, never an invented number. The **Attendance** table on the back counts school days from the real attendance records for the learner's classes, June to April: a day counts as present when marked Present or Late in at least one class that day, otherwise excused when excused in at least one class, otherwise absent. A month with no records shows —. The performance descriptors under the table follow the active grading system for the school year.
+- **What is filled in**: nothing on the card is typed from scratch except the teacher's comments (below). The learner's name, learner ID, age, grade level and section come from the enrolment list — the age is the learner's age on June 1 of the school year, worked out from the birthdate on the Learners tab, and it stays blank when no birthdate is on file; the school name comes from the teacher's school record and appears only on the printed card, never in the app. The DepEd seal prints on the left of the card header and the school seal, uploaded on the Dashboard, on the right. The **Learning Progress** table lists one row per subject the advisory section takes, in Consolidation order — a subject shows on the card as soon as a class for it exists, with blank grades until its teacher files them — with one column per period (Terms 1–3 under DO 015, Quarters 1–4 under DO 8). The Final Grade for a subject is the mean of its period grades, rounded to a whole number; the General Average is the mean of the Final Grades and only shows once every subject has a final grade. Remarks are **Passed** at 75 and above, **Failed** below. A period or subject with no submitted grade shows —, never an invented number. The **Attendance** table on the back counts school days from the real attendance records for the learner's classes, June to April, with nothing extra to fill in: a day counts as present when marked Present or Late in at least one class that day, otherwise excused when excused in at least one class, otherwise absent. A month with no records shows —. The performance descriptors under the table follow the active grading system for the school year.
 - **Teacher's comments**: the only typed content on the card. On the back, each term (or quarter under DO 8) has a box where the adviser types a comment and clicks **Save comment**. The button stays disabled until the text differs from what is saved, and a blank comment clears the saved one. Saved comments print as plain text on the card; a term with no comment prints as ruled lines for handwriting. Everything else on the back — the Dear Parents letter, parent signatures, Certificate of Transfer and Cancellation of Eligibility to Transfer — prints as-is for handwriting.
 - **Views and printing**: pick **Single student card** or **All students in advisory** (roster order), then **Front**, **Back** or **Both sides**. **Print card** (or Ctrl/⌘+P) prints at A5, 100%, margins None — one card per printed page, front then back, with the sidebar, top bar and all controls hidden. Print-all prints one front + back card per learner, each with that learner's name filled in.
 
@@ -1037,10 +1203,10 @@ The grading system is a switch, one per academic year — changing next year's s
 
 - **Plans & Packages** holds the plans and prices. A plan that teachers have used cannot be deleted, only deactivated.
 - **Subscriptions** belong to one teacher each. A teacher has one current subscription at a time. Each subscription keeps its own copy of the plan name and price, so changing a plan's price later does not change existing subscriptions or invoices.
-- **Teacher Free** runs for 1 month and then expires by itself. No invoice is made.
-- **Teacher Pro** starts with a 1-month trial. When the trial ends an invoice of ₱100.00 is made and the subscription shows **Past due** until it is paid. A new invoice is made at every monthly renewal.
-- The trial is given **once per teacher**. A teacher who has already had a trial — on any subscription — never gets a second one, even on a new subscription. A teacher who has not had a trial yet gets one the first time they take Teacher Pro.
-- A teacher can change plan on the **Payments & Invoices** page. Changing plan ends the old subscription and starts a new one on the new plan; any unpaid invoice on the old subscription is voided. Changing plan while a payment is waiting for confirmation is refused. A teacher with no current subscription can choose a plan the same way.
+- **Teacher Free** is the teacher's first plan only, and only once ever. It runs until the end of the teacher's free window and then expires by itself. No invoice is made. A teacher who has already had any subscription can never choose Teacher Free again.
+- Every teacher gets **one free window of 30 days**, counted from their first subscription. Teacher Free and the Teacher Pro trial are the same window, not two: switching plans never pauses, extends or restarts it. A teacher who switches to Teacher Pro part-way through the window only gets what is left of it; once the window has ended, Teacher Pro is payable straight away.
+- **Teacher Pro** starts with the trial only while the free window is still running. When the trial ends an invoice of ₱100.00 is made and the subscription shows **Past due** until it is paid. A new invoice is made at every monthly renewal.
+- A teacher can change plan on the **Payments & Invoices** page. Changing plan ends the old subscription and starts a new one on the new plan; any unpaid invoice on the old subscription is voided. Changing plan while a payment is waiting for confirmation is refused. A teacher with no current subscription can choose a plan the same way, but Teacher Free is refused once they have had a subscription before.
 - An invoice is due 7 days after it is made (`INVOICE_DUE_DAYS`). If it is still unpaid after the due date and no payment is waiting for confirmation, the subscription becomes **Expired**.
 - These changes happen by themselves: the backend checks when it starts, every 10 minutes while it runs, and whenever a billing page is opened.
 - **Payments & Invoices**: open an invoice and choose **Record payment** to enter a payment by hand, or open a payment a teacher sent and **Confirm** or **Reject** it. Confirming marks the invoice paid and activates the subscription for that period.
@@ -1062,7 +1228,7 @@ Addresses the teacher portal uses (they work now):
 | `POST /api/teacher/change-password` | change the teacher's own password |
 | `GET /api/teacher/announcements` | announcements for the signed-in teacher |
 | `GET /api/teacher/subscription`, `POST /api/teacher/subscription` | the teacher's own subscription |
-| `POST /api/teacher/subscription/change-plan` | change the teacher's plan; voids unpaid invoices, trial given once |
+| `POST /api/teacher/subscription/change-plan` | change the teacher's plan; voids unpaid invoices, trial only within the free window |
 | `GET /api/teacher/invoices` | the teacher's own invoices |
 | `GET /api/teacher/invoices/:id` | one of the teacher's own invoices with its payment history |
 | `POST /api/teacher/invoices/:id/payments` | send a payment: reference number and screenshot |

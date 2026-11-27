@@ -25,7 +25,7 @@ const quizzes = require('./controllers/quizzes.controller');
 const exams = require('./controllers/exams.controller');
 const lessonPlans = require('./controllers/lessonPlans.controller');
 const { requireTeacher } = require('./middleware/teacherAuth');
-const { uploadSingle } = require('./utils/uploads');
+const { uploadSingle, uploadPaymentQr } = require('./utils/uploads');
 
 const router = express.Router();
 const idParam = validate(s.idParamSchema, 'params');
@@ -71,6 +71,8 @@ teacher.get('/me', teacherPortal.getMe);
 teacher.get('/academic-years', teacherPortal.listAcademicYears);
 teacher.patch('/me', validate(s.teacherProfileSchema), teacherPortal.updateMe);
 teacher.patch('/me/adviser', validate(s.teacherAdviserSchema), teacherPortal.updateAdviser);
+teacher.get('/school/seal', teacherPortal.getSchoolSeal);
+teacher.put('/school/seal', uploadSingle('seal_image'), teacherPortal.updateSchoolSeal);
 teacher.post('/change-password', validate(s.changePasswordSchema), teacherPortal.changePassword);
 teacher.get('/dashboard', validate(s.viewingYearQuerySchema, 'query'), teacherPortal.getDashboard);
 teacher.get('/holidays', teacherPortal.listHolidays);
@@ -83,6 +85,7 @@ teacher.post('/subscription/change-plan', validate(s.teacherSubscriptionSchema),
 teacher.get('/announcements', teacherPortal.listMyAnnouncements);
 teacher.get('/payment-info', teacherPortal.getPaymentInfo);
 teacher.get('/payment-info/qr', teacherPortal.getPaymentQr);
+teacher.get('/payment-info/qr2', teacherPortal.getSecondPaymentQr);
 teacher.get('/invoices', teacherPortal.listMyInvoices);
 teacher.get('/invoices/:id', idParam, teacherPortal.getMyInvoice);
 teacher.post('/invoices/:id/payments', idParam, uploadSingle('screenshot'), validate(s.paymentSubmitSchema), teacherPortal.submitPayment);
@@ -192,6 +195,7 @@ teacher.post(
 teacher.get('/exams', validate(s.examListQuerySchema, 'query'), exams.listExams);
 teacher.post('/exams', validate(s.examCreateSchema), exams.createExam);
 teacher.get('/exams/:id', idParam, validate(s.examDetailQuerySchema, 'query'), exams.getExam);
+teacher.get('/exams/:id/item-analysis', idParam, exams.getItemAnalysis);
 teacher.patch('/exams/:id', idParam, validate(s.examUpdateSchema), exams.updateExam);
 teacher.put('/exams/:id/key', idParam, validate(s.examKeySchema), exams.saveKey);
 teacher.delete('/exams/:id', idParam, exams.deleteExam);
@@ -297,8 +301,9 @@ router.get('/activity', validate(s.activityListSchema, 'query'), system.listActi
 router.get('/settings', system.getSettings);
 router.put('/settings/academic-year', validate(s.academicYearSchema), system.updateAcademicYear);
 router.put('/settings/grading-system', validate(s.gradingProfileSchema), system.updateGradingSystem);
-router.put('/settings/payment', uploadSingle('qr_image'), validate(s.paymentSettingsSchema), system.updatePaymentSettings);
+router.put('/settings/payment', uploadPaymentQr, validate(s.paymentSettingsSchema), system.updatePaymentSettings);
 router.get('/settings/payment/qr', system.getPaymentQrImage);
+router.get('/settings/payment/qr2', system.getSecondPaymentQrImage);
 
 // ---------- Super User only: manage the Admin account ----------
 const superUserOnly = requireRole('super_user');

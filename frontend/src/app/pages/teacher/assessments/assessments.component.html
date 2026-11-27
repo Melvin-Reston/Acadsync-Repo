@@ -26,10 +26,22 @@
   >
     Exams
   </button>
+  <button
+    type="button"
+    class="tab"
+    role="tab"
+    [attr.aria-selected]="tab() === 'item-analysis'"
+    [class.active]="tab() === 'item-analysis'"
+    (click)="selectTab('item-analysis')"
+  >
+    Test Item Analysis
+  </button>
 </div>
 
 @if (tab() === 'quizzes') {
   <app-teacher-quizzes [embedded]="true" />
-} @else {
+} @else if (tab() === 'exams') {
   <app-teacher-exams [embedded]="true" />
+} @else {
+  <app-teacher-item-analysis />
 }

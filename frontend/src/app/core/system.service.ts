@@ -57,25 +57,44 @@ export class SystemService {
     );
   }
 
-  // Saves the payment QR code, account name and instructions. Sent as a form because it can carry an image.
+  // Saves both payment QR codes, their labels, account names and instructions.
+  // Sent as a form because it can carry images.
   updatePaymentSettings(values: {
+    label: string;
     account_name: string;
     instructions: string;
     qr_image: File | null;
     remove_qr: boolean;
+    qr2_label: string;
+    qr2_account_name: string;
+    qr2_instructions: string;
+    qr_image2: File | null;
+    remove_qr2: boolean;
   }): Observable<{ payment: PaymentSettings }> {
     const form = new FormData();
+    form.append('label', values.label);
     form.append('account_name', values.account_name);
     form.append('instructions', values.instructions);
     form.append('remove_qr', String(values.remove_qr));
     if (values.qr_image) {
       form.append('qr_image', values.qr_image);
     }
+    form.append('qr2_label', values.qr2_label);
+    form.append('qr2_account_name', values.qr2_account_name);
+    form.append('qr2_instructions', values.qr2_instructions);
+    form.append('remove_qr2', String(values.remove_qr2));
+    if (values.qr_image2) {
+      form.append('qr_image2', values.qr_image2);
+    }
     return this.http.put<{ payment: PaymentSettings }>(`${this.api}/settings/payment`, form);
   }
 
   paymentQrImage(): Observable<Blob> {
     return this.http.get(`${this.api}/settings/payment/qr`, { responseType: 'blob' });
+  }
+
+  paymentQr2Image(): Observable<Blob> {
+    return this.http.get(`${this.api}/settings/payment/qr2`, { responseType: 'blob' });
   }
 
   adminAccount(): Observable<{ admin: AdminAccount }> {

@@ -371,9 +371,14 @@ const teacherSubscriptionSchema = z.object({ plan_id: id });
 
 // ---------- Payment QR code settings ----------
 const paymentSettingsSchema = z.object({
+  label: optionalText('Label', 40),
   account_name: optionalText('Account name', 120),
   instructions: optionalText('Instructions', 1000),
   remove_qr: flag,
+  qr2_label: optionalText('Second QR label', 40),
+  qr2_account_name: optionalText('Second QR account name', 120),
+  qr2_instructions: optionalText('Second QR instructions', 1000),
+  remove_qr2: flag,
 });
 
 // ---------- Teacher Batch 2: classes, learners, meetings, schedules ----------

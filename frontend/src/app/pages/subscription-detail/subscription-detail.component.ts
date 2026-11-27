@@ -90,8 +90,10 @@ export class SubscriptionDetailComponent implements OnInit {
   }
 
   // Plans the teacher can move to: active ones, other than the plan they are on.
+  // Teacher Free is never offered here: it can only ever be the teacher's
+  // first plan, and changing plans means they have already had one.
   protected otherPlans(subscription: Subscription): Plan[] {
-    return this.plans().filter((plan) => plan.is_active && plan.id !== subscription.plan_id);
+    return this.plans().filter((plan) => plan.is_active && plan.id !== subscription.plan_id && Number(plan.price) !== 0);
   }
 
   protected get chosenPlan(): Plan | null {

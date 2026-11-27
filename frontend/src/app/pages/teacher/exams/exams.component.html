@@ -385,6 +385,12 @@
           <div class="head-actions">
             <input class="search" type="search" placeholder="Search learner or ID…" [ngModel]="rosterSearch()" (ngModelChange)="rosterSearch.set($event)" aria-label="Search results" />
             <button type="button" class="btn btn-small" (click)="downloadResults()"><app-icon name="download" [size]="16" /> Download CSV</button>
+            <a
+              class="btn btn-small"
+              [routerLink]="['/teacher/assessments']"
+              [queryParams]="{ tab: 'item-analysis', exam: detail.exam.id }"
+              >Test Item Analysis</a
+            >
           </div>
         </div>
         @if (detail.roster.length === 0) {

@@ -1,8 +1,17 @@
 // The subscription rules, in one place.
 //
-//   Free plan (price 0, one time)  -> active for its duration, then expired. No invoice.
-//   Paid plan with a trial         -> trial, then payable when the trial ends.
-//   Paid plan without a trial      -> payable straight away.
+//   One free window per teacher: 30 days from the teacher's first
+//   subscription (teachers.trial_ends_at). Teacher Free and the Teacher Pro
+//   trial are the same window, not two separate ones. Switching plans
+//   never pauses, extends or restarts the window: a teacher who changes
+//   plan part-way through only gets what is left of it, and once it has
+//   ended a paid plan is payable straight away. Teacher Free can only
+//   ever be the teacher's first subscription, so it can never be picked
+//   again after it ends or after switching away from it.
+//
+//   Free plan (price 0, first subscription only) -> active until the window ends, then expired. No invoice.
+//   Paid plan inside the window, with a trial -> trial until the window ends, then payable.
+//   Paid plan outside the window, or without a trial -> payable straight away.
 //   Payable                        -> an invoice is issued and the subscription is "past due" until it is paid.
 //   Invoice paid                   -> active for the paid period, then payable again (renewal).
 //   Invoice not paid by its due date -> expired (unless a payment is waiting for confirmation).
@@ -11,20 +20,29 @@
 const db = require('../db');
 const { config } = require('../config');
 const { logSystemActivity } = require('./activity');
+const { badRequest } = require('./httpError');
 
 const CURRENT_STATUSES = ['trial', 'active', 'past_due'];
 
+// The free window is 30 days, the same length as the Pro trial.
+const TRIAL_WINDOW_DAYS = 30;
+
 const isFree = (row) => Number(row.price) === 0;
 
-// Whether the teacher has ever had a trial on a paid plan. A trial is given
-// once: a teacher who already had one never gets a second, even on a new
-// subscription (the admin's explicit with_trial choice is unaffected).
-async function hasHadTrial(client, teacherId) {
-  const result = await client.query(
-    'SELECT 1 FROM subscriptions WHERE teacher_id = $1 AND trial_ends_at IS NOT NULL LIMIT 1',
-    [teacherId]
-  );
-  return result.rowCount > 0;
+// The end of the teacher's free window, creating it when this is the
+// teacher's first subscription. Returns null when the window has never
+// started (no subscription yet) or when it cannot be created here
+// (a teacher with earlier subscriptions but no stored window, which the
+// 018 migration backfilled — treat it as already used up).
+async function trialWindowEnd(client, teacherId, now) {
+  const teacher = await client.query('SELECT trial_ends_at FROM teachers WHERE id = $1 FOR UPDATE', [teacherId]);
+  if (teacher.rowCount === 0) return null;
+  if (teacher.rows[0].trial_ends_at) return new Date(teacher.rows[0].trial_ends_at);
+  const prior = await client.query('SELECT 1 FROM subscriptions WHERE teacher_id = $1 LIMIT 1', [teacherId]);
+  if (prior.rowCount > 0) return null;
+  const windowEnd = new Date(now.getTime() + TRIAL_WINDOW_DAYS * 24 * 60 * 60 * 1000);
+  await client.query('UPDATE teachers SET trial_ends_at = $2 WHERE id = $1', [teacherId, windowEnd]);
+  return windowEnd;
 }
 
 // Issues an invoice for one period of a subscription. The amount is the price saved on the subscription.
@@ -67,8 +85,26 @@ async function makePayable(client, subscription, periodStart) {
 }
 
 // Starts a new subscription for a teacher. The plan's name, price and billing cycle are copied in.
+// Teacher Free is refused when the teacher already has any subscription:
+// it is once ever, and only as the first subscription. A trial is only
+// what is left of the teacher's free window: switching plans mid-window
+// keeps the same end date instead of starting a fresh trial.
 async function createSubscription(client, { teacherId, plan, withTrial, adminId = null, now = new Date() }) {
-  const useTrial = !isFree(plan) && withTrial && plan.trial_days > 0;
+  now = new Date(now);
+  const prior = await client.query('SELECT 1 FROM subscriptions WHERE teacher_id = $1 LIMIT 1', [teacherId]);
+  if (isFree(plan) && prior.rowCount > 0) {
+    throw badRequest('Teacher Free can only be chosen once, as the first plan.', {
+      code: 'FREE_ALREADY_USED',
+      errors: { plan_id: 'Teacher Free can only be chosen once, as the first plan.' },
+    });
+  }
+
+  const windowEnd = await trialWindowEnd(client, teacherId, now);
+  const inWindow = windowEnd !== null && windowEnd > now;
+  const useTrial = !isFree(plan) && withTrial && plan.trial_days > 0 && inWindow;
+  // A free or trial subscription runs to the end of the window, never past it.
+  // A paid subscription without a trial runs its normal period from the start.
+  const windowPeriodEnd = isFree(plan) || useTrial ? windowEnd : null;
 
   const inserted = await client.query(
     `INSERT INTO subscriptions
@@ -77,9 +113,9 @@ async function createSubscription(client, { teacherId, plan, withTrial, adminId 
      VALUES (
        $1, $2, $3, $4, $5, $6, $7,
        $8::timestamptz,
-       CASE WHEN $9 THEN $8::timestamptz + make_interval(days => $10) END,
+       $9::timestamptz,
        $8::timestamptz,
-       CASE WHEN $9 THEN $8::timestamptz + make_interval(days => $10)
+       CASE WHEN $10::timestamptz IS NOT NULL THEN $10::timestamptz
             ELSE $8::timestamptz + make_interval(months => $6) END,
        $11
      )
@@ -93,8 +129,8 @@ async function createSubscription(client, { teacherId, plan, withTrial, adminId 
       plan.duration_months,
       useTrial ? 'trial' : 'active',
       now,
-      useTrial,
-      plan.trial_days,
+      useTrial ? windowEnd : null,
+      windowPeriodEnd,
       adminId,
     ]
   );
@@ -217,8 +253,9 @@ function startBillingTimer() {
 
 module.exports = {
   CURRENT_STATUSES,
+  TRIAL_WINDOW_DAYS,
   isFree,
-  hasHadTrial,
+  trialWindowEnd,
   issueInvoice,
   makePayable,
   createSubscription,

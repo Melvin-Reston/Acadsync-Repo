@@ -1,7 +1,7 @@
 // Teacher Dashboard: subscription, adviser assignment, announcements, and the
 // teacher's classes today (Batch 2). Grades and attendance arrive in later batches.
 import { DatePipe } from '@angular/common';
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, OnDestroy, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import {
@@ -27,7 +27,7 @@ import { IconComponent } from '../../../shared/icon.component';
   templateUrl: './teacher-dashboard.component.html',
   styleUrl: './teacher-dashboard.component.css',
 })
-export class TeacherDashboardComponent {
+export class TeacherDashboardComponent implements OnDestroy {
   private readonly portal = inject(TeacherPortalService);
   private readonly auth = inject(TeacherAuthService);
   private readonly toast = inject(ToastService);
@@ -72,6 +72,16 @@ export class TeacherDashboardComponent {
     label: `Grade ${grade}`,
   }));
 
+  // School seal for the Report Card: uploaded here, printed on the right
+  // side of the card front, opposite the DepEd seal. The seal belongs to
+  // the school, so it is shared by every teacher of the school. The image
+  // is capped at 2 MB (the same limit as every other image upload) so a
+  // large photo cannot slow the page or the printout down.
+  protected readonly sealSaving = signal(false);
+  protected readonly sealErrors = signal<FieldErrors>({});
+  protected readonly sealPreviewUrl = signal<string | null>(null);
+  private sealPreviewForTeacherId: number | null = null;
+
   // Choose a plan (shown when the teacher has no current plan)
   protected readonly planPickerOpen = signal(false);
   protected readonly plans = signal<Plan[]>([]);
@@ -101,6 +111,85 @@ export class TeacherDashboardComponent {
     });
   }
 
+  ngOnDestroy(): void {
+    this.revokeSealPreview();
+  }
+
+  private revokeSealPreview(): void {
+    const url = this.sealPreviewUrl();
+    if (url) URL.revokeObjectURL(url);
+    this.sealPreviewUrl.set(null);
+    this.sealPreviewForTeacherId = null;
+  }
+
+  private loadSealPreview(teacher: TeacherDashboard['teacher']): void {
+    if (!teacher.has_school_seal) {
+      this.revokeSealPreview();
+      return;
+    }
+    if (this.sealPreviewForTeacherId === teacher.id && this.sealPreviewUrl()) return;
+    this.portal.schoolSealImage().subscribe({
+      next: (blob) => {
+        this.revokeSealPreview();
+        this.sealPreviewUrl.set(URL.createObjectURL(blob));
+        this.sealPreviewForTeacherId = teacher.id;
+      },
+      error: () => this.revokeSealPreview(),
+    });
+  }
+
+  // Choosing a seal uploads it straight away: one button, no second save.
+  protected onSealChosen(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0] ?? null;
+    input.value = '';
+    if (!file) return;
+    this.sealErrors.set({});
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      this.sealErrors.set({ seal_image: 'Upload a PNG, JPG or WEBP image.' });
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      this.sealErrors.set({ seal_image: 'The image is too large. The limit is 2 MB.' });
+      return;
+    }
+    this.error.set('');
+    this.sealSaving.set(true);
+    this.portal.updateSchoolSeal(file).subscribe({
+      next: (response) => {
+        this.sealSaving.set(false);
+        this.applyTeacher(response.teacher);
+        this.revokeSealPreview();
+        this.sealPreviewUrl.set(URL.createObjectURL(file));
+        this.sealPreviewForTeacherId = response.teacher.id;
+        this.toast.success(response.message);
+      },
+      error: (error) => {
+        this.sealSaving.set(false);
+        this.sealErrors.set(fieldErrors(error));
+        this.error.set(errorMessage(error));
+      },
+    });
+  }
+
+  protected removeSeal(): void {
+    this.error.set('');
+    this.sealErrors.set({});
+    this.sealSaving.set(true);
+    this.portal.updateSchoolSeal(null, true).subscribe({
+      next: (response) => {
+        this.sealSaving.set(false);
+        this.applyTeacher(response.teacher);
+        this.revokeSealPreview();
+        this.toast.success(response.message);
+      },
+      error: (error) => {
+        this.sealSaving.set(false);
+        this.error.set(errorMessage(error));
+      },
+    });
+  }
+
   protected load(academicYear?: string): void {
     const yearKey = academicYear ?? this.year.selectedYear() ?? '';
     if (yearKey === this.loadingYear) return;
@@ -121,6 +210,7 @@ export class TeacherDashboardComponent {
         this.classesStartDate = teacher.classes_start_date ?? '';
         this.classesEndDate = teacher.classes_end_date ?? '';
         this.holidays.set(dashboard.holidays ?? []);
+        this.loadSealPreview(teacher);
       },
       error: (error) => {
         this.loadingYear = null;
@@ -142,6 +232,9 @@ export class TeacherDashboardComponent {
       return `Invoice ${invoice.invoice_number} for ${peso(invoice.amount)} is unpaid, due ${this.date(invoice.due_date)}.`;
     }
     if (subscription.status === 'active') {
+      if (Number(subscription.price) === 0) {
+        return `Your free period ends ${this.date(subscription.current_period_end)}. After that, Teacher Pro is a paid plan.`;
+      }
       return subscription.billing_cycle === 'one_time'
         ? `Ends ${this.date(subscription.current_period_end)}.`
         : `Renews ${this.date(subscription.current_period_end)}.`;
@@ -281,6 +374,27 @@ export class TeacherDashboardComponent {
       next: (response) => this.plans.set(response.items),
       error: (error) => this.error.set(errorMessage(error)),
     });
+  }
+
+  // Whether a trial is still available to this teacher: the one free
+  // window (from their first subscription) has not ended yet. A teacher
+  // with no subscription yet has the whole window ahead of them.
+  protected trialAvailable(): boolean {
+    const end = this.subscription()?.window_ends_at;
+    return !end || new Date(end).getTime() > Date.now();
+  }
+
+  protected isFreeSubscription(subscription: { price: string }): boolean {
+    return Number(subscription.price) === 0;
+  }
+
+  // Teacher Free can only ever be the first plan: once the teacher has
+  // had any subscription, Free is no longer offered. The backend refuses
+  // it too. The picker only opens when there is no current plan, so a
+  // subscription on file here always means Free is already used up.
+  protected showPlan(plan: Plan): boolean {
+    if (Number(plan.price) !== 0) return true;
+    return !this.subscription();
   }
 
   protected choosePlan(): void {

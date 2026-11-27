@@ -211,7 +211,7 @@
         </div>
 
         @if (chosenPlan; as plan) {
-          @if (plan.trial_days > 0) {
+          @if (plan.trial_days > 0 && !chosenTeacher()?.subscription_status) {
             <div class="field full">
               <label class="check">
                 <input type="checkbox" name="with_trial" [(ngModel)]="withTrial" />

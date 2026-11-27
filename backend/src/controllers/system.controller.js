@@ -91,10 +91,25 @@ async function listActivity(req, res) {
   res.json({ items: rows.rows, total: total.rows[0].count, page, page_size, admins: admins.rows });
 }
 
-// The payment QR code settings, read from the settings table.
+// The payment QR code settings, read from the settings table. There are
+// two optional QR codes (for example, one e-wallet and one bank): the
+// second lives under its own keys, so no database migration is needed and
+// an install with only the first QR code keeps working exactly as before.
+const PAYMENT_SETTING_KEYS = [
+  'payment_qr_path',
+  'payment_label',
+  'payment_account_name',
+  'payment_instructions',
+  'payment_qr2_path',
+  'payment_qr2_label',
+  'payment_qr2_account_name',
+  'payment_qr2_instructions',
+];
+
 async function readPaymentSettings(client = db) {
   const result = await client.query(
-    `SELECT key, value, updated_at FROM settings WHERE key IN ('payment_qr_path', 'payment_account_name', 'payment_instructions')`
+    `SELECT key, value, updated_at FROM settings WHERE key IN (${PAYMENT_SETTING_KEYS.map((_, i) => `$${i + 1}`).join(', ')})`,
+    PAYMENT_SETTING_KEYS,
   );
   const byKey = Object.fromEntries(result.rows.map((row) => [row.key, row]));
   const value = (key) => (byKey[key] ? byKey[key].value : '');
@@ -103,14 +118,20 @@ async function readPaymentSettings(client = db) {
   return {
     qr_path: value('payment_qr_path'),
     has_qr: Boolean(value('payment_qr_path')),
+    label: value('payment_label'),
     account_name: value('payment_account_name'),
     instructions: value('payment_instructions'),
+    qr2_path: value('payment_qr2_path'),
+    has_qr2: Boolean(value('payment_qr2_path')),
+    qr2_label: value('payment_qr2_label'),
+    qr2_account_name: value('payment_qr2_account_name'),
+    qr2_instructions: value('payment_qr2_instructions'),
     updated_at: updatedAt,
   };
 }
 
-// What the browser may see: everything except the file path.
-const publicPaymentSettings = ({ qr_path, ...rest }) => rest; // eslint-disable-line no-unused-vars
+// What the browser may see: everything except the file paths.
+const publicPaymentSettings = ({ qr_path, qr2_path, ...rest }) => rest; // eslint-disable-line no-unused-vars
 
 // GET /api/settings
 async function getSettings(req, res) {
@@ -145,44 +166,87 @@ async function saveSetting(client, key, value) {
   );
 }
 
-// PUT /api/settings/payment   (form: account_name, instructions, qr_image?, remove_qr?)
-// Saves the payment QR code that teachers see when they pay.
+// PUT /api/settings/payment   (form: label, account_name, instructions, qr_image?, remove_qr?,
+//   qr2_label, qr2_account_name, qr2_instructions, qr_image2?, remove_qr2?)
+// Saves both payment QR codes that teachers see when they pay. One save
+// carries both codes, so saving one never wipes the other. Either code may
+// be removed on its own; removing a code deletes its stored image.
 async function updatePaymentSettings(req, res) {
-  const { account_name, instructions, remove_qr } = req.valid.body;
+  const {
+    label,
+    account_name,
+    instructions,
+    remove_qr,
+    qr2_label,
+    qr2_account_name,
+    qr2_instructions,
+    remove_qr2,
+  } = req.valid.body;
   const before = await readPaymentSettings();
-  const newQrPath = req.file ? await saveImage(req.file, 'qr', 'qr_image') : null;
-
-  let qrPath = before.qr_path;
-  if (newQrPath) qrPath = newQrPath;
-  else if (remove_qr) qrPath = '';
-
+  // The upload middleware puts the files under req.files; accept the old
+  // single-file shape too, so nothing else has to change.
+  const firstFile = req.files?.qr_image?.[0] ?? req.file ?? null;
+  const secondFile = req.files?.qr_image2?.[0] ?? null;
+  const newQrPath = firstFile ? await saveImage(firstFile, 'qr', 'qr_image') : null;
+  let newQr2Path = null;
   try {
-    await db.withTransaction(async (client) => {
-      await saveSetting(client, 'payment_qr_path', qrPath);
-      await saveSetting(client, 'payment_account_name', account_name);
-      await saveSetting(client, 'payment_instructions', instructions);
-
-      let change = 'Updated the payment details';
-      if (newQrPath) change = before.has_qr ? 'Replaced the payment QR code' : 'Uploaded the payment QR code';
-      else if (remove_qr && before.has_qr) change = 'Removed the payment QR code';
-      await logActivity(req, { action: 'settings.payment_qr', entityType: 'settings', description: `${change}${account_name ? ` (account name: ${account_name})` : ''}` }, client);
-    });
+    newQr2Path = secondFile ? await saveImage(secondFile, 'qr', 'qr_image2') : null;
   } catch (error) {
     await deleteImage(newQrPath);
     throw error;
   }
 
-  // The old image is no longer needed once a new one is saved or it was removed.
+  let qrPath = before.qr_path;
+  if (newQrPath) qrPath = newQrPath;
+  else if (remove_qr) qrPath = '';
+  let qr2Path = before.qr2_path;
+  if (newQr2Path) qr2Path = newQr2Path;
+  else if (remove_qr2) qr2Path = '';
+
+  try {
+    await db.withTransaction(async (client) => {
+      await saveSetting(client, 'payment_qr_path', qrPath);
+      await saveSetting(client, 'payment_label', label);
+      await saveSetting(client, 'payment_account_name', account_name);
+      await saveSetting(client, 'payment_instructions', instructions);
+      await saveSetting(client, 'payment_qr2_path', qr2Path);
+      await saveSetting(client, 'payment_qr2_label', qr2_label);
+      await saveSetting(client, 'payment_qr2_account_name', qr2_account_name);
+      await saveSetting(client, 'payment_qr2_instructions', qr2_instructions);
+
+      const changes = [];
+      if (newQrPath) changes.push(before.has_qr ? 'Replaced the payment QR code' : 'Uploaded the payment QR code');
+      else if (remove_qr && before.has_qr) changes.push('Removed the payment QR code');
+      if (newQr2Path) changes.push(before.has_qr2 ? 'Replaced the second payment QR code' : 'Uploaded the second payment QR code');
+      else if (remove_qr2 && before.has_qr2) changes.push('Removed the second payment QR code');
+      const change = changes.length > 0 ? changes.join('; ') : 'Updated the payment details';
+      await logActivity(req, { action: 'settings.payment_qr', entityType: 'settings', description: `${change}${account_name ? ` (account name: ${account_name})` : ''}` }, client);
+    });
+  } catch (error) {
+    await deleteImage(newQrPath);
+    await deleteImage(newQr2Path);
+    throw error;
+  }
+
+  // Old images are no longer needed once a new one is saved or it was removed.
   if (before.qr_path && before.qr_path !== qrPath) await deleteImage(before.qr_path);
+  if (before.qr2_path && before.qr2_path !== qr2Path) await deleteImage(before.qr2_path);
 
   res.json({ payment: publicPaymentSettings(await readPaymentSettings()) });
 }
 
-// GET /api/settings/payment/qr  (the QR code image, for signed-in admins)
+// GET /api/settings/payment/qr  (the first QR code image, for signed-in admins)
 async function getPaymentQrImage(req, res) {
   const settings = await readPaymentSettings();
   if (!settings.qr_path) throw notFound('No payment QR code has been set yet.');
   await sendImage(res, settings.qr_path);
+}
+
+// GET /api/settings/payment/qr2  (the second QR code image, for signed-in admins)
+async function getSecondPaymentQrImage(req, res) {
+  const settings = await readPaymentSettings();
+  if (!settings.qr2_path) throw notFound('No second payment QR code has been set yet.');
+  await sendImage(res, settings.qr2_path);
 }
 
 // PUT /api/settings/academic-year
@@ -239,4 +303,5 @@ module.exports = {
   readPaymentSettings,
   updatePaymentSettings,
   getPaymentQrImage,
+  getSecondPaymentQrImage,
 };

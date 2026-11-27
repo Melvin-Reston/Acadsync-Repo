@@ -65,11 +65,15 @@ export class SubscriptionsComponent implements OnInit {
     { value: 'cancelled', label: 'Cancelled' },
   ];
 
-  protected readonly planOptions = computed<DropdownOption[]>(() =>
-    this.plans()
-      .filter((plan) => plan.is_active)
-      .map((plan) => ({ value: plan.id, label: `${plan.name} · ${planPrice(plan)}` })),
-  );
+  // Add-form plans: Teacher Free is only ever a first plan, so once the
+  // chosen teacher has had any subscription it is not offered. The
+  // backend refuses it too.
+  protected readonly planOptions = computed<DropdownOption[]>(() => {
+    const hadSubscription = !!this.chosenTeacher()?.subscription_status;
+    return this.plans()
+      .filter((plan) => plan.is_active && (!hadSubscription || Number(plan.price) !== 0))
+      .map((plan) => ({ value: plan.id, label: `${plan.name} · ${planPrice(plan)}` }));
+  });
 
   protected readonly subscriptions = signal<Subscription[]>([]);
   protected readonly total = signal(0);

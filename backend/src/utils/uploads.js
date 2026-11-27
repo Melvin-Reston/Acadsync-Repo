@@ -80,4 +80,25 @@ async function sendImage(res, storedPath) {
   res.send(await fs.promises.readFile(full));
 }
 
-module.exports = { uploadSingle, saveImage, deleteImage, sendImage };
+// Reads up to two optional files from a multipart form: the two payment
+// QR codes (uploadPaymentQr). The payment settings form can carry both
+// images in one save, so neither QR code is wiped by saving the other.
+const uploadTwo = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: config.maxUploadBytes, files: 2, fields: 20 },
+});
+
+function uploadPaymentQr(req, res, next) {
+  const handler = uploadTwo.fields([
+    { name: 'qr_image', maxCount: 1 },
+    { name: 'qr_image2', maxCount: 1 },
+  ]);
+  handler(req, res, (error) => {
+    if (!error) return next();
+    const message =
+      error.code === 'LIMIT_FILE_SIZE' ? 'The image is too large. The limit is 2 MB.' : 'The file could not be uploaded.';
+    next(badRequest(message, { code: 'UPLOAD_ERROR', errors: { qr_image: message, qr_image2: message } }));
+  });
+}
+
+module.exports = { uploadSingle, uploadPaymentQr, saveImage, deleteImage, sendImage };

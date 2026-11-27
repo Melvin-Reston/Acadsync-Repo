@@ -20,6 +20,12 @@ export class ReportCardService {
     });
   }
 
+  // The school's seal image itself (fetched with the teacher token, not
+  // by a plain link), printed on the right side of the card front.
+  schoolSeal(): Observable<Blob> {
+    return this.http.get(`${this.api}/school/seal`, { responseType: 'blob' });
+  }
+
   // Saves one comment. A blank comment clears the saved one.
   saveComment(
     learnerId: string,

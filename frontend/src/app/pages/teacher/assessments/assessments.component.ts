@@ -1,27 +1,30 @@
 // Quizzes & Exams on one page: the sidebar stays short, and the two
 // existing pages — online quizzes and the paper exam checker — sit
-// behind tabs. Neither page was rewritten: each one runs unchanged
+// behind tabs, with the Test Item Analysis for the paper exams as a
+// third tab. Neither page was rewritten: each one runs unchanged
 // inside its tab (its own page head hidden, its New button kept), and
 // only the open tab is mounted, so switching tabs loads that tab fresh.
-// The open tab lives in the address as ?tab=quizzes or ?tab=exams, so
-// a refresh, a shared link, or the browser Back button keeps the tab
-// the teacher was on. The old /teacher/quizzes and /teacher/exams
-// addresses still open the right tab.
+// The open tab lives in the address as ?tab=quizzes, ?tab=exams or
+// ?tab=item-analysis (with ?exam= for the analysis), so a refresh, a
+// shared link, or the browser Back button keeps the tab the teacher
+// was on. The old /teacher/quizzes and /teacher/exams addresses
+// still open the right tab.
 import { Component, OnDestroy, inject, signal } from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { TeacherExamsComponent } from '../exams/exams.component';
+import { TeacherItemAnalysisComponent } from '../item-analysis/item-analysis.component';
 import { TeacherQuizzesComponent } from '../quizzes/quizzes.component';
 
-type AssessmentTab = 'quizzes' | 'exams';
+type AssessmentTab = 'quizzes' | 'exams' | 'item-analysis';
 
 function tabFrom(value: unknown): AssessmentTab | null {
-  return value === 'quizzes' || value === 'exams' ? value : null;
+  return value === 'quizzes' || value === 'exams' || value === 'item-analysis' ? value : null;
 }
 
 @Component({
   selector: 'app-teacher-assessments',
-  imports: [TeacherQuizzesComponent, TeacherExamsComponent],
+  imports: [TeacherQuizzesComponent, TeacherExamsComponent, TeacherItemAnalysisComponent],
   templateUrl: './assessments.component.html',
 })
 export class TeacherAssessmentsComponent implements OnDestroy {

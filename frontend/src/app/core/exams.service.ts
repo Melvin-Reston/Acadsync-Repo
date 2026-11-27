@@ -6,7 +6,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
-import { Exam, ExamDetail, ExamQuestion, ExamScanAnswer } from './models';
+import { Exam, ExamDetail, ExamQuestion, ExamScanAnswer, ItemAnalysis } from './models';
 import { downloadBlob, toParams } from './helpers';
 
 export interface ExamCreateBody {
@@ -45,6 +45,12 @@ export class ExamsService {
 
   detail(id: number): Observable<ExamDetail> {
     return this.http.get<ExamDetail>(`${this.api}/exams/${id}`);
+  }
+
+  // Test Item Analysis (Batch 12): computed from the saved checked
+  // sheets, so checking or re-checking a sheet updates it by itself.
+  itemAnalysis(id: number): Observable<ItemAnalysis> {
+    return this.http.get<ItemAnalysis>(`${this.api}/exams/${id}/item-analysis`);
   }
 
   update(id: number, body: ExamUpdateBody): Observable<{ exam: Exam }> {

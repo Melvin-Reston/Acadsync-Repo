@@ -133,8 +133,13 @@ export interface Overview {
 
 export interface PaymentSettings {
   has_qr: boolean;
+  label: string;
   account_name: string;
   instructions: string;
+  has_qr2: boolean;
+  qr2_label: string;
+  qr2_account_name: string;
+  qr2_instructions: string;
   updated_at: string | null;
 }
 
@@ -411,6 +416,9 @@ export interface TeacherSelf {
   present_address: string;
   school_id: number;
   school_name: string | null;
+  // Whether the school has an uploaded seal (Dashboard), printed on the
+  // Report Card. The image itself is fetched from its own endpoint.
+  has_school_seal: boolean;
   // The teacher's own entries for the DepEd print forms; null until filled in.
   region: string | null;
   division: string | null;
@@ -436,6 +444,9 @@ export interface TeacherSubscription {
   billing_cycle: BillingCycle;
   status: SubscriptionStatus;
   trial_ends_at: string | null;
+  // The end of the teacher's one free window (from their first
+  // subscription), whether or not the current subscription is a trial.
+  window_ends_at: string | null;
   current_period_start: string;
   current_period_end: string;
 }
@@ -1143,6 +1154,75 @@ export interface ExamDetail {
   question_stats: { position: number; attempts: number; correct: number }[];
 }
 
+// ---------- Test Item Analysis (Batch 12) ----------
+// Computed by the API from the saved checked sheets, every time it is
+// read. Difficulty and discrimination follow the bands printed on the
+// teacher's Test Item Analysis sheet; a distractor is judged on the
+// sheet's two rules — chosen by at least 5% of takers, and by more
+// lower-group than upper-group learners.
+export interface ItemAnalysisDistractor {
+  option_index: number;
+  label: string;
+  is_correct: boolean;
+  upper: number;
+  lower: number;
+  total: number;
+  plausibility: number;
+  direction: number;
+  remark: string;
+  action: string;
+}
+
+export interface ItemAnalysisItem {
+  position: number;
+  kind: ExamQuestionKind;
+  choices: number;
+  correct: number | null;
+  correct_label: string;
+  upper_correct: number;
+  lower_correct: number;
+  total_correct: number;
+  blank_count: number;
+  difficulty: number | null;
+  difficulty_label: string;
+  difficulty_action: string;
+  discrimination: number | null;
+  discrimination_label: string;
+  discrimination_action: string;
+  negative: boolean;
+  distractors: ItemAnalysisDistractor[];
+}
+
+export interface ItemAnalysis {
+  exam: Exam;
+  grading: GradingInfo;
+  header: {
+    teacher_name: string | null;
+    school_name: string | null;
+    school_city_region: string | null;
+    region: string | null;
+    division: string | null;
+    deped_school_id: string | null;
+    school_head_name: string | null;
+  };
+  roster_size: number;
+  takers: number;
+  groups: { method: string; upper_size: number; lower_size: number; tie_note: string };
+  ready: boolean;
+  mean_score: number | null;
+  mean_percent: number | null;
+  total_points: number;
+  items: ItemAnalysisItem[];
+  summary: {
+    difficulty_counts: Record<string, number>;
+    discrimination_counts: Record<string, number>;
+    distractor_counts: { retain: number; rephrase: number; replace: number };
+    negative_items: number[];
+    most_learned: number[];
+    least_learned: number[];
+  };
+}
+
 // ---------- Lesson plans (Batch 11) ----------
 // One ILAW lesson plan: the header is filled from the teacher's record
 // and class, and every section of the DepEd template is one text field.
@@ -1374,6 +1454,9 @@ export interface ReportCardView {
   adviser: { grade: number; section: string; name: string };
   school_name: string;
   school_head_name: string;
+  // Whether the school has an uploaded seal, printed on the right side
+  // of the card front. The image itself comes from its own endpoint.
+  has_school_seal: boolean;
   academic_year: string;
   grading: GradingInfo;
   descriptors: ReportCardDescriptor[];

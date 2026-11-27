@@ -48,6 +48,12 @@
                 <dd>{{ sub.trial_ends_at | date: 'MMM d, y' }}</dd>
               </div>
             }
+            @if (sub.status === 'active' && isFreeSubscription(sub)) {
+              <div>
+                <dt>Free period ends</dt>
+                <dd>{{ sub.current_period_end | date: 'MMM d, y' }}</dd>
+              </div>
+            }
             <div>
               <dt>Period ends</dt>
               <dd>{{ sub.current_period_end | date: 'MMM d, y' }}</dd>
@@ -73,6 +79,7 @@
           } @else {
             <div class="plan-list">
               @for (plan of plans(); track plan.id) {
+                @if (showPlan(plan)) {
                 <button type="button" class="plan-card" [class.selected]="selectedPlanId() === plan.id" (click)="selectedPlanId.set(plan.id)">
                   <span class="plan-head">
                     <b>{{ plan.name }}</b>
@@ -81,13 +88,14 @@
                     }
                   </span>
                   <span class="plan-price">{{ planPrice(plan) }}</span>
-                  @if (plan.trial_days > 0) {
+                  @if (plan.trial_days > 0 && trialAvailable()) {
                     <span class="plan-trial">{{ plan.trial_days }}-day trial first</span>
                   }
                   @if (plan.features.length > 0) {
                     <span class="plan-features">{{ plan.features.join(', ') }}</span>
                   }
                 </button>
+                }
               }
             </div>
             <div class="form-actions">
@@ -160,6 +168,27 @@
             <input id="school-id" name="depedSchoolId" type="text" class="input" [class.invalid]="formErrors()['deped_school_id']" [(ngModel)]="depedSchoolId" />
             @if (formErrors()['deped_school_id']) {
               <span class="field-error">{{ formErrors()['deped_school_id'] }}</span>
+            }
+          </div>
+
+          <div class="field">
+            <label for="school-seal">School seal</label>
+            <div class="seal-row">
+              @if (sealPreviewUrl()) {
+                <img class="seal-preview" [src]="sealPreviewUrl()" alt="School seal" />
+              } @else {
+                <span class="muted">No seal uploaded yet.</span>
+              }
+              @if (teacher.has_school_seal) {
+                <button type="button" class="btn btn-small" (click)="removeSeal()" [disabled]="sealSaving()">
+                  {{ sealSaving() ? 'Saving…' : 'Remove seal' }}
+                </button>
+              }
+            </div>
+            <input id="school-seal" name="schoolSeal" type="file" class="input" accept="image/png,image/jpeg,image/webp" (change)="onSealChosen($event)" [disabled]="sealSaving()" />
+            <span class="hint">PNG, JPG or WEBP, up to 2 MB. The seal prints on the right side of the Report Card, opposite the DepEd seal. Choosing a file uploads it straight away.</span>
+            @if (sealErrors()['seal_image']) {
+              <span class="field-error">{{ sealErrors()['seal_image'] }}</span>
             }
           </div>
 

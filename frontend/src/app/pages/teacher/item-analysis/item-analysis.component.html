@@ -1,0 +1,272 @@
+<div class="tia-controls no-print">
+  <div class="field tia-picker">
+    <label>Exam</label>
+    <app-dropdown
+      [ngModel]="selectedExamId()"
+      (ngModelChange)="onExamChange($event)"
+      [options]="examOptions()"
+      placeholder="Choose an exam"
+      countSingular="exam"
+      countPlural="exams"
+    />
+  </div>
+  <div class="tia-actions">
+    <button type="button" class="btn" (click)="refresh()" [disabled]="analysisLoading()">Refresh</button>
+    <button type="button" class="btn btn-primary" (click)="print()" [disabled]="!analysis() || !analysis()!.ready">
+      <app-icon name="printer" [size]="16" /> Print analysis
+    </button>
+  </div>
+  <p class="muted small">
+    Computed from the saved checked sheets. Checking or re-checking a sheet in the Exams tab updates this
+    automatically — there is nothing to generate or upload. Only learners with a saved checked sheet are counted.
+  </p>
+</div>
+
+@if (loading()) {
+  <p class="muted">Loading exams…</p>
+} @else if (loadError()) {
+  <p class="field-error">{{ loadError() }}</p>
+  <button type="button" class="btn no-print" (click)="loadExams()">Try again</button>
+} @else if (exams().length === 0) {
+  <div class="card card-pad">
+    <p class="muted">No paper exams yet for this school year. Create an exam in the Exams tab first.</p>
+    <a class="btn no-print" [routerLink]="['/teacher/assessments']" [queryParams]="{ tab: 'exams' }">Go to Exams</a>
+  </div>
+} @else if (analysisLoading() && !analysis()) {
+  <p class="muted">Loading the analysis…</p>
+} @else if (analysisError()) {
+  <p class="field-error">{{ analysisError() }}</p>
+} @else if (analysis(); as report) {
+  @if (!report.ready) {
+    <div class="card card-pad">
+      <h2 class="card-title">No checked sheets yet</h2>
+      <p class="muted">
+        Exam {{ report.exam.exam_number }} · {{ report.exam.title }} has {{ report.takers }} checked
+        sheet{{ report.takers === 1 ? '' : 's' }}. The Test Item Analysis appears here once at least two
+        sheets have been checked, so the papers can be split into an upper and a lower group.
+      </p>
+      <a
+        class="btn no-print"
+        [routerLink]="['/teacher/assessments']"
+        [queryParams]="{ tab: 'exams', exam: report.exam.id }"
+        >Go to Exams to check sheets</a
+      >
+    </div>
+  } @else {
+    <section class="tia-report" aria-label="Test Item Analysis">
+      <header class="tia-head">
+        <p class="tia-republic">Republic of the Philippines</p>
+        <p class="tia-dept">Department of Education</p>
+        @if (report.header.region) {
+          <p class="tia-line">{{ report.header.region }}</p>
+        }
+        @if (report.header.division) {
+          <p class="tia-line">{{ report.header.division }}</p>
+        }
+        @if (report.header.school_name) {
+          <p class="tia-school">
+            <strong>{{ report.header.school_name }}</strong>
+            @if (report.header.school_city_region) {
+              <span> · {{ report.header.school_city_region }}</span>
+            }
+          </p>
+        }
+        @if (report.header.deped_school_id) {
+          <p class="tia-line">School ID: {{ report.header.deped_school_id }}</p>
+        }
+        <h2 class="tia-title">TEST ITEM ANALYSIS</h2>
+        <p class="tia-line">SY {{ report.exam.academic_year }}</p>
+      </header>
+
+      <dl class="tia-meta">
+        <div><dt>Subject</dt><dd>{{ report.exam.subject_name }}</dd></div>
+        <div><dt>{{ report.grading.period_label }}</dt><dd>{{ report.exam.quarter }}</dd></div>
+        <div><dt>Grade Level</dt><dd>{{ report.exam.grade_level }}</dd></div>
+        <div><dt>Section</dt><dd>{{ report.exam.section_name }}</dd></div>
+        <div><dt>Exam</dt><dd>Exam {{ report.exam.exam_number }} · {{ report.exam.title }}</dd></div>
+        <div><dt>Total Items</dt><dd>{{ report.exam.question_count }}</dd></div>
+        <div><dt>Checked Sheets</dt><dd>{{ report.takers }} of {{ report.roster_size }} enrolled</dd></div>
+        <div><dt>Upper Group</dt><dd>{{ report.groups.upper_size }}</dd></div>
+        <div><dt>Lower Group</dt><dd>{{ report.groups.lower_size }}</dd></div>
+        <div><dt>Mean Score</dt><dd>{{ fmt(report.mean_score) }} of {{ report.total_points }} ({{ fmt(report.mean_percent) }}%)</dd></div>
+      </dl>
+
+      @if (report.takers < 10) {
+        <p class="tia-caution no-print">
+          With only {{ report.takers }} checked sheets, one learner moves an index a long way. Treat a
+          Reject/Revise call as a prompt to look at the item, not a verdict on it.
+        </p>
+      }
+      @if (report.summary.negative_items.length > 0) {
+        <p class="tia-caution tia-negative">
+          The lower group got more correct answers than the upper group on
+          {{ joinPositions(report.summary.negative_items) }}. Check the answer key for those items first.
+        </p>
+      }
+
+      <h3 class="tia-section">Item Difficulty and Discrimination</h3>
+      <div class="table-wrap">
+        <table class="table tia-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Key</th>
+              <th>Upper</th>
+              <th>Lower</th>
+              <th>Total</th>
+              <th>Blank</th>
+              <th>Difficulty</th>
+              <th>Evaluation</th>
+              <th>Remarks</th>
+              <th>Discrimination</th>
+              <th>Quality</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of report.items; track item.position) {
+              <tr [class.negative-row]="item.negative">
+                <td>{{ item.position }}</td>
+                <td>{{ item.correct_label }}</td>
+                <td>{{ item.upper_correct }}</td>
+                <td>{{ item.lower_correct }}</td>
+                <td>{{ item.total_correct }}</td>
+                <td>{{ item.blank_count }}</td>
+                <td>{{ fmt(item.difficulty) }}</td>
+                <td>{{ item.difficulty_label }}</td>
+                <td>{{ item.difficulty_action }}</td>
+                <td>{{ fmtSigned(item.discrimination) }}</td>
+                <td>{{ item.discrimination_label }}</td>
+                <td>{{ item.discrimination_action }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="muted small">
+        Difficulty = correct answers in both groups ÷ learners in both groups. Discrimination = upper-group
+        correct rate − lower-group correct rate. {{ report.groups.tie_note }}
+      </p>
+
+      <h3 class="tia-section">Distractor Analysis</h3>
+      <div class="table-wrap">
+        <table class="table tia-table">
+          <thead>
+            <tr>
+              <th>Item</th>
+              <th>Option</th>
+              <th>Upper</th>
+              <th>Lower</th>
+              <th>Total</th>
+              <th>Plausibility</th>
+              <th>Direction</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of report.items; track item.position) {
+              @for (option of item.distractors; track option.option_index) {
+                <tr [class.correct-row]="option.is_correct">
+                  <td>{{ item.position }}</td>
+                  <td>{{ option.label }}</td>
+                  <td>{{ option.upper }}</td>
+                  <td>{{ option.lower }}</td>
+                  <td>{{ option.total }}</td>
+                  <td>{{ fmt(option.plausibility) }}</td>
+                  <td>{{ option.direction > 0 ? '+' : '' }}{{ option.direction }}</td>
+                  <td>{{ option.remark }}</td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
+      <p class="muted small">
+        Plausibility = learners who chose the option ÷ all checked sheets. Direction = upper-group choices −
+        lower-group choices. A good distractor is chosen by at least 5% of takers and by more lower-group than
+        upper-group learners. True/False items have only the one wrong option as their distractor.
+      </p>
+
+      <h3 class="tia-section">Summary based on {{ report.exam.question_count }}-item test</h3>
+      <div class="tia-summary">
+        <table class="table tia-table">
+          <thead>
+            <tr><th>Item Difficulty</th><th>No. of Items</th></tr>
+          </thead>
+          <tbody>
+            @for (row of difficultyRows(); track row.label) {
+              <tr><td>{{ row.label }}</td><td>{{ row.count }}</td></tr>
+            }
+            <tr class="total-row"><td>Total</td><td>{{ report.items.length }}</td></tr>
+          </tbody>
+        </table>
+        <table class="table tia-table">
+          <thead>
+            <tr><th>Item Discrimination</th><th>No. of Items</th></tr>
+          </thead>
+          <tbody>
+            @for (row of discriminationRows(); track row.label) {
+              <tr><td>{{ row.label }}</td><td>{{ row.count }}</td></tr>
+            }
+            <tr class="total-row"><td>Total</td><td>{{ report.items.length }}</td></tr>
+          </tbody>
+        </table>
+        <table class="table tia-table">
+          <thead>
+            <tr><th>Distractor Analysis</th><th>No. of Options</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Retain</td><td>{{ report.summary.distractor_counts.retain }}</td></tr>
+            <tr><td>Rephrase or check for trick wording</td><td>{{ report.summary.distractor_counts.rephrase }}</td></tr>
+            <tr><td>Replace or rewrite</td><td>{{ report.summary.distractor_counts.replace }}</td></tr>
+            <tr class="total-row">
+              <td>Total</td>
+              <td>
+                {{
+                  report.summary.distractor_counts.retain +
+                    report.summary.distractor_counts.rephrase +
+                    report.summary.distractor_counts.replace
+                }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="tia-learned">
+        <strong>Most learned items:</strong> {{ joinPositions(report.summary.most_learned) }} &nbsp;·&nbsp;
+        <strong>Least learned items:</strong> {{ joinPositions(report.summary.least_learned) }}
+      </p>
+
+      <h3 class="tia-section">How to read this</h3>
+      <div class="tia-legends">
+        <div>
+          <h4>Item Difficulty</h4>
+          <p>0.81–1.00 Very Easy — Reject/Revise · 0.61–0.80 Easy — Retain · 0.41–0.60 Moderately Difficult — Retain · 0.21–0.40 Difficult — Retain · 0.00–0.20 Very Difficult — Reject/Revise</p>
+        </div>
+        <div>
+          <h4>Item Discrimination</h4>
+          <p>D ≥ 0.50 Very Good Item — Retain · 0.40–0.49 Good Item; Very Usable — Retain · 0.30–0.39 Fair Quality; Usable Item — Retain · 0.20–0.29 Potentially Poor Item — Revise · D &lt; 0.20 Potentially Very Poor — Reject</p>
+        </div>
+        <div>
+          <h4>Distractor Analysis</h4>
+          <p>Chosen by under 5% — replace or rewrite. Chosen by 5% or more — plausible. Chosen more by the upper group — rephrase or check for trick wording. Chosen more by the lower group — good distractor, retain. Equal in both groups at 5% or more — plausible and meaningful, retain.</p>
+        </div>
+      </div>
+
+      <div class="tia-signatures">
+        <div class="tia-signature">
+          <p class="tia-sign-name">{{ report.header.teacher_name ?? '' }}</p>
+          <p class="tia-sign-role">Prepared by: Subject Teacher</p>
+        </div>
+        <div class="tia-signature">
+          <p class="tia-sign-name">&nbsp;</p>
+          <p class="tia-sign-role">Checked by: Department Head / Master Teacher</p>
+        </div>
+        <div class="tia-signature">
+          <p class="tia-sign-name">{{ report.header.school_head_name ?? '' }}</p>
+          <p class="tia-sign-role">Noted by: School Head</p>
+        </div>
+      </div>
+    </section>
+  }
+}
