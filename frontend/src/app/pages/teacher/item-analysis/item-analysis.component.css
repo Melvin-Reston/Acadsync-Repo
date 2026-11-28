@@ -1,7 +1,9 @@
 /* Test Item Analysis: warm paper on screen, strictly black and white
-   in print, like the other DepEd forms. The tables are wide, so the
-   print page is the landscape DepEd form page with 10mm of the
-   report's own padding on every side. */
+   in print, like the other DepEd forms. The print page is portrait
+   with 0.75in of the report's own padding top and bottom and 0.25in
+   on the sides, so the wide tables have room — the Remarks and Item
+   Quality cells stay on one line — and a 50-item form fits on two
+   pages. */
 .tia-controls {
   display: flex;
   flex-wrap: wrap;
@@ -25,20 +27,84 @@
   margin: 0;
 }
 
+.tia-pane-hidden {
+  display: none;
+}
+
+/* Print-only blocks: hidden on screen, shown in print. There is no
+   screen header at all — the DepEd header exists only here, for
+   print — so nothing of it can show in the UI. The screen meta and
+   main table are hidden in print instead. The print header's layout
+   lives inside @media print below: a flex/grid rule here would
+   outrank this hide on screen and show the header in the UI. */
+.tia-print-only {
+  display: none;
+}
+
+.tia-print-head-text {
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: 430px;
+  text-align: center;
+}
+
+.tia-print-head-text p {
+  margin: 0;
+}
+
+.tia-print-seal {
+  flex: none;
+  height: 72px;
+  width: 72px;
+  object-fit: contain;
+}
+
+.tia-print-meta {
+  grid-template-columns: 1.15fr 1fr;
+  gap: 4px 40px;
+  margin: 14px 0 10px;
+}
+
+.pm-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 6px;
+}
+
+.pm-label {
+  white-space: nowrap;
+}
+
+.pm-value {
+  flex: 1;
+  min-width: 60px;
+  padding: 0 6px;
+  font-weight: 700;
+  border-bottom: 1px solid #000;
+}
+
+.pm-number {
+  flex: 0 0 64px;
+  text-align: center;
+}
+
+.pm-note {
+  font-style: italic;
+  white-space: nowrap;
+}
+
+.tia-print-table thead th,
+.tia-print-distractor-table thead th {
+  text-align: center;
+  vertical-align: middle;
+}
+
 .tia-report {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 20px;
-}
-
-.tia-head {
-  text-align: center;
-  margin-bottom: 12px;
-}
-
-.tia-head p {
-  margin: 0;
 }
 
 .tia-republic,
@@ -133,6 +199,16 @@
   font-weight: 700;
 }
 
+.distractor-item-row td {
+  font-weight: 700;
+  background: var(--surface-2);
+}
+
+.distractor-option {
+  padding-left: 20px;
+  font-style: italic;
+}
+
 .tia-summary {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -160,6 +236,115 @@
   color: var(--ink-2);
 }
 
+/* Circles beside the Difficulty and Discrimination values, and the
+   legend that explains them. The colours are the sample sheet's own
+   markers, not theme colours: blue-green for most learned, light
+   orange for least learned, light yellow with an exclamation point
+   when the lower group beat the upper group. */
+.tia-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tia-mark {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1;
+  color: #000;
+}
+
+.tia-mark-most {
+  background: #2f9e8f;
+}
+
+.tia-mark-least {
+  background: #f2994a;
+}
+
+.tia-mark-warn {
+  background: #fde68a;
+  border: 1px solid #b45309;
+  color: #92400e;
+}
+
+.tia-mark-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+
+.tia-mark-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Bar charts of the summary counts, as on the sample sheet. */
+.tia-charts {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  margin: 16px 0 0;
+}
+
+.tia-chart h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.tia-chart-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 5px 0;
+}
+
+.tia-chart-label {
+  flex: none;
+  width: 160px;
+  text-align: right;
+  font-size: 12px;
+}
+
+.tia-chart-track {
+  flex: 1;
+  height: 14px;
+  background: var(--surface-2);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.tia-chart-bar {
+  display: block;
+  height: 100%;
+}
+
+.tia-chart-bar-difficulty {
+  background: #e8913a;
+}
+
+.tia-chart-bar-discrimination {
+  background: #c0392b;
+}
+
+.tia-chart-count {
+  flex: none;
+  width: 24px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .tia-signatures {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -183,7 +368,8 @@
 
 @media (max-width: 720px) {
   .tia-summary,
-  .tia-legends {
+  .tia-legends,
+  .tia-charts {
     grid-template-columns: 1fr;
   }
 
@@ -194,16 +380,124 @@
 }
 
 @media print {
+  .tia-pane-hidden {
+    display: block;
+  }
+
+  .tia-print-only {
+    display: block;
+  }
+
+  /* Print header: the lines are centred as their own block, and the
+     seal sits beside them with a 150px gap. Three grid columns keep
+     the lines on the page centre: the seal is right-aligned in the
+     left column with the gap as its right margin, so the lines stay
+     centred whether or not a seal was uploaded. The side columns
+     must be minmax(0, 1fr), not plain 1fr: a plain 1fr track grows
+     to fit the seal plus its 150px gap, which pushes the centre
+     column right — at real Letter width the lines sat about 9px
+     off centre, and a longer school name pushed them further. With
+     minmax the tracks stay equal, the lines stay exactly on the
+     content centre, and a seal that needs more room overflows into
+     the side margin instead of moving the text. The doubled class
+     keeps this grid ahead of the .tia-print-only block rule above. */
+  .tia-print-head.tia-print-only {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .tia-print-head-text {
+    grid-column: 2;
+  }
+
+  .tia-print-seal {
+    grid-column: 1;
+    justify-self: end;
+    margin-right: 150px;
+  }
+
+  .tia-print-meta {
+    display: grid;
+    margin: 8px 0;
+  }
+
+  /* The field rows share one grid per side, so the label, value and
+     note columns line up vertically: the Upper Group and Lower Group
+     numbers (and their notes) sit in the same columns even though
+     the Lower Group row has no label of its own. Each field keeps
+     its own column explicitly, or the flattened rows would flow
+     into one another. */
+  .tia-print-meta > div {
+    display: grid;
+    grid-template-columns: max-content 1fr auto;
+    column-gap: 10px;
+    row-gap: 4px;
+    align-items: baseline;
+  }
+
+  .tia-print-meta .pm-row {
+    display: contents;
+  }
+
+  .tia-print-meta .pm-label {
+    grid-column: 1;
+  }
+
+  .tia-print-meta .pm-value {
+    grid-column: 2;
+  }
+
+  .tia-print-meta .pm-note {
+    grid-column: 3;
+  }
+
+  .tia-meta,
+  .tia-screen-table,
+  .tia-screen-heading {
+    display: none;
+  }
+
+  /* Two separate print forms: only the open tab's form prints. The
+     report carries a class for the open tab, and the other form's
+     pane, summary tables, legends and notes are hidden here. The
+     header, field block and signatures print on both forms. */
+  .tia-report.tia-print-distractors .tia-pane-items,
+  .tia-report.tia-print-distractors .tia-form-items {
+    display: none;
+  }
+
+  .tia-report:not(.tia-print-distractors) .tia-pane-distractors,
+  .tia-report:not(.tia-print-distractors) .tia-form-distractors {
+    display: none;
+  }
+
+  .tia-report:not(.tia-print-distractors) .tia-summary,
+  .tia-report:not(.tia-print-distractors) .tia-legends {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .tia-report.tia-print-distractors .tia-summary,
+  .tia-report.tia-print-distractors .tia-legends {
+    grid-template-columns: 1fr;
+  }
+
   .tia-report {
     display: block;
-    page: deped-form;
+    page: tia-form;
     color: #000;
     background: #fff;
     border: 0;
     border-radius: 0;
-    padding: 10mm;
+    /* 0.25in on all sides, carried by the report itself: the page
+       margin stays 0 so the browser adds no date, title, URL or
+       page number. The narrow margins give the wide tables room
+       and the full height of the page, so the Remarks and Item
+       Quality cells stay on one line and a 50-item form fits two
+       pages. */
+    padding: 0.25in;
     font-size: 10px;
-    line-height: 1.35;
+    line-height: 1.25;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
     -webkit-box-decoration-break: clone;
@@ -211,7 +505,70 @@
   }
 
   .tia-title {
+    margin: 6px 0 1px;
     font-size: 14px;
+  }
+
+  .tia-print-head-text p {
+    line-height: 1.25;
+  }
+
+  .tia-section {
+    margin: 12px 0 6px;
+  }
+
+  .tia-report .muted.small {
+    margin: 4px 0;
+  }
+
+  .tia-summary,
+  .tia-legends {
+    gap: 8px;
+  }
+
+  .tia-learned {
+    margin: 8px 0 0;
+  }
+
+  .tia-mark-legend {
+    margin: 4px 0 0;
+    font-size: 8px;
+    gap: 6px 14px;
+  }
+
+  .tia-charts {
+    margin: 10px 0 0;
+    gap: 16px;
+  }
+
+  .tia-chart h4 {
+    margin: 0 0 3px;
+    font-size: 9px;
+  }
+
+  .tia-chart-row {
+    margin: 2px 0;
+    gap: 5px;
+  }
+
+  .tia-chart-label {
+    width: 104px;
+    font-size: 8px;
+  }
+
+  .tia-chart-track {
+    height: 8px;
+    background: #ededed;
+    border-radius: 0;
+  }
+
+  .tia-chart-count {
+    width: 16px;
+    font-size: 8px;
+  }
+
+  .tia-signatures {
+    margin-top: 20px;
   }
 
   .tia-meta {
@@ -233,12 +590,58 @@
   .tia-table th,
   .tia-table td {
     border: 1px solid #000;
-    padding: 3px 4px;
+    padding: 2px 3px;
     font-size: 9px;
   }
 
+  /* Fixed layout with the colgroup widths: the columns do not
+     move with the data, so a wide header word can no longer steal
+     width from the Remarks and Item Quality columns. The type
+     runs smaller than the screen table, and the headers use the
+     plain report font with no letter-spacing — the shared table
+     style's monospace, letter-spaced headers are what made words
+     like DISCRIMINATION far wider than their numbers. Every
+     cell's content is centred, horizontally and vertically, and
+     every value stays on one line. */
+  .tia-print-table {
+    table-layout: fixed;
+    width: 100%;
+  }
+
+  .tia-print-table th,
+  .tia-print-table td {
+    white-space: normal;
+    text-align: center;
+    vertical-align: middle;
+    font-size: 8px;
+    line-height: 1.2;
+    padding: 2px 2px;
+  }
+
+  .tia-print-table th {
+    font-family: inherit;
+    letter-spacing: 0;
+  }
+
+  /* The distractor form carries fourteen columns on a portrait page,
+     so its cells run smaller than the ten-column form's. The shared
+     table style keeps headers on one line; this table must wrap
+     normally, and long words may break anywhere, or the columns
+     cannot fit the page width. Its content is centred like the
+     other form's. */
+  .tia-print-distractor-table th,
+  .tia-print-distractor-table td {
+    font-size: 8px;
+    padding: 2px 3px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
+    vertical-align: middle;
+  }
+
   .tia-table .negative-row td,
-  .tia-table .correct-row td {
+  .tia-table .correct-row td,
+  .tia-table .distractor-item-row td {
     background: #fff;
     color: #000;
   }

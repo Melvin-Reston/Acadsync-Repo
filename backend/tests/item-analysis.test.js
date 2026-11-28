@@ -149,6 +149,7 @@ describe('Test Item Analysis', () => {
     assert.equal(body.groups.upper_size, 0);
     assert.equal(body.groups.lower_size, 0);
     assert.equal(body.header.school_name, 'Analysis Test School');
+    assert.equal(body.header.has_school_seal, false);
 
     const other = await api().get(`/api/teacher/exams/${exam.id}/item-analysis`).set(bearer(otherTeacherToken));
     assert.equal(other.status, 404, JSON.stringify(other.body));
@@ -205,15 +206,21 @@ describe('Test Item Analysis', () => {
     assert.equal(q1d.total, 0);
     assert.equal(q1d.action, 'Replace or rewrite');
     assert.match(q1d.remark, /non-functioning/);
+    assert.match(q1d.plausibility_remark, /non-functioning/);
+    assert.equal(q1d.direction_remark, '—');
     const q1a = q1.distractors.find((option) => option.label === 'A');
     assert.equal(q1a.is_correct, true);
     assert.equal(q1a.remark, 'Correct Answer');
+    assert.equal(q1a.plausibility_remark, 'Correct Answer');
+    assert.equal(q1a.direction_remark, '—');
     // Q1 option B: chosen only by the lower group — a good distractor.
     const q1b = q1.distractors.find((option) => option.label === 'B');
     assert.equal(q1b.upper, 0);
     assert.equal(q1b.lower, 1);
     assert.equal(q1b.direction, -1);
     assert.equal(q1b.action, 'Retain');
+    assert.equal(q1b.plausibility_remark, 'Plausible');
+    assert.equal(q1b.direction_remark, 'Retain: Good distractor');
 
     assert.deepEqual(body.summary.difficulty_counts, {
       'Very Easy': 1,
@@ -260,6 +267,8 @@ describe('Test Item Analysis', () => {
     assert.equal(wrong.direction, 2);
     assert.equal(wrong.action, 'Rephrase or check');
     assert.match(wrong.remark, /misleading/);
+    assert.equal(wrong.plausibility_remark, 'Plausible');
+    assert.match(wrong.direction_remark, /misleading/);
   });
 
   test('re-checking a sheet updates the analysis, and a blank answer counts as wrong', async () => {

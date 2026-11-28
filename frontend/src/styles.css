@@ -1914,6 +1914,13 @@ form > .form-grid + .alert {
     margin: 0;
   }
 
+  @page tia-form {
+    size: portrait;
+    /* No margin, for the same reason: the Test Item Analysis report
+       carries its own padding, 0.25in on all sides. */
+    margin: 0;
+  }
+
   @page exam-sheet {
     size: A4 portrait;
     /* No margin, for the same reason: the sheet's own corner squares

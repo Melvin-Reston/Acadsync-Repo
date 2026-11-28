@@ -1171,6 +1171,8 @@ export interface ItemAnalysisDistractor {
   direction: number;
   remark: string;
   action: string;
+  plausibility_remark: string;
+  direction_remark: string;
 }
 
 export interface ItemAnalysisItem {
@@ -1204,6 +1206,7 @@ export interface ItemAnalysis {
     division: string | null;
     deped_school_id: string | null;
     school_head_name: string | null;
+    has_school_seal: boolean;
   };
   roster_size: number;
   takers: number;

@@ -21,6 +21,20 @@ Teacher Batch 9 adds online quizzes: the teacher makes a numbered quiz per class
 
 Teacher Batch 12 adds Test Item Analysis for the paper exams: a third tab in Quizzes & Exams that is computed from the saved checked sheets, so checking or re-checking a sheet updates it by itself. Papers are split at the median into an upper and a lower group, and each item gets a difficulty index, a discrimination index, and a distractor analysis for every option, with the bands and remarks from the Test Item Analysis sheet, plus summary counts and the signature lines on the printout. Online quizzes are not included. See [Upgrading from Teacher Batch 11 fix 7](#upgrading-from-teacher-batch-11-fix-7).
 
+Batch 13 fix 3 restyles only the Grades page after the old Grades design: the title on the dotted paper, peach quarter tabs, the dark formula strip, soft-tinted Written Works / Performance Tasks / Examinations headers with a dark Computed header, pill filters, row numbers and Incomplete pills in the learner column, and bigger ledger numbers. No grade is recomputed, no button moves, and the DepEd print forms are unchanged. See [Upgrading from Batch 13 fix 2](#upgrading-from-batch-13-fix-2).
+
+Batch 13 fix 7 makes the Grades page fast and the term tabs readable in dark mode: switching back to a term already opened shows it at once with no second load, adding a column appears at once without reloading the whole sheet, and the term tabs use dark text on the cream and peach in both light and dark mode (in dark mode the text was near-white on cream and could not be read). No grade is recomputed and no button moves. See [Upgrading from Batch 13 fix 6](#upgrading-from-batch-13-fix-6).
+
+Batch 13 fix 8 fixes the Test Item Analysis header: the print header no longer shows in the page itself (it was appearing above the screen header, so the header looked doubled in the UI), and in print the header lines are centred as their own block with the school seal beside them with a 150px gap. No number, table or form changes. See [Upgrading from Batch 13 fix 7](#upgrading-from-batch-13-fix-7).
+
+Batch 13 fix 9 finishes the Test Item Analysis header and shortens its printout: the DepEd header no longer shows in the UI at all (it is print-only now), in print the header lines are centred exactly on the page at real Letter width with the school seal 150px beside them, the side margins are 0.25in (top and bottom stay 0.75in), so the Remarks and Item Quality cells stay on one line, and the print spacing is tighter so a 50-item difficulty & discrimination form fits on two pages. No number, table or form changes. See [Upgrading from Batch 13 fix 8](#upgrading-from-batch-13-fix-8).
+
+Batch 13 fix 10 finishes the Test Item Analysis print layout: the print margins are 0.25in on all four sides, the first form's table now has fixed column widths that do not move with the data, the Test Item No. header stacks as Test / Item / No. and the other long headers stack the same way, the print type is smaller and the headers drop the wide monospace letter-spaced style, so the Discrimination Index column shrinks to its numbers and every Remarks and Item Quality value — Reject/Revise, Potentially Very Poor — stays on one line, keeping a 50-item form to two pages. No number, table or form changes. See [Upgrading from Batch 13 fix 9](#upgrading-from-batch-13-fix-9).
+
+Batch 13 fix 11 adds the sample sheet's legend markers and bar charts to Test Item Analysis: a blue-green circle beside the Difficulty and Discrimination values of a most-learned item, a light orange circle for a least-learned item, and a light yellow circle with an exclamation point when the lower group beat the upper group on the item (that warning wins when an item is both), with the three markers explained in a legend below the table; and below the summary counts, two bar charts — orange for Item Difficulty, red for Item Discrimination, hardest and poorest first, each bar sized against its chart's largest count. Most and least learned keep the existing rule (the highest and lowest difficulty in the exam, no marker when every item shares one difficulty). The summary tables, the most/least learned line, the How to read this notes and the signatures stay as they are, and a 50-item form still fits two pages. No number, table or form changes. See [Upgrading from Batch 13 fix 10](#upgrading-from-batch-13-fix-10).
+
+Batch 13 fix 12 removes the now-redundant lines from the first Test Item Analysis form: the Most learned / Least learned item list and the How to read this difficulty and discrimination band notes are gone, because the circles, the legend below the table and the bar charts carry that information. The summary tables, the charts, the legend and the signatures stay, and the distractor notes stay for the second form, under a heading that prints only with that form. No number, table or form changes. See [Upgrading from Batch 13 fix 11](#upgrading-from-batch-13-fix-11).
+
 Teacher Batch 10 adds the paper exam checker: the teacher makes an exam per class and period, enters one answer key — each question with its own 2 to 5 choices, a 2-choice question optionally True/False — prints one answer sheet per learner with the learner's name and Learner ID already on it, then checks each sheet from a photo of the shaded circles. The photo is read in the browser and never uploaded; the teacher reviews and corrects the answers before saving, and the server recomputes the score from its own key into an Examinations column in the Grades page, labelled with the exam number. See [Upgrading from Teacher Batch 9 fix 1](#upgrading-from-teacher-batch-9-fix-1).
 
 Already running Part 1? Go straight to [Upgrading from Part 1](#upgrading-from-part-1).
@@ -183,6 +197,188 @@ DB_SSL=true
 - A yellow **SSL security warning** from the `pg` library can appear when a command connects. It is harmless. The connection is encrypted.
 - Skip `npm test` unless you also have a local PostgreSQL or you set `TEST_DATABASE_URL` to a **separate, empty** database. The tests wipe the database they use, and they refuse to start if it is the same as your real one.
 - Treat the connection string like a password. If it was ever shared, reset the password in the Neon dashboard and paste the new string into `.env`.
+
+## Upgrading from Batch 13 fix 11
+
+This zip is built on top of Batch 13 fix 11 (the Test Item Analysis legend markers and bar charts). Unzip it **last**, over your existing install — do not unzip Batch 13 or fixes 1 to 11 after it. Your `.env` file and your database are kept. There is no new migration: `npm run migrate` reports "Database is already up to date", and you do not run the seed again.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip this zip over your existing `acadsync` folder and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run dev
+```
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. Open Quizzes & Exams, then Test Item Analysis, and print the first form: the Most learned / Least learned line and the How to read this band notes are gone, and the summary tables, charts, legend and signatures remain.
+
+No new `.env` settings are required.
+
+## Upgrading from Batch 13 fix 10
+
+This zip is built on top of Batch 13 fix 10 (the Test Item Analysis print columns fix). Unzip it **last**, over your existing install — do not unzip Batch 13 or fixes 1 to 10 after it. Your `.env` file and your database are kept. There is no new migration: `npm run migrate` reports "Database is already up to date", and you do not run the seed again.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip this zip over your existing `acadsync` folder and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run dev
+```
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. Open Quizzes & Exams, then Test Item Analysis: the circles show beside the Difficulty and Discrimination values, the legend sits below the table, and the two bar charts sit below the summary counts. Print the first form: the markers, legend and charts print on it, still two pages for a 50-item exam.
+
+No new `.env` settings are required.
+
+## Upgrading from Batch 13 fix 9
+
+This zip is built on top of Batch 13 fix 9 (the Test Item Analysis header and margins fix). Unzip it **last**, over your existing install — do not unzip Batch 13 or fixes 1 to 9 after it. Your `.env` file and your database are kept. There is no new migration: `npm run migrate` reports "Database is already up to date", and you do not run the seed again.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip this zip over your existing `acadsync` folder and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run dev
+```
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. Open Quizzes & Exams, then Test Item Analysis: no DepEd header shows in the page. Print the first form: the margins are 0.25in on all sides, the Test Item No. header stacks as Test / Item / No., and every Remarks and Item Quality value stays on one line.
+
+No new `.env` settings are required.
+
+## Upgrading from Batch 13 fix 8
+
+This zip is built on top of Batch 13 fix 8 (the Test Item Analysis header fix). Unzip it **last**, over your existing install — do not unzip Batch 13 or fixes 1 to 8 after it. Your `.env` file and your database are kept. There is no new migration: `npm run migrate` reports "Database is already up to date", and you do not run the seed again.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip this zip over your existing `acadsync` folder and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run dev
+```
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. Open Quizzes & Exams, then Test Item Analysis: no DepEd header shows in the page. Print either form: the header lines are centred on the page, with the school seal beside them, and the side margins are narrower.
+
+No new `.env` settings are required.
+
+## Upgrading from Batch 13 fix 7
+
+This zip is built on top of Batch 13 fix 7 (the fast Grades page). Unzip it **last**, over your existing install — do not unzip Batch 13 or fixes 1 to 7 after it. Your `.env` file and your database are kept. There is no new migration: `npm run migrate` reports "Database is already up to date", and you do not run the seed again.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip this zip over your existing `acadsync` folder and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run dev
+```
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. Open Quizzes & Exams, then Test Item Analysis: the page no longer shows the print header above the screen header. Print either form: the header lines are centred on their own, with the school seal beside them.
+
+No new `.env` settings are required.
+
+## Upgrading from Batch 13 fix 6
+
+This zip is built on top of Batch 13 fix 6 (the centred Test Item Analysis print header). Unzip it **last**, over any newer install — do not unzip Batch 13, fix 1, fix 2, fix 3, fix 4, fix 5 or fix 6 after it. Your `.env` file and everything in your database are kept. You do not run the seed again, and there is no new migration to run: `npm run migrate` reports "Database is already up to date".
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip this zip **over your existing `acadsync` folder** and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run dev
+```
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. Open **Grades**: switching between Term 1, Term 2 and Term 3 is instant once a term has been opened, and **+ Add column** adds the column at once instead of reloading the sheet. Saving scores still re-reads the sheet, so the Final Grades tab always follows the saved scores. In dark mode the term tabs now read clearly — dark text on the cream tabs and the peach active tab, as in light mode.
+
+No new `.env` settings are required.
+
+## Upgrading from Batch 13 fix 2
+
+This zip is built on top of Batch 13 fix 2 (the Test Item Analysis print header). Unzip it **last**, over any newer install — do not unzip Batch 13, fix 1 or fix 2 after it. Your `.env` file and everything in your database are kept. You do not run the seed again, and there is no new migration to run: `npm run migrate` reports "Database is already up to date".
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip this zip **over your existing `acadsync` folder** and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run dev
+```
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. Open **Grades**: the page now follows the old Grades design — the title on the dotted paper with no rule under it, the active quarter or term tab in peach, the dark formula strip, the soft-tinted Written Works, Performance Tasks and Examinations headers with the dark Computed header, pill-shaped search and filters, a row number and an Incomplete pill for each learner, and a "Showing X of Y learners" line under the grid. Encoding, weights, saving, submitting and the Class Record / Final Grades printouts work exactly as before. The score boxes stay square, as chosen on November 23.
+
+No new `.env` settings are required.
 
 ## Upgrading from Part 1
 

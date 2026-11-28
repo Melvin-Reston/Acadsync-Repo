@@ -302,11 +302,19 @@
             </tr>
           </thead>
           <tbody>
-            @for (row of filteredRows(); track row.learner.id) {
+            @for (row of filteredRows(); track row.learner.id; let i = $index) {
               <tr [class.low]="highlightBelow() && row.computed.complete && (row.computed.qg ?? 100) < 75">
                 <td class="sticky learner-cell">
-                  <span class="learner-name">{{ learnerName(row.learner) }}</span>
-                  <span class="learner-id">{{ row.learner.learner_id }} · {{ row.learner.sex }}</span>
+                  <span class="learner-row">
+                    <span class="row-num">{{ i + 1 }}</span>
+                    <span class="learner-main">
+                      <span class="learner-name">{{ learnerName(row.learner) }}</span>
+                      <span class="learner-id">{{ row.learner.learner_id }} · {{ row.learner.sex }}</span>
+                      @if (row.computed.status === 'Incomplete') {
+                        <span class="status-pill">Incomplete</span>
+                      }
+                    </span>
+                  </span>
                 </td>
                 @for (column of sheet()!.columns; track column.id) {
                   <td [class]="'score-cell col-' + column.component.toLowerCase()">
@@ -391,6 +399,10 @@
         <button type="button" class="btn btn-ghost" (click)="addColumn('WW')">+ WW{{ columnsByComponent().WW.length + 1 }}</button>
         <button type="button" class="btn btn-ghost" (click)="addColumn('PT')">+ PT{{ columnsByComponent().PT.length + 1 }}</button>
         <button type="button" class="btn btn-ghost" (click)="addColumn('EX')">+ {{ sheet()!.grading.third_short }}{{ columnsByComponent().EX.length + 1 }}</button>
+      </div>
+      <div class="grid-foot">
+        <span>Showing {{ filteredRows().length }} of {{ sheet()!.learners.length }} learners · School records</span>
+        <span>Page 1 of 1</span>
       </div>
     </section>
 

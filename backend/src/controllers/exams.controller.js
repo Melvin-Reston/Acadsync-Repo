@@ -361,7 +361,8 @@ async function getItemAnalysis(req, res) {
 
   const headerResult = await db.query(
     `SELECT t.first_name, t.last_name, t.region, t.division, t.deped_school_id,
-            t.school_head_name, s.name AS school_name, s.city_region AS school_city_region
+            t.school_head_name, s.name AS school_name, s.city_region AS school_city_region,
+            s.seal_path
        FROM teachers t JOIN schools s ON s.id = t.school_id WHERE t.id = $1`,
     [req.teacher.id]
   );
@@ -374,6 +375,9 @@ async function getItemAnalysis(req, res) {
     division: headerRow.division || null,
     deped_school_id: headerRow.deped_school_id || null,
     school_head_name: headerRow.school_head_name || null,
+    // The print header shows the school's own seal (uploaded on the
+    // Dashboard), never the DepEd seal.
+    has_school_seal: Boolean(headerRow.seal_path),
   };
 
   const rosterResult = await db.query('SELECT COUNT(*)::int AS count FROM class_learners WHERE class_id = $1', [exam.class_id]);
@@ -475,6 +479,31 @@ async function getItemAnalysis(req, res) {
         remark = 'Retain: Plausible and meaningful distractor';
         action = 'Retain';
       }
+      // The print form splits the combined remark into its two
+      // judgements: plausibility (was the option chosen at all, and
+      // by at least 5%?) and direction (which group chose it more?).
+      // The combined remark and action above stay as they are: the
+      // screen table and the summary counts use them.
+      let plausibilityRemark;
+      let directionRemark;
+      if (isCorrect) {
+        plausibilityRemark = 'Correct Answer';
+        directionRemark = '—';
+      } else if (optionTotal === 0) {
+        plausibilityRemark = 'Replace or rewrite: non-functioning distractor';
+        directionRemark = '—';
+      } else {
+        plausibilityRemark =
+          plausibilityRatio < 0.05
+            ? 'Replace or rewrite: Option is too obvious, absurd, or unappealing.'
+            : 'Plausible';
+        directionRemark =
+          upperCount > lowerCount
+            ? 'Rephrase or check for trick wording: Option is misleading, double-keyed, or rewards partial misinterpretations.'
+            : lowerCount > upperCount
+              ? 'Retain: Good distractor'
+              : 'Retain: Plausible and meaningful distractor';
+      }
       if (!isCorrect) {
         if (action === 'Retain') distractorCounts.retain += 1;
         else if (action === 'Rephrase or check') distractorCounts.rephrase += 1;
@@ -491,6 +520,8 @@ async function getItemAnalysis(req, res) {
         direction: upperCount - lowerCount,
         remark,
         action,
+        plausibility_remark: plausibilityRemark,
+        direction_remark: directionRemark,
       };
     });
 

@@ -13,7 +13,7 @@
   <div class="tia-actions">
     <button type="button" class="btn" (click)="refresh()" [disabled]="analysisLoading()">Refresh</button>
     <button type="button" class="btn btn-primary" (click)="print()" [disabled]="!analysis() || !analysis()!.ready">
-      <app-icon name="printer" [size]="16" /> Print analysis
+      <app-icon name="printer" [size]="16" /> Print {{ view() === 'items' ? 'difficulty & discrimination' : 'distractor analysis' }}
     </button>
   </div>
   <p class="muted small">
@@ -53,31 +53,57 @@
       >
     </div>
   } @else {
-    <section class="tia-report" aria-label="Test Item Analysis">
-      <header class="tia-head">
-        <p class="tia-republic">Republic of the Philippines</p>
-        <p class="tia-dept">Department of Education</p>
-        @if (report.header.region) {
-          <p class="tia-line">{{ report.header.region }}</p>
+    <section
+      class="tia-report"
+      [class.tia-print-distractors]="view() === 'distractors'"
+      aria-label="Test Item Analysis"
+    >
+      <!-- Print-only header and field block, arranged like the sample
+           sheet: the header lines centred on their own, the school's
+           own seal beside them with a 150px gap, and the Subject /
+           Grade Level / Total Items and Quarter / Total Learners
+           fields. This is the only DepEd header: there is no screen
+           header, so nothing of it shows in the UI, and the screen
+           meta below is hidden in print. AcadSync has no District
+           field, so no district line prints. When the school has
+           uploaded no seal, the header prints with no logo. -->
+      <div class="tia-print-only tia-print-head" aria-hidden="true">
+        @if (schoolSealUrl()) {
+          <img class="tia-print-seal" [src]="schoolSealUrl()" alt="" />
         }
-        @if (report.header.division) {
-          <p class="tia-line">{{ report.header.division }}</p>
-        }
-        @if (report.header.school_name) {
-          <p class="tia-school">
-            <strong>{{ report.header.school_name }}</strong>
-            @if (report.header.school_city_region) {
-              <span> · {{ report.header.school_city_region }}</span>
-            }
-          </p>
-        }
-        @if (report.header.deped_school_id) {
-          <p class="tia-line">School ID: {{ report.header.deped_school_id }}</p>
-        }
-        <h2 class="tia-title">TEST ITEM ANALYSIS</h2>
-        <p class="tia-line">SY {{ report.exam.academic_year }}</p>
-      </header>
-
+        <div class="tia-print-head-text">
+          <p class="tia-republic">Republic of the Philippines</p>
+          <p class="tia-dept">Department of Education</p>
+          @if (report.header.region) {
+            <p class="tia-line">{{ report.header.region }}</p>
+          }
+          @if (report.header.division) {
+            <p class="tia-line">{{ report.header.division }}</p>
+          }
+          @if (report.header.school_name) {
+            <p class="tia-school">
+              <strong>{{ report.header.school_name }}</strong>
+            </p>
+          }
+          @if (report.header.school_city_region) {
+            <p class="tia-line">{{ report.header.school_city_region }}</p>
+          }
+          <h2 class="tia-title">TEST ITEM ANALYSIS</h2>
+          <p class="tia-line">SY {{ report.exam.academic_year }}</p>
+        </div>
+      </div>
+      <div class="tia-print-only tia-print-meta" aria-hidden="true">
+        <div>
+          <p class="pm-row"><span class="pm-label">Subject</span><span class="pm-value">{{ report.exam.subject_name }}</span></p>
+          <p class="pm-row"><span class="pm-label">Grade Level</span><span class="pm-value">{{ report.exam.grade_level }}</span></p>
+          <p class="pm-row"><span class="pm-label">Total Items</span><span class="pm-value">{{ report.exam.question_count }}</span></p>
+        </div>
+        <div>
+          <p class="pm-row"><span class="pm-label">Quarter/Grading Period</span><span class="pm-value">{{ periodWord(report.exam.quarter) }}</span></p>
+          <p class="pm-row"><span class="pm-label">Total Learners</span><span class="pm-value pm-number">{{ report.groups.upper_size }}</span><span class="pm-note">Upper Group</span></p>
+          <p class="pm-row"><span class="pm-label"></span><span class="pm-value pm-number">{{ report.groups.lower_size }}</span><span class="pm-note">Lower Group</span></p>
+        </div>
+      </div>
       <dl class="tia-meta">
         <div><dt>Subject</dt><dd>{{ report.exam.subject_name }}</dd></div>
         <div><dt>{{ report.grading.period_label }}</dt><dd>{{ report.exam.quarter }}</dd></div>
@@ -98,14 +124,38 @@
         </p>
       }
       @if (report.summary.negative_items.length > 0) {
-        <p class="tia-caution tia-negative">
+        <p class="tia-caution tia-negative tia-form-items">
           The lower group got more correct answers than the upper group on
           {{ joinPositions(report.summary.negative_items) }}. Check the answer key for those items first.
         </p>
       }
 
-      <h3 class="tia-section">Item Difficulty and Discrimination</h3>
-      <div class="table-wrap">
+      <div class="tabs no-print" role="tablist" aria-label="Test Item Analysis sections">
+        <button
+          type="button"
+          class="tab"
+          role="tab"
+          [attr.aria-selected]="view() === 'items'"
+          [class.active]="view() === 'items'"
+          (click)="selectView('items')"
+        >
+          Difficulty &amp; Discrimination
+        </button>
+        <button
+          type="button"
+          class="tab"
+          role="tab"
+          [attr.aria-selected]="view() === 'distractors'"
+          [class.active]="view() === 'distractors'"
+          (click)="selectView('distractors')"
+        >
+          Distractor Analysis
+        </button>
+      </div>
+
+      <div class="tia-pane tia-pane-items" [class.tia-pane-hidden]="view() !== 'items'">
+      <h3 class="tia-section tia-screen-heading">Item Difficulty and Discrimination</h3>
+      <div class="table-wrap tia-screen-table">
         <table class="table tia-table">
           <thead>
             <tr>
@@ -125,6 +175,7 @@
           </thead>
           <tbody>
             @for (item of report.items; track item.position) {
+              @let mark = itemMark(item);
               <tr [class.negative-row]="item.negative">
                 <td>{{ item.position }}</td>
                 <td>{{ item.correct_label }}</td>
@@ -132,10 +183,73 @@
                 <td>{{ item.lower_correct }}</td>
                 <td>{{ item.total_correct }}</td>
                 <td>{{ item.blank_count }}</td>
-                <td>{{ fmt(item.difficulty) }}</td>
+                <td><span class="tia-value">@if (mark) {<span class="tia-mark tia-mark-{{ mark }}" aria-hidden="true">@if (mark === 'warn') {!}</span>} {{ fmt(item.difficulty) }}</span></td>
                 <td>{{ item.difficulty_label }}</td>
                 <td>{{ item.difficulty_action }}</td>
-                <td>{{ fmtSigned(item.discrimination) }}</td>
+                <td><span class="tia-value">@if (mark) {<span class="tia-mark tia-mark-{{ mark }}" aria-hidden="true">@if (mark === 'warn') {!}</span>} {{ fmtSigned(item.discrimination) }}</span></td>
+                <td>{{ item.discrimination_label }}</td>
+                <td>{{ item.discrimination_action }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <!-- Print-only main table with the sample sheet's grouped header:
+           Test Item No. over two rows, then Learners with Correct
+           Answers, Item Difficulty and Item Discrimination over three
+           columns each. No Key or Blank columns, as on the sheet. -->
+      <div class="tia-print-only">
+        <table class="table tia-table tia-print-table">
+          <!-- Fixed column widths: the table must not re-size its
+               columns from the data, or the wide header words steal
+               width from the Remarks and Item Quality columns and
+               their values wrap onto two lines. The widths below
+               leave every value on one line at the print size:
+               the number columns stay narrow, Evaluation and Item
+               Quality get room for their longest labels. -->
+          <colgroup>
+            <col style="width: 46px">
+            <col style="width: 62px">
+            <col style="width: 62px">
+            <col style="width: 54px">
+            <col style="width: 66px">
+            <col style="width: 112px">
+            <col style="width: 82px">
+            <col style="width: 78px">
+            <col style="width: 118px">
+            <col style="width: 88px">
+          </colgroup>
+          <thead>
+            <tr>
+              <th rowspan="2">Test<br>Item<br>No.</th>
+              <th colspan="3">Learners with Correct Answers</th>
+              <th colspan="3">Item Difficulty</th>
+              <th colspan="3">Item Discrimination</th>
+            </tr>
+            <tr>
+              <th>Upper<br>Group</th>
+              <th>Lower<br>Group</th>
+              <th>Total</th>
+              <th>Difficulty<br>Value</th>
+              <th>Item<br>Evaluation</th>
+              <th>Remarks</th>
+              <th>Discrimination<br>Index</th>
+              <th>Item<br>Quality</th>
+              <th>Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of report.items; track item.position) {
+              @let mark = itemMark(item);
+              <tr [class.negative-row]="item.negative">
+                <td>{{ item.position }}</td>
+                <td>{{ item.upper_correct }}</td>
+                <td>{{ item.lower_correct }}</td>
+                <td>{{ item.total_correct }}</td>
+                <td><span class="tia-value">@if (mark) {<span class="tia-mark tia-mark-{{ mark }}" aria-hidden="true">@if (mark === 'warn') {!}</span>} {{ fmt(item.difficulty) }}</span></td>
+                <td>{{ item.difficulty_label }}</td>
+                <td>{{ item.difficulty_action }}</td>
+                <td><span class="tia-value">@if (mark) {<span class="tia-mark tia-mark-{{ mark }}" aria-hidden="true">@if (mark === 'warn') {!}</span>} {{ fmtSigned(item.discrimination) }}</span></td>
                 <td>{{ item.discrimination_label }}</td>
                 <td>{{ item.discrimination_action }}</td>
               </tr>
@@ -147,14 +261,24 @@
         Difficulty = correct answers in both groups ÷ learners in both groups. Discrimination = upper-group
         correct rate − lower-group correct rate. {{ report.groups.tie_note }}
       </p>
+      <!-- The circles beside the Difficulty and Discrimination values,
+           as on the sample sheet: blue-green for a most-learned item,
+           light orange for a least-learned item, light yellow with an
+           exclamation point when the lower group beat the upper group. -->
+      <div class="tia-mark-legend tia-form-items" aria-label="Circles beside the Difficulty and Discrimination values">
+        <span class="tia-mark-legend-item"><span class="tia-mark tia-mark-most" aria-hidden="true"></span> Most Learned</span>
+        <span class="tia-mark-legend-item"><span class="tia-mark tia-mark-least" aria-hidden="true"></span> Least Learned</span>
+        <span class="tia-mark-legend-item"><span class="tia-mark tia-mark-warn" aria-hidden="true">!</span> The lower group got more correct answers than the upper group.</span>
+      </div>
+      </div>
 
+      <div class="tia-pane tia-pane-distractors" [class.tia-pane-hidden]="view() !== 'distractors'">
       <h3 class="tia-section">Distractor Analysis</h3>
       <div class="table-wrap">
-        <table class="table tia-table">
+        <table class="table tia-table tia-screen-table">
           <thead>
             <tr>
               <th>Item</th>
-              <th>Option</th>
               <th>Upper</th>
               <th>Lower</th>
               <th>Total</th>
@@ -165,10 +289,18 @@
           </thead>
           <tbody>
             @for (item of report.items; track item.position) {
+              <tr class="distractor-item-row">
+                <td>{{ item.position }}</td>
+                <td>{{ item.upper_correct }}</td>
+                <td>{{ item.lower_correct }}</td>
+                <td>{{ item.total_correct }}</td>
+                <td>—</td>
+                <td>—</td>
+                <td></td>
+              </tr>
               @for (option of item.distractors; track option.option_index) {
                 <tr [class.correct-row]="option.is_correct">
-                  <td>{{ item.position }}</td>
-                  <td>{{ option.label }}</td>
+                  <td class="distractor-option">{{ option.is_correct ? '*' : '' }}{{ option.label }}</td>
                   <td>{{ option.upper }}</td>
                   <td>{{ option.lower }}</td>
                   <td>{{ option.total }}</td>
@@ -181,15 +313,87 @@
           </tbody>
         </table>
       </div>
+      <!-- Print form 2: the same grouped header as the difficulty and
+           discrimination form, plus the Distractor Analysis group, as
+           on the sample sheet. Item rows carry the item numbers; option
+           rows carry the responses and the distractor judgements. -->
+      <div class="tia-print-only">
+        <table class="table tia-table tia-print-distractor-table">
+          <thead>
+            <tr>
+              <th rowspan="2">Test Item No.</th>
+              <th colspan="3">Learners with Correct Answers / Number of Responses</th>
+              <th colspan="3">Item Difficulty</th>
+              <th colspan="3">Item Discrimination</th>
+              <th colspan="4">Distractor Analysis</th>
+            </tr>
+            <tr>
+              <th>Upper Group</th>
+              <th>Lower Group</th>
+              <th>Total</th>
+              <th>Difficulty Index</th>
+              <th>Item Evaluation</th>
+              <th>Remarks</th>
+              <th>Discrimination Index</th>
+              <th>Item Quality</th>
+              <th>Remarks</th>
+              <th>Plausibility Index</th>
+              <th>Plausibility Remarks</th>
+              <th>Discrimination Direction Index</th>
+              <th>Discrimination Direction Remarks</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of report.items; track item.position) {
+              @let mark = itemMark(item);
+              <tr class="distractor-item-row">
+                <td>{{ item.position }}</td>
+                <td>{{ item.upper_correct }}</td>
+                <td>{{ item.lower_correct }}</td>
+                <td>{{ item.total_correct }}</td>
+                <td><span class="tia-value">@if (mark) {<span class="tia-mark tia-mark-{{ mark }}" aria-hidden="true">@if (mark === 'warn') {!}</span>} {{ fmt(item.difficulty) }}</span></td>
+                <td>{{ item.difficulty_label }}</td>
+                <td>{{ item.difficulty_action }}</td>
+                <td><span class="tia-value">@if (mark) {<span class="tia-mark tia-mark-{{ mark }}" aria-hidden="true">@if (mark === 'warn') {!}</span>} {{ fmtSigned(item.discrimination) }}</span></td>
+                <td>{{ item.discrimination_label }}</td>
+                <td>{{ item.discrimination_action }}</td>
+                <td>—</td>
+                <td></td>
+                <td>—</td>
+                <td></td>
+              </tr>
+              @for (option of item.distractors; track option.option_index) {
+                <tr [class.correct-row]="option.is_correct">
+                  <td class="distractor-option">{{ option.is_correct ? '*' : '' }}{{ option.label }}</td>
+                  <td>{{ option.upper }}</td>
+                  <td>{{ option.lower }}</td>
+                  <td>{{ option.total }}</td>
+                  <td>—</td>
+                  <td></td>
+                  <td></td>
+                  <td>—</td>
+                  <td></td>
+                  <td></td>
+                  <td>{{ fmt(option.plausibility) }}</td>
+                  <td>{{ option.plausibility_remark }}</td>
+                  <td>{{ option.direction > 0 ? '+' : '' }}{{ option.direction }}</td>
+                  <td>{{ option.direction_remark }}</td>
+                </tr>
+              }
+            }
+          </tbody>
+        </table>
+      </div>
       <p class="muted small">
         Plausibility = learners who chose the option ÷ all checked sheets. Direction = upper-group choices −
         lower-group choices. A good distractor is chosen by at least 5% of takers and by more lower-group than
         upper-group learners. True/False items have only the one wrong option as their distractor.
       </p>
+      </div>
 
       <h3 class="tia-section">Summary based on {{ report.exam.question_count }}-item test</h3>
       <div class="tia-summary">
-        <table class="table tia-table">
+        <table class="table tia-table tia-form-items">
           <thead>
             <tr><th>Item Difficulty</th><th>No. of Items</th></tr>
           </thead>
@@ -200,7 +404,7 @@
             <tr class="total-row"><td>Total</td><td>{{ report.items.length }}</td></tr>
           </tbody>
         </table>
-        <table class="table tia-table">
+        <table class="table tia-table tia-form-items">
           <thead>
             <tr><th>Item Discrimination</th><th>No. of Items</th></tr>
           </thead>
@@ -211,7 +415,7 @@
             <tr class="total-row"><td>Total</td><td>{{ report.items.length }}</td></tr>
           </tbody>
         </table>
-        <table class="table tia-table">
+        <table class="table tia-table tia-form-distractors">
           <thead>
             <tr><th>Distractor Analysis</th><th>No. of Options</th></tr>
           </thead>
@@ -232,22 +436,39 @@
           </tbody>
         </table>
       </div>
-      <p class="tia-learned">
-        <strong>Most learned items:</strong> {{ joinPositions(report.summary.most_learned) }} &nbsp;·&nbsp;
-        <strong>Least learned items:</strong> {{ joinPositions(report.summary.least_learned) }}
-      </p>
-
-      <h3 class="tia-section">How to read this</h3>
-      <div class="tia-legends">
-        <div>
+      <!-- Bar charts of the two summary counts, as on the sample
+           sheet: orange for Item Difficulty, red for Item
+           Discrimination, hardest and poorest first. -->
+      <div class="tia-charts tia-form-items">
+        <div class="tia-chart">
           <h4>Item Difficulty</h4>
-          <p>0.81–1.00 Very Easy — Reject/Revise · 0.61–0.80 Easy — Retain · 0.41–0.60 Moderately Difficult — Retain · 0.21–0.40 Difficult — Retain · 0.00–0.20 Very Difficult — Reject/Revise</p>
+          @for (row of difficultyChartRows(); track row.label) {
+            <div class="tia-chart-row">
+              <span class="tia-chart-label">{{ row.label }}</span>
+              <span class="tia-chart-track"><span class="tia-chart-bar tia-chart-bar-difficulty" [style.width.%]="row.pct"></span></span>
+              <span class="tia-chart-count">{{ row.count }}</span>
+            </div>
+          }
         </div>
-        <div>
+        <div class="tia-chart">
           <h4>Item Discrimination</h4>
-          <p>D ≥ 0.50 Very Good Item — Retain · 0.40–0.49 Good Item; Very Usable — Retain · 0.30–0.39 Fair Quality; Usable Item — Retain · 0.20–0.29 Potentially Poor Item — Revise · D &lt; 0.20 Potentially Very Poor — Reject</p>
+          @for (row of discriminationChartRows(); track row.label) {
+            <div class="tia-chart-row">
+              <span class="tia-chart-label">{{ row.label }}</span>
+              <span class="tia-chart-track"><span class="tia-chart-bar tia-chart-bar-discrimination" [style.width.%]="row.pct"></span></span>
+              <span class="tia-chart-count">{{ row.count }}</span>
+            </div>
+          }
         </div>
-        <div>
+      </div>
+      <!-- The most/least learned line and the difficulty and
+           discrimination band notes are gone: the circles, the
+           legend below the table and the bar charts carry that
+           now. Only the distractor notes stay, for the second
+           form, under a heading that prints only with that form. -->
+      <h3 class="tia-section tia-form-distractors">How to read this</h3>
+      <div class="tia-legends">
+        <div class="tia-form-distractors">
           <h4>Distractor Analysis</h4>
           <p>Chosen by under 5% — replace or rewrite. Chosen by 5% or more — plausible. Chosen more by the upper group — rephrase or check for trick wording. Chosen more by the lower group — good distractor, retain. Equal in both groups at 5% or more — plausible and meaningful, retain.</p>
         </div>

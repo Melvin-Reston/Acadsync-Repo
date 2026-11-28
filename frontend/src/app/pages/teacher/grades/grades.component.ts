@@ -70,6 +70,23 @@ export class TeacherGradesComponent {
   protected readonly draft = signal<Record<number, Record<number, number | null>>>({});
   protected readonly savedDraft = signal<Record<number, Record<number, number | null>>>({});
 
+  // Sheets already fetched for the open class and viewing year, keyed
+  // "classId:quarter". Switching back to a term already seen shows it at
+  // once, with no second round trip — every sheet load re-reads the
+  // roster, the scores, the submission state and the final grades of
+  // every period, which is what made switching feel slow. A save, a
+  // column change, a weights change or a filing drops the class's
+  // entries, so a cached sheet is never shown after its data changed
+  // (final grades depend on every period's saved scores).
+  private readonly sheetCache = new Map<string, GradeSheet>();
+  private sheetCacheYear: string | null = null;
+  // Sequence guard: a slow sheet response for a term the teacher has
+  // already left must not overwrite the term now on screen.
+  private sheetSeq = 0;
+  // Columns being added, per component: the add itself is one insert,
+  // and a double click must not add the column twice.
+  private readonly addingColumns = new Set<'WW' | 'PT' | 'EX'>();
+
   protected readonly search = signal('');
   protected readonly sexFilter = signal<SexFilter>('all');
   protected readonly highlightBelow = signal(false);
@@ -426,6 +443,12 @@ export class TeacherGradesComponent {
   private loadClasses(): void {
     const yearKey = this.year.selectedYear() ?? '';
     if (yearKey === this.loadingClassesYear) return;
+    // A new viewing year means new classes: last year's cached sheets
+    // must not come back.
+    if (yearKey !== this.sheetCacheYear) {
+      this.sheetCache.clear();
+      this.sheetCacheYear = yearKey;
+    }
     this.loadingClassesYear = yearKey;
     this.classesService.classes({ academic_year: this.year.selectedYear() ?? '' }).subscribe({
       next: (response) => {
@@ -446,34 +469,70 @@ export class TeacherGradesComponent {
     });
   }
 
-  protected loadSheet(quarter?: number): void {
+  // Loads a sheet, from the cache when this class and term were already
+  // fetched. Forced loads (after a save or a column/weight change)
+  // always re-read the server. Called with no quarter, the server
+  // resolves the term, so there is no cache key to look up and it
+  // always fetches.
+  protected loadSheet(quarter?: number, force = false): void {
     const classId = this.selectedClassId();
     if (classId === '') return;
+    if (quarter !== undefined && !force) {
+      const cached = this.sheetCache.get(this.sheetCacheKey(classId, quarter));
+      if (cached) {
+        // Bump the sequence so a still-flying load for another term
+        // cannot overwrite the cached sheet when it lands.
+        this.sheetSeq += 1;
+        this.applySheet(cached);
+        return;
+      }
+    }
+    if (force) this.dropClassCache(classId);
+    const seq = ++this.sheetSeq;
     this.loading.set(true);
     this.grades.sheet(classId, quarter).subscribe({
       next: (sheet) => {
-        this.sheet.set(sheet);
-        this.quarter.set(sheet.quarter);
-        this.weightsDraft.set({ ...sheet.weights });
-        this.weightsEditing.set(false);
-        const subWeights: Record<number, number> = {};
-        for (const column of sheet.columns) {
-          if (column.component === 'EX') subWeights[column.id] = column.sub_weight ?? 0;
-        }
-        this.subWeightsDraft.set(subWeights);
-        const draft: Record<number, Record<number, number | null>> = {};
-        for (const learner of sheet.learners) {
-          draft[learner.id] = { ...learner.scores };
-        }
-        this.draft.set(draft);
-        this.savedDraft.set(JSON.parse(JSON.stringify(draft)));
-        this.loading.set(false);
+        if (seq !== this.sheetSeq) return;
+        this.sheetCache.set(this.sheetCacheKey(classId, sheet.quarter), sheet);
+        this.applySheet(sheet);
       },
       error: (error) => {
+        if (seq !== this.sheetSeq) return;
         this.loading.set(false);
         this.error.set(errorMessage(error));
       },
     });
+  }
+
+  private sheetCacheKey(classId: number, quarter: number): string {
+    return `${classId}:${quarter}`;
+  }
+
+  private dropClassCache(classId: number): void {
+    for (const key of [...this.sheetCache.keys()]) {
+      if (key.startsWith(`${classId}:`)) this.sheetCache.delete(key);
+    }
+  }
+
+  // Puts a fetched (or cached) sheet on screen: weights, the working
+  // draft and the saved copy the dirty check compares against.
+  private applySheet(sheet: GradeSheet): void {
+    this.sheet.set(sheet);
+    this.quarter.set(sheet.quarter);
+    this.weightsDraft.set({ ...sheet.weights });
+    this.weightsEditing.set(false);
+    const subWeights: Record<number, number> = {};
+    for (const column of sheet.columns) {
+      if (column.component === 'EX') subWeights[column.id] = column.sub_weight ?? 0;
+    }
+    this.subWeightsDraft.set(subWeights);
+    const draft: Record<number, Record<number, number | null>> = {};
+    for (const learner of sheet.learners) {
+      draft[learner.id] = { ...learner.scores };
+    }
+    this.draft.set(draft);
+    this.savedDraft.set(JSON.parse(JSON.stringify(draft)));
+    this.loading.set(false);
   }
 
   protected onClassSelect(classId: number | ''): void {
@@ -513,7 +572,7 @@ export class TeacherGradesComponent {
   protected recalculate(): void {
     // The numbers are computed live as the teacher types; this re-reads the
     // saved sheet from the server and recomputes everything from it.
-    this.loadSheet(this.quarter());
+    this.loadSheet(this.quarter(), true);
     this.toast.success('Grades recalculated from the saved scores.');
   }
 
@@ -560,7 +619,7 @@ export class TeacherGradesComponent {
         } else {
           this.toast.success('Scores saved.');
         }
-        this.loadSheet(this.quarter());
+        this.loadSheet(this.quarter(), true);
       },
       error: (error) => {
         this.saving.set(false);
@@ -591,13 +650,67 @@ export class TeacherGradesComponent {
 
   protected addColumn(component: 'WW' | 'PT' | 'EX'): void {
     const classId = this.selectedClassId();
-    if (classId === '') return;
+    const sheet = this.sheet();
+    if (classId === '' || !sheet) return;
+    if (this.addingColumns.has(component)) return;
+    this.addingColumns.add(component);
     this.grades.addColumn(classId, this.quarter(), component).subscribe({
       next: (response) => {
+        this.addingColumns.delete(component);
         this.toast.success(`Added ${response.column.name}.`);
-        this.loadSheet(this.quarter());
+        // No sheet reload: adding a column is one insert, and the reload
+        // was the slow part. The new column is blank for every learner,
+        // so it slots straight into the sheet on screen, in its
+        // component's order. The server also clears this term's
+        // submission when a column is added, so the patched sheet
+        // drops it too. The other terms' cached sheets are dropped —
+        // their finals can move when a record gains a blank column —
+        // and the patched sheet is cached in their place.
+        const column: GradeColumn = {
+          ...response.column,
+          quiz_id: null,
+          quiz_title: null,
+          exam_id: null,
+          exam_title: null,
+        };
+        const rank = (value: GradeColumn) =>
+          value.component === 'WW' ? 1 : value.component === 'PT' ? 2 : 3;
+        const columns = [...sheet.columns, column].sort(
+          (a, b) => rank(a) - rank(b) || a.position - b.position || a.id - b.id,
+        );
+        const patched: GradeSheet = {
+          ...sheet,
+          columns,
+          submission: null,
+          learners: sheet.learners.map((learner) => ({
+            ...learner,
+            scores: { ...learner.scores, [column.id]: null },
+          })),
+        };
+        this.dropClassCache(classId);
+        this.sheetCache.set(this.sheetCacheKey(classId, sheet.quarter), patched);
+        this.sheet.set(patched);
+        const next = { ...this.draft() };
+        const saved = { ...this.savedDraft() };
+        for (const learner of sheet.learners) {
+          next[learner.id] = { ...(next[learner.id] ?? {}), [column.id]: null };
+          saved[learner.id] = { ...(saved[learner.id] ?? {}), [column.id]: null };
+        }
+        this.draft.set(next);
+        this.savedDraft.set(saved);
+        // A new Examinations column starts with the sub-weight the
+        // server gave it, so the sub-weights editor follows the sheet.
+        if (column.component === 'EX') {
+          this.subWeightsDraft.set({
+            ...this.subWeightsDraft(),
+            [column.id]: column.sub_weight ?? 0,
+          });
+        }
       },
-      error: (error) => this.error.set(errorMessage(error)),
+      error: (error) => {
+        this.addingColumns.delete(component);
+        this.error.set(errorMessage(error));
+      },
     });
   }
 
@@ -610,11 +723,11 @@ export class TeacherGradesComponent {
     this.grades.updateColumn(classId, column.id, value).subscribe({
       next: () => {
         this.toast.success(`${column.name} highest possible score is now ${value}.`);
-        this.loadSheet(this.quarter());
+        this.loadSheet(this.quarter(), true);
       },
       error: (error) => {
         this.error.set(errorMessage(error));
-        this.loadSheet(this.quarter());
+        this.loadSheet(this.quarter(), true);
       },
     });
   }
@@ -633,7 +746,7 @@ export class TeacherGradesComponent {
         this.removingColumn.set(false);
         this.removeColumn.set(null);
         this.toast.success(`Removed ${column.name} and its scores.`);
-        this.loadSheet(this.quarter());
+        this.loadSheet(this.quarter(), true);
       },
       error: (error) => {
         this.removingColumn.set(false);
@@ -660,7 +773,7 @@ export class TeacherGradesComponent {
         this.weightsSaving.set(false);
         this.weightsEditing.set(false);
         this.toast.success('Weights saved.');
-        this.loadSheet(this.quarter());
+        this.loadSheet(this.quarter(), true);
       },
       error: (error) => {
         this.weightsSaving.set(false);
@@ -696,7 +809,7 @@ export class TeacherGradesComponent {
         } else {
           this.toast.success('Examinations sub-weights saved.');
         }
-        this.loadSheet(this.quarter());
+        this.loadSheet(this.quarter(), true);
       },
       error: (error) => {
         this.subWeightsSaving.set(false);
@@ -750,7 +863,7 @@ export class TeacherGradesComponent {
         this.submitting.set(false);
         this.submitOpen.set(false);
         this.toast.success(response.message);
-        this.loadSheet(this.quarter());
+        this.loadSheet(this.quarter(), true);
       },
       error: (error) => {
         this.submitting.set(false);
