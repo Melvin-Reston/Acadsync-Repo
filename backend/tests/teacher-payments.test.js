@@ -330,9 +330,9 @@ describe('Teacher QR payment', () => {
   });
 });
 
-// ---------- The screenshot is kept after review ----------
+// ---------- The screenshot is deleted on approval, kept on rejection ----------
 
-describe('Payment screenshot kept after review', () => {
+describe('Payment screenshot deleted on approval', () => {
   const fs = require('node:fs');
   const path = require('node:path');
 
@@ -346,7 +346,7 @@ describe('Payment screenshot kept after review', () => {
     return storedPath ? path.join(config.uploadDir, storedPath) : null;
   }
 
-  test('a confirmed payment keeps its screenshot for re-checking', async () => {
+  test('a confirmed payment deletes its screenshot but keeps its text record', async () => {
     const { invoice, token } = await teacherWithUnpaidInvoice();
     const submitted = await submitAsTeacher(token, invoice.id);
     assert.equal(submitted.status, 201, JSON.stringify(submitted.body));
@@ -362,15 +362,16 @@ describe('Payment screenshot kept after review', () => {
 
     const confirmed = await api().post(`/api/payments/${paymentId}/confirm`).set(bearer(adminToken));
     assert.equal(confirmed.status, 200, JSON.stringify(confirmed.body));
-    assert.equal(confirmed.body.payment.has_screenshot, true);
+    assert.equal(confirmed.body.payment.has_screenshot, false);
 
-    // The image and its path stay with the confirmed payment.
-    assert.equal(await screenshotPath(paymentId), before);
-    assert.equal(fs.existsSync(file), true, 'screenshot file should still exist after confirm');
-    assert.equal((await api().get(`/api/payments/${paymentId}/screenshot`).set(bearer(adminToken))).status, 200);
+    // The image and its path are gone, but the text record stays.
+    assert.equal(await screenshotPath(paymentId), null);
+    assert.equal(fs.existsSync(file), false, 'screenshot file should be deleted after confirm');
+    assert.equal((await api().get(`/api/payments/${paymentId}/screenshot`).set(bearer(adminToken))).status, 404);
     const again = await api().get(`/api/payments/${paymentId}`).set(bearer(adminToken));
     assert.equal(again.body.payment.status, 'confirmed');
     assert.equal(again.body.payment.reference_number, 'GCASH-1001');
+    assert.equal(again.body.payment.amount, '100.00');
   });
 
   test('a rejected payment keeps its screenshot for re-checking', async () => {

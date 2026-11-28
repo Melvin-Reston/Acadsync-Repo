@@ -824,8 +824,13 @@ describe('Payment QR code', () => {
     assert.equal(saved.body.payment.account_name, 'Test Account Name');
     assert.match((await lastActivity('settings.payment_qr')).description, /Uploaded the payment QR code/);
 
-    const firstPath = (await pool.query(`SELECT value FROM settings WHERE key = 'payment_qr_path'`)).rows[0].value;
-    assert.match(firstPath, /^qr\/[0-9a-f]{32}\.png$/);
+    const firstRow = (await pool.query(`SELECT image_data, mime_type FROM branding_images WHERE key = 'payment_qr'`)).rows[0];
+    assert.ok(firstRow);
+    assert.ok(Buffer.from(firstRow.image_data).equals(PNG));
+    assert.equal(firstRow.mime_type, 'image/png');
+    // The old file path in settings is cleared: the database row is the only source now.
+    assert.equal((await pool.query(`SELECT value FROM settings WHERE key = 'payment_qr_path'`)).rows[0].value, '');
+    assert.ok(!fs.existsSync(path.join(config.uploadDir, 'qr')), 'no QR code file should be written to disk');
 
     const image = await api().get('/api/settings/payment/qr').set(bearer(adminToken));
     assert.equal(image.status, 200);
@@ -838,11 +843,13 @@ describe('Payment QR code', () => {
     assert.equal(textOnly.body.payment.account_name, 'Second Name');
     assert.equal(textOnly.body.payment.instructions, '');
 
-    // Replace: the old file is deleted.
+    // Replace: the database row is updated in place, and no file is written.
     const replaced = await api().put('/api/settings/payment').set(bearer(adminToken)).field('account_name', 'Second Name').attach('qr_image', PNG, 'new.png');
     assert.equal(replaced.status, 200);
     assert.match((await lastActivity('settings.payment_qr')).description, /Replaced the payment QR code/);
-    assert.ok(!fs.existsSync(path.join(config.uploadDir, firstPath)));
+    const replacedRow = (await pool.query(`SELECT image_data FROM branding_images WHERE key = 'payment_qr'`)).rows[0];
+    assert.ok(Buffer.from(replacedRow.image_data).equals(PNG));
+    assert.ok(!fs.existsSync(path.join(config.uploadDir, 'qr')));
 
     const wrongType = await api().put('/api/settings/payment').set(bearer(adminToken)).field('account_name', 'Second Name').attach('qr_image', NOT_AN_IMAGE, 'qr.png');
     assert.equal(wrongType.status, 400);

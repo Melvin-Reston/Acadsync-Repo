@@ -362,7 +362,7 @@ async function getItemAnalysis(req, res) {
   const headerResult = await db.query(
     `SELECT t.first_name, t.last_name, t.region, t.division, t.deped_school_id,
             t.school_head_name, s.name AS school_name, s.city_region AS school_city_region,
-            s.seal_path
+            (s.seal_data IS NOT NULL) AS has_school_seal
        FROM teachers t JOIN schools s ON s.id = t.school_id WHERE t.id = $1`,
     [req.teacher.id]
   );
@@ -377,7 +377,7 @@ async function getItemAnalysis(req, res) {
     school_head_name: headerRow.school_head_name || null,
     // The print header shows the school's own seal (uploaded on the
     // Dashboard), never the DepEd seal.
-    has_school_seal: Boolean(headerRow.seal_path),
+    has_school_seal: Boolean(headerRow.has_school_seal),
   };
 
   const rosterResult = await db.query('SELECT COUNT(*)::int AS count FROM class_learners WHERE class_id = $1', [exam.class_id]);

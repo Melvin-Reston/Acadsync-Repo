@@ -2,10 +2,12 @@
 // Teacher sign-in lives in teacherAuth.controller.js.
 const db = require('../db');
 const { logActivity } = require('../utils/activity');
-const { notFound } = require('../utils/httpError');
+const { notFound, badRequest } = require('../utils/httpError');
 const { config } = require('../config');
 const billing = require('../utils/billing');
-const { saveImage, deleteImage, sendImage } = require('../utils/uploads');
+const { readImageFile, sendBytes } = require('../utils/uploads');
+const branding = require('../utils/branding');
+const { DEP_SEAL_KEY, DEP_LOGO_KEY } = branding;
 const deped = require('../utils/deped');
 const grading = require('../utils/grading');
 
@@ -91,16 +93,15 @@ async function listActivity(req, res) {
   res.json({ items: rows.rows, total: total.rows[0].count, page, page_size, admins: admins.rows });
 }
 
-// The payment QR code settings, read from the settings table. There are
-// two optional QR codes (for example, one e-wallet and one bank): the
-// second lives under its own keys, so no database migration is needed and
-// an install with only the first QR code keeps working exactly as before.
+// The payment QR code settings. The QR images themselves live in the
+// database (branding_images, migration 020), not as files on disk, so
+// a redeploy cannot wipe them; only their labels and instructions live
+// in the settings table. There are two optional QR codes (for example,
+// one e-wallet and one bank).
 const PAYMENT_SETTING_KEYS = [
-  'payment_qr_path',
   'payment_label',
   'payment_account_name',
   'payment_instructions',
-  'payment_qr2_path',
   'payment_qr2_label',
   'payment_qr2_account_name',
   'payment_qr2_instructions',
@@ -114,15 +115,14 @@ async function readPaymentSettings(client = db) {
   const byKey = Object.fromEntries(result.rows.map((row) => [row.key, row]));
   const value = (key) => (byKey[key] ? byKey[key].value : '');
   const updatedAt = result.rows.reduce((latest, row) => (!latest || row.updated_at > latest ? row.updated_at : latest), null);
+  const flags = await branding.brandingFlags(client);
 
   return {
-    qr_path: value('payment_qr_path'),
-    has_qr: Boolean(value('payment_qr_path')),
+    has_qr: flags.has_qr,
     label: value('payment_label'),
     account_name: value('payment_account_name'),
     instructions: value('payment_instructions'),
-    qr2_path: value('payment_qr2_path'),
-    has_qr2: Boolean(value('payment_qr2_path')),
+    has_qr2: flags.has_qr2,
     qr2_label: value('payment_qr2_label'),
     qr2_account_name: value('payment_qr2_account_name'),
     qr2_instructions: value('payment_qr2_instructions'),
@@ -130,8 +130,8 @@ async function readPaymentSettings(client = db) {
   };
 }
 
-// What the browser may see: everything except the file paths.
-const publicPaymentSettings = ({ qr_path, qr2_path, ...rest }) => rest; // eslint-disable-line no-unused-vars
+// What the browser may see: the payment settings as read above.
+const publicPaymentSettings = (settings) => settings;
 
 // GET /api/settings
 async function getSettings(req, res) {
@@ -170,7 +170,9 @@ async function saveSetting(client, key, value) {
 //   qr2_label, qr2_account_name, qr2_instructions, qr_image2?, remove_qr2?)
 // Saves both payment QR codes that teachers see when they pay. One save
 // carries both codes, so saving one never wipes the other. Either code may
-// be removed on its own; removing a code deletes its stored image.
+// be removed on its own. The images are stored in the database, so they
+// survive a redeploy; the old file paths in settings are cleared and
+// never read again.
 async function updatePaymentSettings(req, res) {
   const {
     label,
@@ -184,69 +186,103 @@ async function updatePaymentSettings(req, res) {
   } = req.valid.body;
   const before = await readPaymentSettings();
   // The upload middleware puts the files under req.files; accept the old
-  // single-file shape too, so nothing else has to change.
+  // single-file shape too, so nothing else has to change. Both images
+  // are checked before anything is saved, so a bad second image cannot
+  // leave the first one half-saved.
   const firstFile = req.files?.qr_image?.[0] ?? req.file ?? null;
   const secondFile = req.files?.qr_image2?.[0] ?? null;
-  const newQrPath = firstFile ? await saveImage(firstFile, 'qr', 'qr_image') : null;
-  let newQr2Path = null;
-  try {
-    newQr2Path = secondFile ? await saveImage(secondFile, 'qr', 'qr_image2') : null;
-  } catch (error) {
-    await deleteImage(newQrPath);
-    throw error;
-  }
+  const newQr = firstFile ? readImageFile(firstFile, 'qr_image') : null;
+  const newQr2 = secondFile ? readImageFile(secondFile, 'qr_image2') : null;
 
-  let qrPath = before.qr_path;
-  if (newQrPath) qrPath = newQrPath;
-  else if (remove_qr) qrPath = '';
-  let qr2Path = before.qr2_path;
-  if (newQr2Path) qr2Path = newQr2Path;
-  else if (remove_qr2) qr2Path = '';
+  await db.withTransaction(async (client) => {
+    await saveSetting(client, 'payment_label', label);
+    await saveSetting(client, 'payment_account_name', account_name);
+    await saveSetting(client, 'payment_instructions', instructions);
+    await saveSetting(client, 'payment_qr2_label', qr2_label);
+    await saveSetting(client, 'payment_qr2_account_name', qr2_account_name);
+    await saveSetting(client, 'payment_qr2_instructions', qr2_instructions);
+    // Clear the pre-fix-15 file paths, in case an install upgraded with
+    // a QR code already set: the database rows below are the only source now.
+    await saveSetting(client, 'payment_qr_path', '');
+    await saveSetting(client, 'payment_qr2_path', '');
 
-  try {
-    await db.withTransaction(async (client) => {
-      await saveSetting(client, 'payment_qr_path', qrPath);
-      await saveSetting(client, 'payment_label', label);
-      await saveSetting(client, 'payment_account_name', account_name);
-      await saveSetting(client, 'payment_instructions', instructions);
-      await saveSetting(client, 'payment_qr2_path', qr2Path);
-      await saveSetting(client, 'payment_qr2_label', qr2_label);
-      await saveSetting(client, 'payment_qr2_account_name', qr2_account_name);
-      await saveSetting(client, 'payment_qr2_instructions', qr2_instructions);
+    if (newQr) await branding.saveBrandingImage(branding.PAYMENT_QR_KEY, newQr, client);
+    else if (remove_qr) await branding.deleteBrandingImage(branding.PAYMENT_QR_KEY, client);
+    if (newQr2) await branding.saveBrandingImage(branding.PAYMENT_QR2_KEY, newQr2, client);
+    else if (remove_qr2) await branding.deleteBrandingImage(branding.PAYMENT_QR2_KEY, client);
 
-      const changes = [];
-      if (newQrPath) changes.push(before.has_qr ? 'Replaced the payment QR code' : 'Uploaded the payment QR code');
-      else if (remove_qr && before.has_qr) changes.push('Removed the payment QR code');
-      if (newQr2Path) changes.push(before.has_qr2 ? 'Replaced the second payment QR code' : 'Uploaded the second payment QR code');
-      else if (remove_qr2 && before.has_qr2) changes.push('Removed the second payment QR code');
-      const change = changes.length > 0 ? changes.join('; ') : 'Updated the payment details';
-      await logActivity(req, { action: 'settings.payment_qr', entityType: 'settings', description: `${change}${account_name ? ` (account name: ${account_name})` : ''}` }, client);
-    });
-  } catch (error) {
-    await deleteImage(newQrPath);
-    await deleteImage(newQr2Path);
-    throw error;
-  }
-
-  // Old images are no longer needed once a new one is saved or it was removed.
-  if (before.qr_path && before.qr_path !== qrPath) await deleteImage(before.qr_path);
-  if (before.qr2_path && before.qr2_path !== qr2Path) await deleteImage(before.qr2_path);
+    const changes = [];
+    if (newQr) changes.push(before.has_qr ? 'Replaced the payment QR code' : 'Uploaded the payment QR code');
+    else if (remove_qr && before.has_qr) changes.push('Removed the payment QR code');
+    if (newQr2) changes.push(before.has_qr2 ? 'Replaced the second payment QR code' : 'Uploaded the second payment QR code');
+    else if (remove_qr2 && before.has_qr2) changes.push('Removed the second payment QR code');
+    const change = changes.length > 0 ? changes.join('; ') : 'Updated the payment details';
+    await logActivity(req, { action: 'settings.payment_qr', entityType: 'settings', description: `${change}${account_name ? ` (account name: ${account_name})` : ''}` }, client);
+  });
 
   res.json({ payment: publicPaymentSettings(await readPaymentSettings()) });
 }
 
 // GET /api/settings/payment/qr  (the first QR code image, for signed-in admins)
 async function getPaymentQrImage(req, res) {
-  const settings = await readPaymentSettings();
-  if (!settings.qr_path) throw notFound('No payment QR code has been set yet.');
-  await sendImage(res, settings.qr_path);
+  const image = await branding.readBrandingImage(branding.PAYMENT_QR_KEY);
+  if (!image) throw notFound('No payment QR code has been set yet.');
+  sendBytes(res, image.data, image.mime);
 }
 
 // GET /api/settings/payment/qr2  (the second QR code image, for signed-in admins)
 async function getSecondPaymentQrImage(req, res) {
-  const settings = await readPaymentSettings();
-  if (!settings.qr2_path) throw notFound('No second payment QR code has been set yet.');
-  await sendImage(res, settings.qr2_path);
+  const image = await branding.readBrandingImage(branding.PAYMENT_QR2_KEY);
+  if (!image) throw notFound('No second payment QR code has been set yet.');
+  sendBytes(res, image.data, image.mime);
+}
+
+// ---------- DepEd logos ----------
+// The two DepEd logos (the circular seal and the logo) live in the
+// database too, seeded from the bundled originals the first time they
+// are needed. They almost never change; when DepEd does change one, an
+// admin replaces it here, and the replacement is never overwritten by
+// a later deploy. Teachers read the same images through their own
+// endpoints, so the print forms always use the logos in force.
+
+// GET /api/settings/deped  (whether each DepEd logo is set)
+async function getDepedAssets(req, res) {
+  await branding.ensureDepedAssets(db);
+  const flags = await branding.brandingFlags(db);
+  res.json({ has_deped_seal: flags.has_deped_seal, has_deped_logo: flags.has_deped_logo });
+}
+
+// GET /api/settings/deped/seal and /api/settings/deped/logo (signed-in admins)
+async function getDepedSealImage(req, res) {
+  const image = await branding.readDepedImage(DEP_SEAL_KEY);
+  if (!image) throw notFound('No DepEd seal has been set yet.');
+  sendBytes(res, image.data, image.mime);
+}
+
+async function getDepedLogoImage(req, res) {
+  const image = await branding.readDepedImage(DEP_LOGO_KEY);
+  if (!image) throw notFound('No DepEd logo has been set yet.');
+  sendBytes(res, image.data, image.mime);
+}
+
+// PUT /api/settings/deped/:kind  (form: image?) — kind is "seal" or "logo".
+// Replaces one DepEd logo with the uploaded image.
+async function updateDepedAsset(req, res) {
+  const kind = req.params.kind;
+  const key = kind === 'seal' ? DEP_SEAL_KEY : kind === 'logo' ? DEP_LOGO_KEY : null;
+  if (!key) throw notFound('DepEd logo not found.');
+  if (!req.file) {
+    throw badRequest('Choose an image to upload.', {
+      code: 'VALIDATION_ERROR',
+      errors: { image: 'Choose an image to upload.' },
+    });
+  }
+  const image = readImageFile(req.file, 'image');
+  await branding.saveBrandingImage(key, image);
+  const label = kind === 'seal' ? 'DepEd seal' : 'DepEd logo';
+  await logActivity(req, { action: 'settings.deped_logo', entityType: 'settings', description: `Replaced the ${label}` });
+  const flags = await branding.brandingFlags(db);
+  res.json({ has_deped_seal: flags.has_deped_seal, has_deped_logo: flags.has_deped_logo });
 }
 
 // PUT /api/settings/academic-year
@@ -304,4 +340,8 @@ module.exports = {
   updatePaymentSettings,
   getPaymentQrImage,
   getSecondPaymentQrImage,
+  getDepedAssets,
+  getDepedSealImage,
+  getDepedLogoImage,
+  updateDepedAsset,
 };

@@ -73,6 +73,8 @@ teacher.patch('/me', validate(s.teacherProfileSchema), teacherPortal.updateMe);
 teacher.patch('/me/adviser', validate(s.teacherAdviserSchema), teacherPortal.updateAdviser);
 teacher.get('/school/seal', teacherPortal.getSchoolSeal);
 teacher.put('/school/seal', uploadSingle('seal_image'), teacherPortal.updateSchoolSeal);
+teacher.get('/deped/seal', teacherPortal.getDepedSeal);
+teacher.get('/deped/logo', teacherPortal.getDepedLogo);
 teacher.post('/change-password', validate(s.changePasswordSchema), teacherPortal.changePassword);
 teacher.get('/dashboard', validate(s.viewingYearQuerySchema, 'query'), teacherPortal.getDashboard);
 teacher.get('/holidays', teacherPortal.listHolidays);
@@ -305,6 +307,10 @@ router.put('/settings/grading-system', validate(s.gradingProfileSchema), system.
 router.put('/settings/payment', uploadPaymentQr, validate(s.paymentSettingsSchema), system.updatePaymentSettings);
 router.get('/settings/payment/qr', system.getPaymentQrImage);
 router.get('/settings/payment/qr2', system.getSecondPaymentQrImage);
+router.get('/settings/deped', system.getDepedAssets);
+router.get('/settings/deped/seal', system.getDepedSealImage);
+router.get('/settings/deped/logo', system.getDepedLogoImage);
+router.put('/settings/deped/:kind', uploadSingle('image'), system.updateDepedAsset);
 
 // ---------- Super User only: manage the Admin account ----------
 const superUserOnly = requireRole('super_user');

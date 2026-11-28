@@ -473,11 +473,15 @@
   @if (printTarget() === 'class-record') {
     <section class="deped-print dp-class-record" aria-label="Class record printout">
       <div class="dp-head">
-        <img class="dp-seal" src="/deped-seal.png" alt="" />
+        @if (depedSealUrl()) {
+          <img class="dp-seal" [src]="depedSealUrl()" alt="" />
+        }
         <div class="dp-title">
           <h2>CLASS RECORD - {{ sheet()!.grading.period_label.toUpperCase() }} {{ quarter() }}</h2>
         </div>
-        <img class="dp-logo" src="/deped-logo.webp" alt="" />
+        @if (depedLogoUrl()) {
+          <img class="dp-logo" [src]="depedLogoUrl()" alt="" />
+        }
       </div>
       <div class="dp-fields">
         <div class="dp-field col-4"><span class="fl">Region</span><span class="fv">{{ teacher()?.region ?? '' }}</span></div>
@@ -622,11 +626,15 @@
   @if (printTarget() === 'final-grades') {
     <section class="deped-print" aria-label="Final grades printout">
       <div class="dp-head">
-        <img class="dp-seal" src="/deped-seal.png" alt="" />
+        @if (depedSealUrl()) {
+          <img class="dp-seal" [src]="depedSealUrl()" alt="" />
+        }
         <div class="dp-title">
           <h2>CLASS RECORD - FINAL GRADES</h2>
         </div>
-        <img class="dp-logo" src="/deped-logo.webp" alt="" />
+        @if (depedLogoUrl()) {
+          <img class="dp-logo" [src]="depedLogoUrl()" alt="" />
+        }
       </div>
       <div class="dp-fields">
         <div class="dp-field col-4"><span class="fl">Region</span><span class="fv">{{ teacher()?.region ?? '' }}</span></div>

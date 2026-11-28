@@ -80,14 +80,14 @@ async function buildReportCards(client, adviser, requestedYear) {
   const roster = await sectionRoster(client, adviser, classIds);
   const months = schoolYearMonths(year);
 
-  const school = await client.query('SELECT name, principal_contact, seal_path FROM schools WHERE id = $1', [adviser.school_id]);
+  const school = await client.query('SELECT name, principal_contact, (seal_data IS NOT NULL) AS has_seal FROM schools WHERE id = $1', [adviser.school_id]);
   const schoolName = school.rows[0] ? school.rows[0].name : '';
   // The School Head's printed name comes from the school's own record
   // (its Principal / contact field), not from the teacher's profile.
   const schoolHeadName = school.rows[0] ? school.rows[0].principal_contact || '' : '';
   // Whether the school has uploaded a seal (Dashboard): the image itself
   // is fetched from its own endpoint, never as a path in this response.
-  const hasSchoolSeal = Boolean(school.rows[0] && school.rows[0].seal_path);
+  const hasSchoolSeal = Boolean(school.rows[0] && school.rows[0].has_seal);
 
   // Every filing for the section's classes this year, by class and period.
   const submissions = new Map(); // class id -> Map(period -> { submitted_at, profile })

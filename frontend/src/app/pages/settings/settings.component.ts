@@ -12,7 +12,7 @@ import { ModalComponent } from '../../shared/modal.component';
 import { TemporaryPasswordComponent } from '../../shared/temporary-password.component';
 
 // Each card on this page has its own "saving" flag, message and field errors.
-type Section = 'profile' | 'password' | 'year' | 'grading' | 'account' | 'payment';
+type Section = 'profile' | 'password' | 'year' | 'grading' | 'account' | 'payment' | 'deped';
 
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
 
@@ -64,6 +64,17 @@ export class SettingsComponent implements OnDestroy {
   protected readonly qr2File = signal<File | null>(null);
   protected readonly confirmRemoveQr2 = signal(false);
 
+  // DepEd logos: the circular seal and the logo, stored in the database
+  // and printed on the DepEd forms. They change only when DepEd changes
+  // them, so each one is replaced here, on its own, from the bundled
+  // originals that ship with the system.
+  protected readonly hasDepedSeal = signal(false);
+  protected readonly depedSealUrl = signal('');
+  protected readonly depedSealFile = signal<File | null>(null);
+  protected readonly hasDepedLogo = signal(false);
+  protected readonly depedLogoUrl = signal('');
+  protected readonly depedLogoFile = signal<File | null>(null);
+
   constructor() {
     const admin = this.auth.admin();
     if (admin) {
@@ -79,6 +90,11 @@ export class SettingsComponent implements OnDestroy {
         this.showPayment(settings.payment);
       },
       error: (error) => this.fail('year', error),
+    });
+
+    this.system.depedAssets().subscribe({
+      next: (assets) => this.showDeped(assets),
+      error: (error) => this.fail('deped', error),
     });
 
     if (this.auth.isSuperUser()) {
@@ -252,9 +268,82 @@ export class SettingsComponent implements OnDestroy {
     else this.qrUrl.set(url);
   }
 
+  // ---------- DepEd logos ----------
+  protected onDepedChosen(event: Event, kind: 'seal' | 'logo'): void {
+    const file = (event.target as HTMLInputElement).files?.[0] ?? null;
+    if (kind === 'seal') this.depedSealFile.set(null);
+    else this.depedLogoFile.set(null);
+    this.errorIn.set(null);
+    this.errors.set({});
+    if (!file) return;
+
+    let problem = '';
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      problem = 'Upload a PNG, JPG or WEBP image.';
+    } else if (file.size > MAX_IMAGE_BYTES) {
+      problem = 'The image is too large. The limit is 2 MB.';
+    }
+    if (problem) {
+      this.errorIn.set('deped');
+      this.error.set('');
+      this.errors.set({ [kind === 'seal' ? 'deped_seal_image' : 'deped_logo_image']: problem });
+      return;
+    }
+
+    if (kind === 'seal') this.depedSealFile.set(file);
+    else this.depedLogoFile.set(file);
+    this.setDepedUrl(URL.createObjectURL(file), kind);
+  }
+
+  protected saveDeped(kind: 'seal' | 'logo'): void {
+    const file = kind === 'seal' ? this.depedSealFile() : this.depedLogoFile();
+    if (!file) return;
+    this.start('deped');
+    this.system.updateDepedAsset(kind, file).subscribe({
+      next: (assets) => {
+        this.showDeped(assets);
+        this.finish(kind === 'seal' ? 'DepEd seal replaced.' : 'DepEd logo replaced.');
+      },
+      error: (error) => this.fail('deped', error),
+    });
+  }
+
+  private showDeped(assets: { has_deped_seal: boolean; has_deped_logo: boolean }): void {
+    this.hasDepedSeal.set(assets.has_deped_seal);
+    this.hasDepedLogo.set(assets.has_deped_logo);
+    this.depedSealFile.set(null);
+    this.depedLogoFile.set(null);
+    this.setDepedUrl('', 'seal');
+    this.setDepedUrl('', 'logo');
+
+    if (assets.has_deped_seal) {
+      this.system.depedSealImage().subscribe({
+        next: (blob) => this.setDepedUrl(URL.createObjectURL(blob), 'seal'),
+        error: () => undefined,
+      });
+    }
+    if (assets.has_deped_logo) {
+      this.system.depedLogoImage().subscribe({
+        next: (blob) => this.setDepedUrl(URL.createObjectURL(blob), 'logo'),
+        error: () => undefined,
+      });
+    }
+  }
+
+  private setDepedUrl(url: string, kind: 'seal' | 'logo'): void {
+    const current = kind === 'seal' ? this.depedSealUrl() : this.depedLogoUrl();
+    if (current) {
+      URL.revokeObjectURL(current);
+    }
+    if (kind === 'seal') this.depedSealUrl.set(url);
+    else this.depedLogoUrl.set(url);
+  }
+
   ngOnDestroy(): void {
     this.setQrUrl('', false);
     this.setQrUrl('', true);
+    this.setDepedUrl('', 'seal');
+    this.setDepedUrl('', 'logo');
   }
 
   // ---------- Admin account (Super User only) ----------

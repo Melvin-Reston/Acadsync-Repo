@@ -185,8 +185,12 @@
                 </button>
               }
             </div>
+            @if (teacher.has_school_seal) {
+              <span class="hint">This seal is shared by all teachers at {{ teacher.school_name }}. You do not need to upload it again. Choosing a file below replaces it for everyone, and removing it removes it for everyone.</span>
+            } @else {
+              <span class="hint">PNG, JPG or WEBP, up to 2 MB. Upload it once — every teacher at {{ teacher.school_name }} will see it, and it prints on the right side of the Report Card, opposite the DepEd seal. Choosing a file uploads it straight away.</span>
+            }
             <input id="school-seal" name="schoolSeal" type="file" class="input" accept="image/png,image/jpeg,image/webp" (change)="onSealChosen($event)" [disabled]="sealSaving()" />
-            <span class="hint">PNG, JPG or WEBP, up to 2 MB. The seal prints on the right side of the Report Card, opposite the DepEd seal. Choosing a file uploads it straight away.</span>
             @if (sealErrors()['seal_image']) {
               <span class="field-error">{{ sealErrors()['seal_image'] }}</span>
             }

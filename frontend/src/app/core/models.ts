@@ -143,6 +143,11 @@ export interface PaymentSettings {
   updated_at: string | null;
 }
 
+export interface DepedAssets {
+  has_deped_seal: boolean;
+  has_deped_logo: boolean;
+}
+
 export interface Settings {
   academic_year: string;
   academic_year_updated_at: string;

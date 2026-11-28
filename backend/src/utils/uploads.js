@@ -41,6 +41,28 @@ function detectImageType(buffer) {
   return null;
 }
 
+// Checks an uploaded image without writing it anywhere, for images that
+// are stored in the database instead of on disk (payment QR codes, the
+// school seal, the DepEd logos). Returns the bytes and their real type.
+function readImageFile(file, fieldName) {
+  const type = detectImageType(file && file.buffer);
+  if (!type) {
+    const message = 'Upload a PNG, JPG or WEBP image.';
+    throw badRequest(message, { code: 'UPLOAD_ERROR', errors: { [fieldName]: message } });
+  }
+  return { buffer: file.buffer, mime: type.mime, extension: type.extension };
+}
+
+// Sends image bytes read from the database to the browser. Only called
+// from routes that already checked the sign-in.
+function sendBytes(res, data, mime) {
+  if (!data) throw notFound('Image not found.');
+  res.setHeader('Content-Type', mime || 'application/octet-stream');
+  res.setHeader('Cache-Control', 'private, no-store');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.send(data);
+}
+
 // Saves an uploaded image in uploads/<folder>/ and returns the path to store, e.g. "payments/ab12cd.png".
 async function saveImage(file, folder, fieldName) {
   const type = detectImageType(file.buffer);
@@ -101,4 +123,4 @@ function uploadPaymentQr(req, res, next) {
   });
 }
 
-module.exports = { uploadSingle, uploadPaymentQr, saveImage, deleteImage, sendImage };
+module.exports = { uploadSingle, uploadPaymentQr, saveImage, deleteImage, sendImage, detectImageType, readImageFile, sendBytes };

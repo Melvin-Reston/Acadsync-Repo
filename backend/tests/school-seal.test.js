@@ -104,6 +104,12 @@ describe('School seal upload', () => {
     assert.equal(uploaded.body.teacher.has_school_seal, true);
     assert.equal(uploaded.body.message, 'School seal uploaded.');
 
+    // The bytes live in the database, not as a file: a redeploy cannot wipe them.
+    const row = await pool.query('SELECT seal_data, seal_mime, seal_path FROM schools WHERE id = $1', [schoolId]);
+    assert.ok(Buffer.from(row.rows[0].seal_data).equals(PNG));
+    assert.equal(row.rows[0].seal_mime, 'image/png');
+    assert.equal(row.rows[0].seal_path, null);
+
     const image = await api().get('/api/teacher/school/seal').set(bearer(adviserToken));
     assert.equal(image.status, 200);
     assert.match(image.headers['content-type'], /image\/png/);
@@ -147,6 +153,9 @@ describe('School seal upload', () => {
       .field('remove_seal', 'true');
     assert.equal(removed.status, 200, JSON.stringify(removed.body));
     assert.equal(removed.body.teacher.has_school_seal, false);
+    const cleared = await pool.query('SELECT seal_data, seal_mime FROM schools WHERE id = $1', [schoolId]);
+    assert.equal(cleared.rows[0].seal_data, null);
+    assert.equal(cleared.rows[0].seal_mime, null);
     const image = await api().get('/api/teacher/school/seal').set(bearer(adviserToken));
     assert.equal(image.status, 404);
     const cards = await getCards(adviserToken);

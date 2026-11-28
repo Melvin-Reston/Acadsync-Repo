@@ -145,6 +145,22 @@ export class TeacherAttendanceComponent {
   protected readonly sf2Error = signal('');
   protected readonly sf2Printing = signal(false);
 
+  // The DepEd logos for the SF2 print header, read from the database so
+  // an admin replacement is what prints. Loaded once, on page load.
+  protected readonly depedSealUrl = signal<string | null>(null);
+  protected readonly depedLogoUrl = signal<string | null>(null);
+
+  private loadDepedImages(): void {
+    this.portal.depedSeal().subscribe({
+      next: (blob) => this.depedSealUrl.set(URL.createObjectURL(blob)),
+      error: () => this.depedSealUrl.set(null),
+    });
+    this.portal.depedLogo().subscribe({
+      next: (blob) => this.depedLogoUrl.set(URL.createObjectURL(blob)),
+      error: () => this.depedLogoUrl.set(null),
+    });
+  }
+
   protected readonly sf2MonthOptions = computed<DropdownOption[]>(() => {
     const year = this.year.selectedYear();
     if (!year) return [];
@@ -247,6 +263,13 @@ export class TeacherAttendanceComponent {
   });
 
   constructor() {
+    this.loadDepedImages();
+    inject(DestroyRef).onDestroy(() => {
+      const seal = this.depedSealUrl();
+      if (seal) URL.revokeObjectURL(seal);
+      const logo = this.depedLogoUrl();
+      if (logo) URL.revokeObjectURL(logo);
+    });
     effect(() => {
       if (this.year.selectedYear() || this.year.loaded()) this.loadClasses();
     });

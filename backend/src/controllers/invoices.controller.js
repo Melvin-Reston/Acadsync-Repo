@@ -310,19 +310,25 @@ async function lockPendingPayment(id, client) {
 }
 
 // POST /api/payments/:id/confirm
-// Confirming keeps the screenshot: the image stays with the payment record so
-// the proof can be re-checked later. The payment record itself (reference
-// number, amount, who confirmed it and when) is kept as well.
+// Confirming deletes the screenshot: the image was the proof to check
+// before approval, and it is not kept afterwards. The payment record
+// itself (reference number, amount, who confirmed it and when) is kept
+// as well, in text. The file is deleted only after the confirming
+// transaction commits, so a failed confirmation never loses the proof.
+// A rejected payment keeps its screenshot, so it can be re-checked.
 async function confirmPayment(req, res) {
   const { id } = req.valid.params;
 
-  await db.withTransaction(async (client) => {
+  const screenshotPath = await db.withTransaction(async (client) => {
     const payment = await lockPendingPayment(id, client);
     const view = await findPayment(id, client);
     const invoice = (await client.query('SELECT * FROM invoices WHERE id = $1 FOR UPDATE', [payment.invoice_id])).rows[0];
     if (invoice.status !== 'unpaid') throw conflict(`The invoice of this payment is already ${invoice.status}.`, { code: 'INVOICE_NOT_PAYABLE' });
 
-    await client.query(`UPDATE payments SET status = 'confirmed', reviewed_by = $2, reviewed_at = NOW() WHERE id = $1`, [id, req.admin.id]);
+    await client.query(
+      `UPDATE payments SET status = 'confirmed', screenshot_path = NULL, reviewed_by = $2, reviewed_at = NOW() WHERE id = $1`,
+      [id, req.admin.id]
+    );
     await applyConfirmedPayment(invoice, client);
 
     await logActivity(
@@ -335,7 +341,10 @@ async function confirmPayment(req, res) {
       },
       client
     );
+    return payment.screenshot_path;
   });
+
+  if (screenshotPath) await deleteImage(screenshotPath);
 
   res.json({ payment: await findPayment(id) });
 }

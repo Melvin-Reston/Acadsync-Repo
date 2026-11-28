@@ -311,12 +311,16 @@
 @if (sf2Printing() && sf2()) {
   <section class="deped-print" aria-label="School Form 2 printout">
     <div class="dp-head">
-      <img class="dp-seal" src="/deped-seal.png" alt="" />
+      @if (depedSealUrl()) {
+        <img class="dp-seal" [src]="depedSealUrl()" alt="" />
+      }
       <div class="dp-title">
         <h2>School Form 2 (SF2) Daily Attendance Report of Learners</h2>
         <p>(This replaces Form 1, Form 2 &amp; SF5 Form 4 – Absenteeism and Dropout Profile)</p>
       </div>
-      <img class="dp-logo" src="/deped-logo.webp" alt="" />
+      @if (depedLogoUrl()) {
+        <img class="dp-logo" [src]="depedLogoUrl()" alt="" />
+      }
     </div>
     <div class="dp-fields">
       <div class="dp-field col-4"><span class="fl">School ID :</span><span class="fv">{{ sf2()!.school.deped_school_id ?? '' }}</span></div>

@@ -159,6 +159,16 @@ export class TeacherPortalService {
     return this.http.get(`${this.api}/school/seal`, { responseType: 'blob' });
   }
 
+  // The DepEd logos for the print forms, read from the database so an
+  // admin replacement is what prints (fetched with the teacher token).
+  depedSeal(): Observable<Blob> {
+    return this.http.get(`${this.api}/deped/seal`, { responseType: 'blob' });
+  }
+
+  depedLogo(): Observable<Blob> {
+    return this.http.get(`${this.api}/deped/logo`, { responseType: 'blob' });
+  }
+
   // Uploads (or removes) the school's seal. Sent as a form because it
   // carries an image; remove=true sends no file and clears the seal.
   updateSchoolSeal(file: File | null, remove = false): Observable<{ teacher: TeacherSelf; message: string }> {

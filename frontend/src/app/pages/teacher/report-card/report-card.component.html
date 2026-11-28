@@ -102,7 +102,11 @@
           <article class="sheet" aria-label="Report card front">
             <div class="rep">
               <div class="seals" aria-hidden="true">
-                <div class="seal seal-img"><img src="/deped-seal.png" alt="" /></div>
+                @if (depedSealUrl()) {
+                  <div class="seal seal-img"><img [src]="depedSealUrl()" alt="" /></div>
+                } @else {
+                  <div class="seal">DepEd<br />Seal</div>
+                }
                 @if (schoolSealUrl()) {
                   <div class="seal seal-img"><img [src]="schoolSealUrl()" alt="" /></div>
                 } @else {

@@ -35,6 +35,10 @@ export class TeacherReportCardComponent implements OnDestroy {
   // endpoint when the card says the school has one. Revoked when the
   // view reloads and when the page is left, so the blob never leaks.
   protected readonly schoolSealUrl = signal<string | null>(null);
+  // The DepEd seal on the left of the card, read from the database so
+  // an admin replacement is what prints. Loaded once, with the view.
+  protected readonly depedSealUrl = signal<string | null>(null);
+  private depedSealLoaded = false;
   protected readonly loading = signal(true);
   protected readonly error = signal('');
   // The academic year a load is already in flight for: the viewing-year
@@ -103,6 +107,20 @@ export class TeacherReportCardComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     this.revokeSchoolSeal();
+    const url = this.depedSealUrl();
+    if (url) URL.revokeObjectURL(url);
+    this.depedSealUrl.set(null);
+  }
+
+  private loadDepedSeal(): void {
+    if (this.depedSealLoaded) return;
+    this.depedSealLoaded = true;
+    this.reportCard.depedSeal().subscribe({
+      next: (blob) => this.depedSealUrl.set(URL.createObjectURL(blob)),
+      // The card still prints without the seal if the image cannot be
+      // fetched; the slot stays in its place.
+      error: () => this.depedSealUrl.set(null),
+    });
   }
 
   private revokeSchoolSeal(): void {
@@ -132,6 +150,7 @@ export class TeacherReportCardComponent implements OnDestroy {
         this.loadingYear = null;
         this.view.set(view);
         this.loadSchoolSeal(view.has_school_seal);
+        this.loadDepedSeal();
         if (view.learners.length > 0 && !this.selectedLearnerId()) {
           this.selectedLearnerId.set(view.learners[0].learner_id);
         }

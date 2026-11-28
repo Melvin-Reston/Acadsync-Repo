@@ -4,7 +4,8 @@ const db = require('../db');
 const { config } = require('../config');
 const { badRequest, notFound } = require('../utils/httpError');
 const billing = require('../utils/billing');
-const { saveImage, deleteImage, sendImage } = require('../utils/uploads');
+const { saveImage, deleteImage, readImageFile, sendBytes } = require('../utils/uploads');
+const branding = require('../utils/branding');
 const { TODAY, resolvePaidOn, lockPayableInvoice } = require('./invoices.controller');
 const { readPaymentSettings } = require('./system.controller');
 const { findActivePlan, assertNoCurrentSubscription, voidUnpaidInvoices } = require('./subscriptions.controller');
@@ -19,7 +20,8 @@ const { publicTeacher } = require('./teacherAuth.controller');
 async function findSelf(teacherId, client = db) {
   const result = await client.query(
     `SELECT t.id, t.first_name, t.last_name, t.email, t.mobile, t.present_address, t.username,
-            t.school_id, s.name AS school_name, s.city_region AS school_city_region, s.seal_path,
+            t.school_id, s.name AS school_name, s.city_region AS school_city_region,
+            (s.seal_data IS NOT NULL) AS has_school_seal,
             t.region, t.division, t.deped_school_id, t.school_head_name,
             t.classes_start_date::text AS classes_start_date,
             t.classes_end_date::text AS classes_end_date,
@@ -192,46 +194,51 @@ async function updateMe(req, res) {
 // Uploads (or removes) the school's seal, printed on the right side of
 // the Report Card front, opposite the DepEd seal. The seal belongs to
 // the school, so every teacher of the school shares the one uploaded
-// here; uploading a new seal replaces the old file. Images are capped
-// at 2 MB by the upload middleware, like every other image upload.
+// here; uploading a new seal replaces it for all of them, and no other
+// teacher needs to upload it again. The bytes are stored in the
+// database, so a redeploy cannot wipe them. Images are capped at 2 MB
+// by the upload middleware, like every other image upload.
 async function updateSchoolSeal(req, res) {
   const self = await findSelf(req.teacher.id);
   const before = await db.query('SELECT seal_path FROM schools WHERE id = $1', [self.school_id]);
   const beforePath = before.rows[0] ? before.rows[0].seal_path : null;
   const remove = req.body && (req.body.remove_seal === 'true' || req.body.remove_seal === true);
-  const newPath = req.file ? await saveImage(req.file, 'seals', 'seal_image') : null;
+  const newImage = req.file ? readImageFile(req.file, 'seal_image') : null;
 
-  try {
-    if (newPath) {
-      await db.query('UPDATE schools SET seal_path = $1, updated_at = NOW() WHERE id = $2', [newPath, self.school_id]);
-    } else if (remove) {
-      await db.query('UPDATE schools SET seal_path = NULL, updated_at = NOW() WHERE id = $1', [self.school_id]);
-    } else {
-      throw badRequest('Choose an image to upload.', {
-        code: 'VALIDATION_ERROR',
-        errors: { seal_image: 'Choose an image to upload.' },
-      });
-    }
-  } catch (error) {
-    await deleteImage(newPath);
-    throw error;
+  if (newImage) {
+    await db.query(
+      'UPDATE schools SET seal_data = $1, seal_mime = $2, seal_path = NULL, updated_at = NOW() WHERE id = $3',
+      [newImage.buffer, newImage.mime, self.school_id]
+    );
+  } else if (remove) {
+    await db.query(
+      'UPDATE schools SET seal_data = NULL, seal_mime = NULL, seal_path = NULL, updated_at = NOW() WHERE id = $1',
+      [self.school_id]
+    );
+  } else {
+    throw badRequest('Choose an image to upload.', {
+      code: 'VALIDATION_ERROR',
+      errors: { seal_image: 'Choose an image to upload.' },
+    });
   }
 
-  if (beforePath && beforePath !== newPath) await deleteImage(beforePath);
+  // A seal uploaded before fix 15 was a file on disk; it is no longer
+  // read, so remove it rather than leaving an orphan behind.
+  if (beforePath) await deleteImage(beforePath);
   const updated = await findSelf(req.teacher.id);
   res.json({
     teacher: publicTeacher(updated),
-    message: newPath ? 'School seal uploaded.' : 'School seal removed.',
+    message: newImage ? 'School seal uploaded.' : 'School seal removed.',
   });
 }
 
 // GET /api/teacher/school/seal  (the school's seal image, for the signed-in teacher)
 async function getSchoolSeal(req, res) {
   const self = await findSelf(req.teacher.id);
-  const result = await db.query('SELECT seal_path FROM schools WHERE id = $1', [self.school_id]);
-  const sealPath = result.rows[0] ? result.rows[0].seal_path : null;
-  if (!sealPath) throw notFound('No school seal has been uploaded yet.');
-  await sendImage(res, sealPath);
+  const result = await db.query('SELECT seal_data, seal_mime FROM schools WHERE id = $1', [self.school_id]);
+  const row = result.rows[0];
+  if (!row || !row.seal_data) throw notFound('No school seal has been uploaded yet.');
+  sendBytes(res, row.seal_data, row.seal_mime);
 }
 
 // PATCH /api/teacher/me/adviser  (adviser status, grade and section)
@@ -501,16 +508,31 @@ async function getPaymentInfo(req, res) {
 
 // GET /api/teacher/payment-info/qr  (the first QR code image)
 async function getPaymentQr(req, res) {
-  const settings = await readPaymentSettings();
-  if (!settings.qr_path) throw notFound('No payment QR code has been set yet.');
-  await sendImage(res, settings.qr_path);
+  const image = await branding.readBrandingImage(branding.PAYMENT_QR_KEY);
+  if (!image) throw notFound('No payment QR code has been set yet.');
+  sendBytes(res, image.data, image.mime);
 }
 
 // GET /api/teacher/payment-info/qr2  (the second QR code image)
 async function getSecondPaymentQr(req, res) {
-  const settings = await readPaymentSettings();
-  if (!settings.qr2_path) throw notFound('No second payment QR code has been set yet.');
-  await sendImage(res, settings.qr2_path);
+  const image = await branding.readBrandingImage(branding.PAYMENT_QR2_KEY);
+  if (!image) throw notFound('No second payment QR code has been set yet.');
+  sendBytes(res, image.data, image.mime);
+}
+
+// GET /api/teacher/deped/seal and /api/teacher/deped/logo (the DepEd
+// logos for the print forms, read from the database so an admin
+// replacement is what prints).
+async function getDepedSeal(req, res) {
+  const image = await branding.readDepedImage(branding.DEP_SEAL_KEY);
+  if (!image) throw notFound('No DepEd seal has been set yet.');
+  sendBytes(res, image.data, image.mime);
+}
+
+async function getDepedLogo(req, res) {
+  const image = await branding.readDepedImage(branding.DEP_LOGO_KEY);
+  if (!image) throw notFound('No DepEd logo has been set yet.');
+  sendBytes(res, image.data, image.mime);
 }
 
 // GET /api/teacher/invoices  (the signed-in teacher's own invoices)
@@ -598,6 +620,8 @@ module.exports = {
   getPaymentInfo,
   getPaymentQr,
   getSecondPaymentQr,
+  getDepedSeal,
+  getDepedLogo,
   listMyInvoices,
   getMyInvoice,
   submitPayment,

@@ -63,9 +63,9 @@ function publicTeacher(teacher) {
     school_id: teacher.school_id,
     school_name: teacher.school_name || null,
     // Whether the school has an uploaded seal (Dashboard). Only findSelf
-    // supplies the seal path, so sign-in responses read false until the
+    // supplies the flag, so sign-in responses read false until the
     // Dashboard refreshes the teacher — which it does on every load.
-    has_school_seal: Boolean(teacher.seal_path),
+    has_school_seal: Boolean(teacher.has_school_seal ?? teacher.seal_path),
     // The teacher's own entries for the DepEd print forms; null until filled in.
     region: teacher.region || null,
     division: teacher.division || null,
@@ -141,7 +141,7 @@ async function register(req, res) {
     );
 
     const found = await client.query(
-      `SELECT t.*, s.name AS school_name, s.seal_path FROM teachers t JOIN schools s ON s.id = t.school_id WHERE t.id = $1`,
+      `SELECT t.*, s.name AS school_name, (s.seal_data IS NOT NULL) AS has_school_seal FROM teachers t JOIN schools s ON s.id = t.school_id WHERE t.id = $1`,
       [teacherId]
     );
     return found.rows[0];

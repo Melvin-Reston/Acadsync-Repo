@@ -4,7 +4,7 @@ import { Injectable, inject, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { toParams } from './helpers';
-import { ActivityPage, AdminAccount, Overview, PaymentSettings, Settings } from './models';
+import { ActivityPage, AdminAccount, DepedAssets, Overview, PaymentSettings, Settings } from './models';
 
 export interface ActivityFilters {
   search: string;
@@ -95,6 +95,26 @@ export class SystemService {
 
   paymentQr2Image(): Observable<Blob> {
     return this.http.get(`${this.api}/settings/payment/qr2`, { responseType: 'blob' });
+  }
+
+  // The DepEd logos stored in the database: whether each is set, its
+  // image for preview, and replacing one when DepEd changes it.
+  depedAssets(): Observable<DepedAssets> {
+    return this.http.get<DepedAssets>(`${this.api}/settings/deped`);
+  }
+
+  depedSealImage(): Observable<Blob> {
+    return this.http.get(`${this.api}/settings/deped/seal`, { responseType: 'blob' });
+  }
+
+  depedLogoImage(): Observable<Blob> {
+    return this.http.get(`${this.api}/settings/deped/logo`, { responseType: 'blob' });
+  }
+
+  updateDepedAsset(kind: 'seal' | 'logo', image: File): Observable<DepedAssets> {
+    const form = new FormData();
+    form.append('image', image);
+    return this.http.put<DepedAssets>(`${this.api}/settings/deped/${kind}`, form);
   }
 
   adminAccount(): Observable<{ admin: AdminAccount }> {

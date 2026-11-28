@@ -64,6 +64,22 @@ export class TeacherGradesComponent {
   protected readonly view = signal<'period' | 'finals'>('period');
   protected readonly printTarget = signal<'class-record' | 'final-grades' | null>(null);
 
+  // The DepEd logos for the print headers, read from the database so an
+  // admin replacement is what prints. Loaded once, on page load.
+  protected readonly depedSealUrl = signal<string | null>(null);
+  protected readonly depedLogoUrl = signal<string | null>(null);
+
+  private loadDepedImages(): void {
+    this.portal.depedSeal().subscribe({
+      next: (blob) => this.depedSealUrl.set(URL.createObjectURL(blob)),
+      error: () => this.depedSealUrl.set(null),
+    });
+    this.portal.depedLogo().subscribe({
+      next: (blob) => this.depedLogoUrl.set(URL.createObjectURL(blob)),
+      error: () => this.depedLogoUrl.set(null),
+    });
+  }
+
   // The working scores: learner id -> column id -> score (null = blank).
   // Seeded from the saved sheet on load; typing updates these, and the
   // computed grades below follow at once.
@@ -425,6 +441,13 @@ export class TeacherGradesComponent {
   });
 
   constructor() {
+    this.loadDepedImages();
+    inject(DestroyRef).onDestroy(() => {
+      const seal = this.depedSealUrl();
+      if (seal) URL.revokeObjectURL(seal);
+      const logo = this.depedLogoUrl();
+      if (logo) URL.revokeObjectURL(logo);
+    });
     this.portal.me().subscribe({
       next: (response) => this.teacher.set(response.teacher),
       error: () => undefined,

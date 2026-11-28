@@ -37,6 +37,8 @@ Batch 13 fix 12 removes the now-redundant lines from the first Test Item Analysi
 
 Batch 13 fix 14 adds a Delete button for teachers: on a teacher's profile, Delete asks for confirmation and then removes the teacher together with their subscription, invoices and payments, classes, schedules, attendance, grades, quizzes, exams and lesson plans. Learners other teachers of the same school use are kept. See [Upgrading from Batch 13 fix 13](#upgrading-from-batch-13-fix-13).
 
+Batch 13 fix 15 stores the payment QR codes, the school seal and the two DepEd logos in the database instead of files on the server's disk, so they survive every redeploy. The school seal belongs to the school: once one teacher uploads it, every teacher at that school sees it and does not need to upload it again, and replacing or removing it replaces or removes it for everyone. The DepEd seal and logo are seeded from the files shipped with the backend, and Settings gains a DepEd logos card where the administrator can replace either one if DepEd ever changes it; a replacement is never overwritten by re-seeding. A payment screenshot is still required when the teacher sends a payment and still shows while it is waiting, but when the administrator confirms the payment the screenshot file is deleted and only the payment record (amount, reference number, date, who confirmed it) is kept; a rejected payment keeps its screenshot. See [Upgrading from Batch 13 fix 14](#upgrading-from-batch-13-fix-14).
+
 Finalization (Batch 13 fix 13) finishes the teacher pages: the Dashboard, Payments & Invoices and Profile cards now have space between them, the line under the Classes & Sections hero is gone, the Attendance filter buttons have room between them, and the Report Card controls sit on the paper with no box around them. On Schedules, a meeting that is part of a Monday–Friday series at the same time and room can now be edited or deleted for the whole week at once from its 3-dots menu, as well as one day at a time. On Grades, the weights section gains a Lowest grade (floor) field: this year (DO 015 Adjusted) the lowest grade on the card is 60, and from SY 2027–2028 (zero-based) it is 0, and a teacher can raise the floor for one class — a floor below the grading table's own never lowers a grade. See [Upgrading from Batch 13 fix 12](#upgrading-from-batch-13-fix-12).
 
 Teacher Batch 10 adds the paper exam checker: the teacher makes an exam per class and period, enters one answer key — each question with its own 2 to 5 choices, a 2-choice question optionally True/False — prints one answer sheet per learner with the learner's name and Learner ID already on it, then checks each sheet from a photo of the shaded circles. The photo is read in the browser and never uploaded; the teacher reviews and corrects the answers before saving, and the server recomputes the score from its own key into an Examinations column in the Grades page, labelled with the exam number. See [Upgrading from Teacher Batch 9 fix 1](#upgrading-from-teacher-batch-9-fix-1).
@@ -201,6 +203,16 @@ DB_SSL=true
 - A yellow **SSL security warning** from the `pg` library can appear when a command connects. It is harmless. The connection is encrypted.
 - Skip `npm test` unless you also have a local PostgreSQL or you set `TEST_DATABASE_URL` to a **separate, empty** database. The tests wipe the database they use, and they refuse to start if it is the same as your real one.
 - Treat the connection string like a password. If it was ever shared, reset the password in the Neon dashboard and paste the new string into `.env`.
+
+## Upgrading from Batch 13 fix 14
+
+If you are running Batch 13 fix 14, this is the zip to apply last (or alone on top of fix 14). Do not unzip Batch 13 or fixes 1 to 14 after this one.
+
+1. Stop both terminals (backend and frontend).
+2. Unzip this zip over your `acadsync` folder, choosing Replace for every file. Your `.env` file is not in the zip, so it stays as it is.
+3. In the `backend` folder, run `npm install` and then `npm run migrate`. You should see `Applied 020_database_images.sql`. Running migrate again should say the database is already up to date.
+4. In the `frontend` folder, run `npm install` and then `npm start`.
+5. One last re-upload: the payment QR codes and the school seal you uploaded before this fix were files on the disk. Upload both QR codes again in Settings (Admin Console), and upload the school seal once on any teacher's Dashboard — after that, every teacher at that school sees it, and no re-upload is needed after future deploys. The DepEd logos need no action: they are seeded automatically from the files in the zip.
 
 ## Upgrading from Batch 13 fix 13
 

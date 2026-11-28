@@ -383,6 +383,93 @@
     </form>
   </section>
 
+  <!-- DepEd logos: stored in the database and printed on the DepEd forms.
+       Replace one only when DepEd changes it. -->
+  <section class="card">
+    <div class="card-head">
+      <h2 class="card-title">DepEd logos</h2>
+      <span class="pill" [class.accent]="hasDepedSeal() && hasDepedLogo()" [class.plain]="!hasDepedSeal() || !hasDepedLogo()">
+        {{ hasDepedSeal() && hasDepedLogo() ? 'Set' : 'Not set' }}
+      </span>
+    </div>
+    <div class="card-pad">
+      @if (errorIn() === 'deped' && error()) {
+        <div class="alert" role="alert">
+          <app-icon name="alert" [size]="16" />
+          <span>{{ error() }}</span>
+        </div>
+      }
+
+      <div class="qr-section">
+        <h3 class="qr-section-title">DepEd seal</h3>
+        <div class="qr-row">
+          <div class="qr-box">
+            @if (depedSealUrl()) {
+              <img [src]="depedSealUrl()" alt="DepEd seal" />
+            } @else {
+              <span class="muted">No image</span>
+            }
+          </div>
+          <div class="field">
+            <label for="deped-seal-image">{{ hasDepedSeal() ? 'Replace image' : 'DepEd seal image' }}</label>
+            <input
+              id="deped-seal-image"
+              name="deped_seal_image"
+              type="file"
+              class="input"
+              accept="image/png,image/jpeg,image/webp"
+              [class.invalid]="errorIn() === 'deped' && errors()['deped_seal_image']"
+              (change)="onDepedChosen($event, 'seal')"
+            />
+            <span class="hint">PNG, JPG or WEBP, up to 2 MB. Stored in the database. Replace it only when DepEd changes the seal.</span>
+            @if (errorIn() === 'deped' && errors()['deped_seal_image']) {
+              <span class="field-error">{{ errors()['deped_seal_image'] }}</span>
+            }
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-primary" [disabled]="!depedSealFile() || saving() === 'deped'" (click)="saveDeped('seal')">
+            {{ saving() === 'deped' ? 'Saving…' : 'Save DepEd seal' }}
+          </button>
+        </div>
+      </div>
+
+      <div class="qr-section">
+        <h3 class="qr-section-title">DepEd logo</h3>
+        <div class="qr-row">
+          <div class="qr-box">
+            @if (depedLogoUrl()) {
+              <img [src]="depedLogoUrl()" alt="DepEd logo" />
+            } @else {
+              <span class="muted">No image</span>
+            }
+          </div>
+          <div class="field">
+            <label for="deped-logo-image">{{ hasDepedLogo() ? 'Replace image' : 'DepEd logo image' }}</label>
+            <input
+              id="deped-logo-image"
+              name="deped_logo_image"
+              type="file"
+              class="input"
+              accept="image/png,image/jpeg,image/webp"
+              [class.invalid]="errorIn() === 'deped' && errors()['deped_logo_image']"
+              (change)="onDepedChosen($event, 'logo')"
+            />
+            <span class="hint">PNG, JPG or WEBP, up to 2 MB. Stored in the database. Replace it only when DepEd changes the logo.</span>
+            @if (errorIn() === 'deped' && errors()['deped_logo_image']) {
+              <span class="field-error">{{ errors()['deped_logo_image'] }}</span>
+            }
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-primary" [disabled]="!depedLogoFile() || saving() === 'deped'" (click)="saveDeped('logo')">
+            {{ saving() === 'deped' ? 'Saving…' : 'Save DepEd logo' }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Admin account: only the Super User sees this card -->
   @if (auth.isSuperUser()) {
     <section class="card">

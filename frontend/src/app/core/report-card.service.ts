@@ -26,6 +26,12 @@ export class ReportCardService {
     return this.http.get(`${this.api}/school/seal`, { responseType: 'blob' });
   }
 
+  // The DepEd seal image itself, read from the database so an admin
+  // replacement is what prints, on the left side of the card front.
+  depedSeal(): Observable<Blob> {
+    return this.http.get(`${this.api}/deped/seal`, { responseType: 'blob' });
+  }
+
   // Saves one comment. A blank comment clears the saved one.
   saveComment(
     learnerId: string,
