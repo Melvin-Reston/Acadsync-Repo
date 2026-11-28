@@ -162,6 +162,7 @@ export interface GradingInfo {
   grade_label: string;
   third_label: string;
   third_short: string;
+  default_floor: number;
 }
 
 export interface GradingProfileOption {
@@ -810,6 +811,9 @@ export interface GradeWeights {
   ww: number;
   pt: number;
   ex: number;
+  // The teacher-set lowest grade for the class; the profile's own floor
+  // when the teacher has not set one.
+  floor?: number;
 }
 
 export interface GradeComponentGrade {

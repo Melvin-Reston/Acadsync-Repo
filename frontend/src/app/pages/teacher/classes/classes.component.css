@@ -7,7 +7,8 @@
   align-items: flex-end;
   justify-content: space-between;
   padding-bottom: 24px;
-  border-bottom: 2px solid var(--ink);
+  /* No rule under the hero: the line across the page below the tabs
+     is removed, so the tabs sit on the paper with nothing under them. */
 }
 
 .hero-left {

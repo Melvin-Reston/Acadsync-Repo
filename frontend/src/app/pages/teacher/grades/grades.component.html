@@ -167,7 +167,7 @@
     <div class="weights-head">
       <div>
         <span class="card-title">Weights</span>
-        <span class="muted"> · WW {{ sheet()!.weights.ww }}% · PT {{ sheet()!.weights.pt }}% · {{ sheet()!.grading.third_short }} {{ sheet()!.weights.ex }}%</span>
+        <span class="muted"> · WW {{ sheet()!.weights.ww }}% · PT {{ sheet()!.weights.pt }}% · {{ sheet()!.grading.third_short }} {{ sheet()!.weights.ex }}% · Floor {{ sheet()!.weights.floor ?? profileFloor() }}</span>
       </div>
       @if (!weightsEditing()) {
         <button type="button" class="btn" (click)="weightsEditing.set(true)">Edit weights</button>
@@ -184,6 +184,10 @@
         <label class="field">{{ sheet()!.grading.third_label }} %
           <input type="number" class="input" min="0" max="100" [ngModel]="weightsDraft().ex" (ngModelChange)="weightsDraft.set({ ...weightsDraft(), ex: $event })" />
         </label>
+        <label class="field">Lowest grade (floor)
+          <input type="number" class="input" min="0" max="100" [ngModel]="weightsDraft().floor" (ngModelChange)="weightsDraft.set({ ...weightsDraft(), floor: $event })" />
+        </label>
+        <p class="muted floor-note">No grade on the card goes below the floor. Under {{ sheet()!.grading.label }} the lowest grade is {{ profileFloor() }}, so a floor below {{ profileFloor() }} changes nothing — the grading table itself sets that. Saving the floor clears any filed period for this class, like any weights change.</p>
         @if (sheet()!.grading.third_short === 'EX' && exColumns().length > 0) {
           <div class="subweights">
             <span class="card-title">Examinations shares</span>

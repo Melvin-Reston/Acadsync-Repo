@@ -247,6 +247,7 @@ router.patch('/teachers/:id', idParam, validate(s.teacherUpdateSchema), teachers
 router.post('/teachers/:id/restrict', idParam, validate(s.restrictSchema), teachers.restrictTeacher);
 router.post('/teachers/:id/unrestrict', idParam, teachers.unrestrictTeacher);
 router.post('/teachers/:id/reset-password', idParam, teachers.resetTeacherPassword);
+router.delete('/teachers/:id', idParam, teachers.deleteTeacher);
 
 // Schools
 router.get('/schools', validate(s.schoolListSchema, 'query'), schools.listSchools);

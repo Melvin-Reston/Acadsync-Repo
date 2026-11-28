@@ -846,11 +846,66 @@ async function createMeeting(req, res) {
 }
 
 // PATCH /api/teacher/meetings/:id
+// With apply_to_week, the new time and room are applied to the whole
+// series: every meeting of the same class that currently sits at the
+// edited meeting's old time and room, on any weekday. Each day keeps its
+// own day of the week, and a day that would clash with another meeting
+// is skipped and reported instead of blocking the rest of the week.
 async function updateMeeting(req, res) {
   const { id } = req.valid.params;
-  const { day_of_week, start_time, end_time, room } = req.valid.body;
+  const { day_of_week, start_time, end_time, room, apply_to_week } = req.valid.body;
   const meeting = await findMeeting(id, req.teacher.id);
   const klass = await findClass(meeting.class_id, req.teacher.id);
+  const newRoom = room || klass.room;
+
+  if (apply_to_week) {
+    const siblings = await db.query(
+      `SELECT id, day_of_week FROM class_meetings
+        WHERE class_id = $1 AND start_time = $2 AND end_time = $3 AND room = $4
+        ORDER BY day_of_week`,
+      [meeting.class_id, meeting.start_time, meeting.end_time, meeting.room]
+    );
+    const updated = [];
+    const skipped = [];
+    for (const sibling of siblings.rows) {
+      try {
+        await db.withTransaction(async (client) => {
+          await assertNoConflict(client, req.teacher.id, {
+            dayOfWeek: sibling.day_of_week,
+            startTime: start_time,
+            endTime: end_time,
+            room: newRoom,
+            excludeId: sibling.id,
+          });
+          await client.query(
+            `UPDATE class_meetings SET start_time = $1, end_time = $2, room = $3, updated_at = NOW() WHERE id = $4`,
+            [start_time, end_time, newRoom, sibling.id]
+          );
+        });
+        updated.push(DAY_NAMES[sibling.day_of_week - 1]);
+      } catch (error) {
+        if (error && error.status === 409) {
+          skipped.push({ day_of_week: sibling.day_of_week, day_name: DAY_NAMES[sibling.day_of_week - 1], reason: error.message });
+        } else {
+          throw error;
+        }
+      }
+    }
+    if (updated.length === 0) {
+      throw conflict(
+        `No meeting was changed: ${skipped.map((skip) => `${skip.day_name} — ${skip.reason}`).join(' ')}`
+      );
+    }
+    return res.json({
+      meeting: await findMeeting(id, req.teacher.id),
+      updated,
+      skipped,
+      message:
+        skipped.length === 0
+          ? `Meeting changed Monday to Friday.`
+          : `Meeting changed on ${updated.join(', ')}. Skipped: ${skipped.map((skip) => `${skip.day_name} (${skip.reason})`).join('; ')}.`,
+    });
+  }
 
   await db.withTransaction(async (client) => {
     await assertNoConflict(client, req.teacher.id, {
@@ -869,11 +924,21 @@ async function updateMeeting(req, res) {
 }
 
 // DELETE /api/teacher/meetings/:id
+// With ?whole_week=true, the whole series goes: every meeting of the same
+// class at this meeting's time and room, on any weekday.
 async function deleteMeeting(req, res) {
   const { id } = req.valid.params;
-  await findMeeting(id, req.teacher.id);
+  const meeting = await findMeeting(id, req.teacher.id);
+  if (req.query && req.query.whole_week === 'true') {
+    const deleted = await db.query(
+      `DELETE FROM class_meetings
+        WHERE class_id = $1 AND start_time = $2 AND end_time = $3 AND room = $4`,
+      [meeting.class_id, meeting.start_time, meeting.end_time, meeting.room]
+    );
+    return res.json({ message: 'Meetings deleted.', deleted: deleted.rowCount });
+  }
   await db.query('DELETE FROM class_meetings WHERE id = $1', [id]);
-  res.json({ message: 'Meeting deleted.' });
+  res.json({ message: 'Meeting deleted.', deleted: 1 });
 }
 
 // ---------- Weekly timetable ----------

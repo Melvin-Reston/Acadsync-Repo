@@ -492,6 +492,10 @@ const meetingUpdateSchema = z
     start_time: timeOfDay('Start time'),
     end_time: timeOfDay('End time'),
     room: optionalText('Room', 30),
+    // Whole-week edit: the same time and room are applied to every day
+    // of the week on which this class already meets at the meeting's
+    // current time and room. Each day keeps its own day of the week.
+    apply_to_week: z.boolean().optional().default(false),
   })
   .refine((value) => value.end_time > value.start_time, { path: ['end_time'], message: 'The end time must be after the start time.' });
 
@@ -639,12 +643,15 @@ const gradeSubWeightsSchema = z
     message: 'The Examinations sub-weights must add up to 100.',
   });
 
-// The three weights must add up to 100.
+// The three weights must add up to 100. floor_grade is the optional
+// teacher-set lowest grade for the class (0–100); when it is not sent,
+// the saved floor is kept.
 const gradeWeightsSchema = z
   .object({
     ww_weight: wholeNumber('WW weight', 0, 100),
     pt_weight: wholeNumber('PT weight', 0, 100),
     ex_weight: wholeNumber('EX weight', 0, 100),
+    floor_grade: wholeNumber('Lowest grade', 0, 100).optional(),
   })
   .refine((value) => value.ww_weight + value.pt_weight + value.ex_weight === 100, {
     path: ['ww_weight'],

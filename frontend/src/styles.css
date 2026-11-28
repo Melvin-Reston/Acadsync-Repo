@@ -1889,6 +1889,17 @@ form > .form-grid + .alert {
   align-items: start;
 }
 
+/* A .stack inside the two-column layout holds several cards (Dashboard,
+   Profile): the cards need space between them, or they touch edge to
+   edge. The gap is scoped here so a lone .stack elsewhere keeps its
+   plain margin-bottom behaviour. */
+.dash-grid .stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
 @media (max-width: 960px) {
   .dash-grid {
     grid-template-columns: 1fr;

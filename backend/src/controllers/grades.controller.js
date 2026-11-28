@@ -41,10 +41,12 @@ function columnName(column, profileCode) {
 
 // The weights for one class: the saved row, or the default for the profile
 // and the subject's group (core 20/50/30, MAPEH and EPP/TLE 20/60/20 under
-// DO 015; 30/50/20 under DO 8).
+// DO 015; 30/50/20 under DO 8). floor is the teacher-set lowest grade when
+// one was saved, otherwise the profile's own floor (60 under DO 8 and
+// DO 015 Adjusted, 0 under zero-based).
 async function getWeights(client, classId, profileCode) {
   const result = await client.query(
-    'SELECT ww_weight, pt_weight, ex_weight FROM grade_weights WHERE class_id = $1',
+    'SELECT ww_weight, pt_weight, ex_weight, floor_grade FROM grade_weights WHERE class_id = $1',
     [classId]
   );
   if (result.rowCount === 0) {
@@ -53,10 +55,15 @@ async function getWeights(client, classId, profileCode) {
         JOIN subjects s ON s.id = c.subject_id WHERE c.id = $1`,
       [classId]
     );
-    return deped.defaultWeights(profileCode, group.rows[0] ? group.rows[0].group : 'core');
+    return { ...deped.defaultWeights(profileCode, group.rows[0] ? group.rows[0].group : 'core'), floor: deped.defaultFloor(profileCode) };
   }
   const row = result.rows[0];
-  return { ww: row.ww_weight, pt: row.pt_weight, ex: row.ex_weight };
+  return {
+    ww: row.ww_weight,
+    pt: row.pt_weight,
+    ex: row.ex_weight,
+    floor: row.floor_grade === null ? deped.defaultFloor(profileCode) : Number(row.floor_grade),
+  };
 }
 
 // The columns of one class record, in WW / PT / EX order, then by position.
@@ -649,25 +656,35 @@ async function updateSubWeights(req, res) {
   res.json({ columns: exColumns, message: 'Examinations sub-weights saved.' });
 }
 
-// PATCH /api/teacher/grades/:id/weights  { ww_weight, pt_weight, ex_weight }
+// PATCH /api/teacher/grades/:id/weights  { ww_weight, pt_weight, ex_weight, floor_grade? }
 // The three weights must add up to 100 (checked by the validator as well as the table).
+// floor_grade is optional: when it is sent it replaces the saved floor; when it
+// is not sent the saved floor (or the profile default for a class with no row
+// yet) is kept, so an older client that only sends weights changes nothing.
 async function updateWeights(req, res) {
   const { id } = req.valid.params;
-  const { ww_weight, pt_weight, ex_weight } = req.valid.body;
+  const { ww_weight, pt_weight, ex_weight, floor_grade } = req.valid.body;
   const klass = await findClass(id, req.teacher.id);
   const year = klass.academic_year;
+  const profile = await grading.getClassGradingProfile(db, id);
 
   await db.withTransaction(async (client) => {
+    const existing = await client.query('SELECT floor_grade FROM grade_weights WHERE class_id = $1', [id]);
+    const floor = floor_grade !== undefined && floor_grade !== null
+      ? floor_grade
+      : existing.rows[0] && existing.rows[0].floor_grade !== null
+        ? Number(existing.rows[0].floor_grade)
+        : deped.defaultFloor(profile.code);
     await client.query(
-      `INSERT INTO grade_weights (class_id, ww_weight, pt_weight, ex_weight)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (class_id) DO UPDATE SET ww_weight = $2, pt_weight = $3, ex_weight = $4, updated_at = NOW()`,
-      [id, ww_weight, pt_weight, ex_weight]
+      `INSERT INTO grade_weights (class_id, ww_weight, pt_weight, ex_weight, floor_grade)
+       VALUES ($1, $2, $3, $4, $5)
+       ON CONFLICT (class_id) DO UPDATE SET ww_weight = $2, pt_weight = $3, ex_weight = $4, floor_grade = $5, updated_at = NOW()`,
+      [id, ww_weight, pt_weight, ex_weight, floor]
     );
-    // Weights apply to every period of the class, so any filed period clears.
+    // Weights (and the floor) apply to every period of the class, so any filed period clears.
     await client.query('DELETE FROM grade_submissions WHERE class_id = $1 AND academic_year = $2', [id, year]);
   });
-  res.json({ weights: { ww: ww_weight, pt: pt_weight, ex: ex_weight }, message: 'Weights saved.' });
+  res.json({ weights: await getWeights(db, id, profile.code), message: 'Weights saved.' });
 }
 
 // ---------- Submission ----------

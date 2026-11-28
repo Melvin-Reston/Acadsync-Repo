@@ -1,7 +1,7 @@
 import { DatePipe } from '@angular/common';
 import { Component, OnInit, inject, input, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import {
   errorMessage,
   fieldErrors,
@@ -17,7 +17,7 @@ import { ModalComponent } from '../../shared/modal.component';
 import { TeacherFormComponent } from '../../shared/teacher-form.component';
 import { TemporaryPasswordComponent } from '../../shared/temporary-password.component';
 
-type Dialog = 'none' | 'edit' | 'restrict' | 'unrestrict' | 'reset';
+type Dialog = 'none' | 'edit' | 'restrict' | 'unrestrict' | 'reset' | 'delete';
 
 @Component({
   selector: 'app-teacher-profile',
@@ -35,6 +35,7 @@ type Dialog = 'none' | 'edit' | 'restrict' | 'unrestrict' | 'reset';
 export class TeacherProfileComponent implements OnInit {
   private readonly teachersApi = inject(TeachersService);
   private readonly toast = inject(ToastService);
+  private readonly router = inject(Router);
 
   // From the address: /teachers/:id
   readonly id = input.required<string>();
@@ -85,6 +86,24 @@ export class TeacherProfileComponent implements OnInit {
 
   protected unrestrict(): void {
     this.run(this.teachersApi.unrestrict(Number(this.id())), 'Restriction removed.');
+  }
+
+  protected deleteTeacher(): void {
+    this.working.set(true);
+    this.dialogError.set('');
+
+    this.teachersApi.delete(Number(this.id())).subscribe({
+      next: () => {
+        this.working.set(false);
+        this.close();
+        this.toast.success('Teacher deleted.');
+        void this.router.navigate(['/teachers']);
+      },
+      error: (error) => {
+        this.working.set(false);
+        this.dialogError.set(errorMessage(error));
+      },
+    });
   }
 
   protected resetPassword(): void {

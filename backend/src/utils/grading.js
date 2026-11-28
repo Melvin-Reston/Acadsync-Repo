@@ -34,6 +34,7 @@ function gradingInfo(profile, academicYear) {
     grade_label: profile.gradeLabel,
     third_label: profile.thirdLabel,
     third_short: profile.thirdShort,
+    default_floor: deped.defaultFloor(profile.code),
   };
 }
 

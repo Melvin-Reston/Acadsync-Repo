@@ -373,6 +373,7 @@ export class TeacherConsolidationComponent {
           grade_label: 'Term grade',
           third_label: 'Examinations',
           third_short: 'EX',
+          default_floor: 60,
         },
         grade: null,
         section: null,

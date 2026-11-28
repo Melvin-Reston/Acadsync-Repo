@@ -672,6 +672,75 @@ describe('Teachers', () => {
     const profile = await api().get(`/api/teachers/${created.id}`).set(bearer(adminToken));
     assert.ok(!JSON.stringify(profile.body).includes(temporary));
   });
+
+  test('deleting a teacher removes the teacher and logs the delete', async () => {
+    const deletable = await createTeacher(schoolRow.id, { first_name: 'Delete', last_name: 'Me', email: 'delete.me@test.local', username: 'delete.me' });
+
+    const noToken = await api().delete(`/api/teachers/${deletable.id}`);
+    assert.equal(noToken.status, 401);
+
+    const missing = await api().delete('/api/teachers/999999').set(bearer(adminToken));
+    assert.equal(missing.status, 404);
+
+    const response = await api().delete(`/api/teachers/${deletable.id}`).set(bearer(adminToken));
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    assert.equal(response.body.message, 'Teacher deleted.');
+
+    const gone = await api().get(`/api/teachers/${deletable.id}`).set(bearer(adminToken));
+    assert.equal(gone.status, 404);
+
+    const listed = await api().get('/api/teachers').query({ search: 'delete.me' }).set(bearer(adminToken));
+    assert.equal(listed.body.total, 0);
+
+    const signInAttempt = await api().post('/api/teacher-auth/login').send({ login: 'delete.me', password: 'TempPass123' });
+    assert.equal(signInAttempt.status, 401);
+
+    const logged = await pool.query("SELECT description FROM activity_log WHERE action = 'teacher.delete' AND entity_id = $1", [deletable.id]);
+    assert.equal(logged.rowCount, 1);
+    assert.match(logged.rows[0].description, /Delete Me/);
+
+    const again = await api().delete(`/api/teachers/${deletable.id}`).set(bearer(adminToken));
+    assert.equal(again.status, 404);
+  });
+
+  test('deleting a teacher keeps a learner another teacher of the same school uses', async () => {
+    // Set up with direct rows (not the public sign-up) so this test writes
+    // no system-role activity rows: the Activity log test in this file
+    // expects every row to carry a Super User or Admin role.
+    const first = await createTeacher(schoolRow.id, { first_name: 'Shared', last_name: 'First', email: 'shared.first@test.local', username: 'shared.first' });
+    const second = await createTeacher(schoolRow.id, { first_name: 'Shared', last_name: 'Second', email: 'shared.second@test.local', username: 'shared.second' });
+
+    const makeClass = async (teacherId, name) => {
+      const subject = await pool.query('INSERT INTO subjects (teacher_id, name, grade_level) VALUES ($1, $2, 10) RETURNING id', [teacherId, name]);
+      const klass = await pool.query(
+        'INSERT INTO classes (teacher_id, subject_id, grade_level, section_name, academic_year) VALUES ($1, $2, 10, $3, $4) RETURNING id',
+        [teacherId, subject.rows[0].id, 'Luke', '2026-2027']
+      );
+      return klass.rows[0].id;
+    };
+    const firstClassId = await makeClass(first.id, 'Shared Subject A');
+    const secondClassId = await makeClass(second.id, 'Shared Subject B');
+
+    const learner = await pool.query(
+      "INSERT INTO learners (teacher_id, school_id, first_name, last_name, learner_id, sex) VALUES ($1, $2, 'Shared', 'Learner', 'STU-SHARED-1', 'Female') RETURNING id",
+      [first.id, schoolRow.id]
+    );
+    const learnerId = learner.rows[0].id;
+    await pool.query('INSERT INTO class_learners (class_id, learner_id) VALUES ($1, $2), ($3, $2)', [firstClassId, learnerId, secondClassId]);
+
+    const deleted = await api().delete(`/api/teachers/${first.id}`).set(bearer(adminToken));
+    assert.equal(deleted.status, 200, JSON.stringify(deleted.body));
+
+    const kept = await pool.query('SELECT teacher_id FROM learners WHERE id = $1', [learnerId]);
+    assert.equal(kept.rowCount, 1, 'the shared learner survives the delete');
+    assert.equal(kept.rows[0].teacher_id, second.id);
+
+    const enrolment = await pool.query('SELECT 1 FROM class_learners WHERE class_id = $1 AND learner_id = $2', [secondClassId, learnerId]);
+    assert.equal(enrolment.rowCount, 1, 'the other teacher keeps the enrolment');
+
+    const firstClassGone = await pool.query('SELECT 1 FROM classes WHERE id = $1', [firstClassId]);
+    assert.equal(firstClassGone.rowCount, 0);
+  });
 });
 
 describe('Overview', () => {

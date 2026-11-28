@@ -35,6 +35,10 @@ Batch 13 fix 11 adds the sample sheet's legend markers and bar charts to Test It
 
 Batch 13 fix 12 removes the now-redundant lines from the first Test Item Analysis form: the Most learned / Least learned item list and the How to read this difficulty and discrimination band notes are gone, because the circles, the legend below the table and the bar charts carry that information. The summary tables, the charts, the legend and the signatures stay, and the distractor notes stay for the second form, under a heading that prints only with that form. No number, table or form changes. See [Upgrading from Batch 13 fix 11](#upgrading-from-batch-13-fix-11).
 
+Batch 13 fix 14 adds a Delete button for teachers: on a teacher's profile, Delete asks for confirmation and then removes the teacher together with their subscription, invoices and payments, classes, schedules, attendance, grades, quizzes, exams and lesson plans. Learners other teachers of the same school use are kept. See [Upgrading from Batch 13 fix 13](#upgrading-from-batch-13-fix-13).
+
+Finalization (Batch 13 fix 13) finishes the teacher pages: the Dashboard, Payments & Invoices and Profile cards now have space between them, the line under the Classes & Sections hero is gone, the Attendance filter buttons have room between them, and the Report Card controls sit on the paper with no box around them. On Schedules, a meeting that is part of a Monday–Friday series at the same time and room can now be edited or deleted for the whole week at once from its 3-dots menu, as well as one day at a time. On Grades, the weights section gains a Lowest grade (floor) field: this year (DO 015 Adjusted) the lowest grade on the card is 60, and from SY 2027–2028 (zero-based) it is 0, and a teacher can raise the floor for one class — a floor below the grading table's own never lowers a grade. See [Upgrading from Batch 13 fix 12](#upgrading-from-batch-13-fix-12).
+
 Teacher Batch 10 adds the paper exam checker: the teacher makes an exam per class and period, enters one answer key — each question with its own 2 to 5 choices, a 2-choice question optionally True/False — prints one answer sheet per learner with the learner's name and Learner ID already on it, then checks each sheet from a photo of the shaded circles. The photo is read in the browser and never uploaded; the teacher reviews and corrects the answers before saving, and the server recomputes the score from its own key into an Examinations column in the Grades page, labelled with the exam number. See [Upgrading from Teacher Batch 9 fix 1](#upgrading-from-teacher-batch-9-fix-1).
 
 Already running Part 1? Go straight to [Upgrading from Part 1](#upgrading-from-part-1).
@@ -197,6 +201,60 @@ DB_SSL=true
 - A yellow **SSL security warning** from the `pg` library can appear when a command connects. It is harmless. The connection is encrypted.
 - Skip `npm test` unless you also have a local PostgreSQL or you set `TEST_DATABASE_URL` to a **separate, empty** database. The tests wipe the database they use, and they refuse to start if it is the same as your real one.
 - Treat the connection string like a password. If it was ever shared, reset the password in the Neon dashboard and paste the new string into `.env`.
+
+## Upgrading from Batch 13 fix 13
+
+This zip is built on top of Batch 13 fix 13 (the finalization spacing, whole-week schedules and Grades floor field). Unzip it **last**, over your existing install — do not unzip Batch 13 or fixes 1 to 13 after it. Your `.env` file and your database are kept. There is no new migration: `npm run migrate` reports "Database is already up to date", and you do not run the seed again.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip this zip over your existing `acadsync` folder and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run migrate
+npm run dev
+```
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. Open Teachers, open a teacher, and Delete is beside Restrict. The confirmation names everything that will be deleted.
+
+No new `.env` settings are required.
+
+## Upgrading from Batch 13 fix 12
+
+This zip is built on top of Batch 13 fix 12 (the Test Item Analysis redundant-lines removal). Unzip it **last**, over your existing install — do not unzip Batch 13 or fixes 1 to 12 after it. Your `.env` file and your database are kept. There is one new migration: run `npm run migrate` in the backend and expect `Applied 019_grade_weights_floor.sql`.
+
+1. Stop the backend and the frontend (press Ctrl+C in both terminals).
+2. Unzip this zip over your existing `acadsync` folder and choose **Replace** when Windows asks. Your `backend/.env` is not in the zip, so it stays as it is.
+3. In the first terminal:
+
+```
+cd backend
+npm install
+npm run migrate
+npm run dev
+```
+
+4. In the second terminal:
+
+```
+cd frontend
+npm install
+npm start
+```
+
+5. Open http://localhost:4200 and sign in as before. On Grades, open the weights section of a class: the Lowest grade (floor) field shows 60 this year. On Schedules, open the 3-dots menu of a Monday–Friday meeting: Edit whole week and Delete whole week are listed when the meeting is part of a series.
+
+No new `.env` settings are required.
 
 ## Upgrading from Batch 13 fix 11
 

@@ -174,6 +174,7 @@ export class TeacherReportCardComponent implements OnDestroy {
           grade_label: 'Term grade',
           third_label: 'Examinations',
           third_short: 'EX',
+          default_floor: 60,
         },
         descriptors: [],
         months: [],

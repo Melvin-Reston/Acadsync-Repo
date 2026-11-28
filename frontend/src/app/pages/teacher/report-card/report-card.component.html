@@ -35,8 +35,9 @@
     </div>
   </div>
 } @else if (view()) {
-  <!-- Controls: screen only, never printed -->
-  <section class="card controls no-print" aria-label="Report card controls">
+  <!-- Controls: screen only, never printed. No card box around them:
+       the controls sit on the paper with nothing boxing them in. -->
+  <section class="controls no-print" aria-label="Report card controls">
     <div class="field">
       <label>Print scope</label>
       <app-dropdown

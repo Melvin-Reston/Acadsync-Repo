@@ -80,22 +80,70 @@ export class TeacherSchedulesComponent {
     created: string[];
     skipped: { day_name: string; reason: string }[];
   } | null>(null);
-  protected readonly deleteMeetingTarget = signal<Meeting | null>(null);
+  // The result of the last whole-week edit, shown in the modal until it
+  // closes: which days were changed and which were skipped, and why.
+  protected readonly seriesResult = signal<{
+    updated: string[];
+    skipped: { day_name: string; reason: string }[];
+  } | null>(null);
+  protected readonly deleteMeetingTarget = signal<{ meeting: Meeting; wholeWeek: boolean } | null>(null);
+  // Whole-week edit: the new time and room apply to every day of the
+  // series, not just the day that was opened. Set when the edit opens
+  // from "Edit whole week"; the checkbox in the form can turn it off.
+  protected applyToWeek = false;
 
-  // The 3-dots actions at the right end of a Daily Agenda row: Edit opens
-  // the Manage Class Schedules form filled in; Delete asks first.
-  protected readonly meetingMenuItems: MenuItem[] = [
-    { value: 'edit', label: 'Edit' },
-    { value: 'delete', label: 'Delete', danger: true },
-  ];
+  // The days of the series the meeting being edited belongs to: every
+  // weekday this class already meets at the same time and room. Set when
+  // the edit opens; empty when the meeting stands alone.
+  protected readonly seriesDays = signal<string[]>([]);
+
+  // The 3-dots actions on a meeting: Edit / Delete for that one day, and,
+  // when the meeting is part of a Monday–Friday series at the same time
+  // and room, Edit whole week / Delete whole week for the whole line.
+  protected meetingMenuItemsFor(meeting: ScheduleMeeting): MenuItem[] {
+    const series = this.seriesDaysFor(meeting);
+    const items: MenuItem[] = [{ value: 'edit', label: 'Edit' }];
+    if (series.length >= 2) {
+      items.push({ value: 'edit-week', label: `Edit whole week (${series.join(', ')})` });
+    }
+    items.push({ value: 'delete', label: 'Delete', danger: true });
+    if (series.length >= 2) {
+      items.push({ value: 'delete-week', label: 'Delete whole week', danger: true });
+    }
+    return items;
+  }
+
+  private seriesDaysFor(meeting: ScheduleMeeting): string[] {
+    const start = meeting.start_time.slice(0, 5);
+    const end = meeting.end_time.slice(0, 5);
+    return (this.schedule()?.meetings ?? [])
+      .filter(
+        (other) =>
+          other.class_id === meeting.class_id &&
+          other.start_time.slice(0, 5) === start &&
+          other.end_time.slice(0, 5) === end &&
+          other.room === meeting.room,
+      )
+      .map((other) => other.day_name)
+      .filter((day, index, list) => list.indexOf(day) === index)
+      .sort((a, b) => DAY_NAMES.indexOf(a) - DAY_NAMES.indexOf(b));
+  }
 
   protected meetingMenuAction(action: string, meeting: ScheduleMeeting): void {
     if (action === 'edit') {
       this.openEditMeeting(meeting);
       return;
     }
+    if (action === 'edit-week') {
+      this.openEditMeeting(meeting, true);
+      return;
+    }
     if (action === 'delete') {
-      this.deleteMeetingTarget.set(meeting);
+      this.deleteMeetingTarget.set({ meeting, wholeWeek: false });
+      return;
+    }
+    if (action === 'delete-week') {
+      this.deleteMeetingTarget.set({ meeting, wholeWeek: true });
     }
   }
 
@@ -337,12 +385,15 @@ export class TeacherSchedulesComponent {
     this.formEnd = '08:30';
     this.formRoom = this.classes().find((klass) => klass.id === this.formClassId)?.room ?? '';
     this.repeatWeek = false;
+    this.applyToWeek = false;
+    this.seriesDays.set([]);
     this.weekResult.set(null);
+    this.seriesResult.set(null);
     this.formErrors.set({});
     this.manageOpen.set(true);
   }
 
-  protected openEditMeeting(meeting: Meeting): void {
+  protected openEditMeeting(meeting: Meeting, wholeWeek = false): void {
     this.editingMeeting = meeting;
     this.formClassId = meeting.class_id;
     this.formDay = meeting.day_of_week;
@@ -350,7 +401,10 @@ export class TeacherSchedulesComponent {
     this.formEnd = meeting.end_time.slice(0, 5);
     this.formRoom = meeting.room;
     this.repeatWeek = false;
+    this.applyToWeek = wholeWeek;
+    this.seriesDays.set(this.seriesDaysFor(meeting as ScheduleMeeting));
     this.weekResult.set(null);
+    this.seriesResult.set(null);
     this.formErrors.set({});
     this.manageOpen.set(true);
   }
@@ -363,6 +417,7 @@ export class TeacherSchedulesComponent {
   protected saveMeeting(): void {
     if (!this.formClassId) return;
     const wholeWeek = this.repeatWeek && !this.editingMeeting;
+    const applyToWeek = this.applyToWeek && !!this.editingMeeting;
     const form: MeetingForm = {
       class_id: this.formClassId,
       day_of_week: this.formDay,
@@ -370,11 +425,13 @@ export class TeacherSchedulesComponent {
       end_time: this.formEnd,
       room: this.formRoom.trim(),
       repeat_week: wholeWeek,
+      apply_to_week: applyToWeek,
     };
     this.saving.set(true);
     this.weekResult.set(null);
+    this.seriesResult.set(null);
     // One Observable type for both paths, so subscribe infers one result type.
-    const request: Observable<{ meeting: Meeting } | MeetingCreateResult> = this.editingMeeting
+    const request: Observable<MeetingCreateResult> = this.editingMeeting
       ? this.classesService.updateMeeting(this.editingMeeting.id, form)
       : this.classesService.createMeeting(form);
     request.subscribe({
@@ -392,6 +449,21 @@ export class TeacherSchedulesComponent {
             })),
           });
           this.toast.success(result.message ?? 'Meetings added for the week.');
+        } else if (applyToWeek && 'updated' in result && result.updated) {
+          // Whole-week edit: report which days changed and which were
+          // skipped. A skipped day keeps the modal open on the same
+          // edit so the reason stays visible; otherwise the modal
+          // closes like any other edit.
+          this.seriesResult.set({
+            updated: result.updated ?? [],
+            skipped: (result.skipped ?? []).map((skip) => ({ day_name: skip.day_name, reason: skip.reason })),
+          });
+          this.toast.success(result.message ?? 'Meeting changed for the whole week.');
+          this.load();
+          if ((result.skipped ?? []).length > 0) return;
+          this.editingMeeting = null;
+          this.manageOpen.set(false);
+          return;
         } else {
           this.toast.success(wasEdit ? 'Meeting updated.' : 'Meeting added.');
         }
@@ -408,12 +480,14 @@ export class TeacherSchedulesComponent {
   }
 
   protected confirmDeleteMeeting(): void {
-    const meeting = this.deleteMeetingTarget();
-    if (!meeting) return;
-    this.classesService.deleteMeeting(meeting.id).subscribe({
-      next: () => {
+    const target = this.deleteMeetingTarget();
+    if (!target) return;
+    this.classesService.deleteMeeting(target.meeting.id, target.wholeWeek).subscribe({
+      next: (result) => {
         this.deleteMeetingTarget.set(null);
-        this.toast.success('Meeting deleted.');
+        this.toast.success(
+          target.wholeWeek ? `${result.deleted} meetings deleted.` : 'Meeting deleted.',
+        );
         this.load();
       },
       error: (error) => {

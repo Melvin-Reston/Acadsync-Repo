@@ -79,12 +79,13 @@ export class GradesService {
     return this.http.delete<{ message: string }>(`${this.api}/grades/${classId}/columns/${columnId}`);
   }
 
-  // Replaces the three weights; they must add up to 100.
+  // Replaces the three weights and the lowest grade; the weights must add up to 100.
   updateWeights(classId: number, weights: GradeWeights): Observable<{ message: string; weights: GradeWeights }> {
     return this.http.patch<{ message: string; weights: GradeWeights }>(`${this.api}/grades/${classId}/weights`, {
       ww_weight: weights.ww,
       pt_weight: weights.pt,
       ex_weight: weights.ex,
+      floor_grade: weights.floor,
     });
   }
 

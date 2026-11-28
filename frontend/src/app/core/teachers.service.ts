@@ -46,4 +46,8 @@ export class TeachersService {
   resetPassword(id: number): Observable<{ temporary_password: string }> {
     return this.http.post<{ temporary_password: string }>(`${this.api}/${id}/reset-password`, {});
   }
+
+  delete(id: number): Observable<{ message: string }> {
+    return this.http.delete<{ message: string }>(`${this.api}/${id}`);
+  }
 }

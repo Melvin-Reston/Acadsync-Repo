@@ -49,12 +49,16 @@ export interface MeetingForm {
   // When true, the same meeting is added Monday to Friday; a day that
   // would conflict is skipped and reported instead of blocking the rest.
   repeat_week?: boolean;
+  // On an edit only: apply the new time and room to the whole week-long
+  // series (every day this class already meets at the old time and room).
+  apply_to_week?: boolean;
 }
 
 export interface MeetingCreateResult {
   meeting?: Meeting; // single-day add
   meetings?: Meeting[]; // whole-week add: the days that were created
-  skipped?: { day_of_week: number; day_name: string; reason: string }[];
+  updated?: string[]; // whole-week edit: the day names that were changed
+  skipped?: { day_of_week?: number; day_name: string; reason: string }[];
   message?: string;
 }
 
@@ -204,12 +208,20 @@ export class ClassesService {
     return this.http.post<MeetingCreateResult>(`${this.api}/meetings`, form);
   }
 
-  updateMeeting(id: number, form: MeetingForm): Observable<{ meeting: Meeting }> {
-    return this.http.patch<{ meeting: Meeting }>(`${this.api}/meetings/${id}`, form);
+  updateMeeting(
+    id: number,
+    form: MeetingForm,
+  ): Observable<MeetingCreateResult> {
+    return this.http.patch<MeetingCreateResult>(
+      `${this.api}/meetings/${id}`,
+      form,
+    );
   }
 
-  deleteMeeting(id: number): Observable<{ deleted: boolean }> {
-    return this.http.delete<{ deleted: boolean }>(`${this.api}/meetings/${id}`);
+  deleteMeeting(id: number, wholeWeek = false): Observable<{ deleted: number; message?: string }> {
+    return this.http.delete<{ deleted: number; message?: string }>(`${this.api}/meetings/${id}`, {
+      params: toParams({ whole_week: wholeWeek ? 'true' : '' }),
+    });
   }
 
   schedule(weekStart: string, academicYear?: string): Observable<ScheduleResponse> {

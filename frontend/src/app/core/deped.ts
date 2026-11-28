@@ -32,6 +32,9 @@ export interface GradeProfile {
   transmutation: 'do8' | 'do015_adjusted' | 'none';
   honors: 'do8' | 'do015';
   weights: Record<SubjectGroup, { ww: number; pt: number; ex: number }>;
+  // Lowest grade that can appear on the card under this profile: 60
+  // where a transmutation table bottoms out at 60, 0 where there is none.
+  floor: number;
 }
 
 export const PROFILES: Record<GradingProfileCode, GradeProfile> = {
@@ -46,6 +49,7 @@ export const PROFILES: Record<GradingProfileCode, GradeProfile> = {
     thirdShort: 'QA',
     transmutation: 'do8',
     honors: 'do8',
+    floor: 60,
     weights: {
       core: { ww: 30, pt: 50, ex: 20 },
       mapeh: { ww: 30, pt: 50, ex: 20 },
@@ -63,6 +67,7 @@ export const PROFILES: Record<GradingProfileCode, GradeProfile> = {
     thirdShort: 'EX',
     transmutation: 'do015_adjusted',
     honors: 'do015',
+    floor: 60,
     weights: {
       core: { ww: 20, pt: 50, ex: 30 },
       mapeh: { ww: 20, pt: 60, ex: 20 },
@@ -80,6 +85,7 @@ export const PROFILES: Record<GradingProfileCode, GradeProfile> = {
     thirdShort: 'EX',
     transmutation: 'none',
     honors: 'do015',
+    floor: 0,
     weights: {
       core: { ww: 20, pt: 50, ex: 30 },
       mapeh: { ww: 20, pt: 60, ex: 20 },
@@ -208,17 +214,31 @@ export function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-/** The grade on the card for an initial grade, under a profile, or null when not yet computed. */
-export function transmute(initial: number | null, profileCode: string | null | undefined = 'do8_2015'): number | null {
+/** The lowest grade that can appear on the card under a profile, before any teacher-set floor. */
+export function defaultFloor(profileCode: string | null | undefined = 'do8_2015'): number {
+  return profileFor(profileCode).floor;
+}
+
+/** The grade on the card for an initial grade, under a profile, or null when not yet computed.
+ *  `floor` is the lowest grade that may appear: the teacher-set floor, or the
+ *  profile's own floor when none was set. It is a minimum only, so under
+ *  DO 8 / DO 015 Adjusted a floor below 60 changes nothing — the table
+ *  already bottoms out at 60. */
+export function transmute(
+  initial: number | null,
+  profileCode: string | null | undefined = 'do8_2015',
+  floor: number | null | undefined = null,
+): number | null {
   if (initial === null || initial === undefined) return null;
   const profile = profileFor(profileCode);
   const clamped = Math.min(100, Math.max(0, round2(initial)));
-  if (profile.transmutation === 'none') return Math.round(clamped);
+  const effectiveFloor = floor === null || floor === undefined ? profile.floor : Math.min(100, Math.max(0, floor));
+  if (profile.transmutation === 'none') return Math.max(Math.round(clamped), effectiveFloor);
   const bands = profile.transmutation === 'do015_adjusted' ? DO015_ADJUSTED_BANDS : TRANSMUTATION_BANDS;
   for (const [lowest, transmuted] of bands) {
-    if (clamped >= lowest) return transmuted;
+    if (clamped >= lowest) return Math.max(transmuted, effectiveFloor);
   }
-  return bands[bands.length - 1][1];
+  return Math.max(bands[bands.length - 1][1], effectiveFloor);
 }
 
 export function descriptorFor(grade: number, profileCode: string | null | undefined = 'do8_2015'): string {
@@ -249,10 +269,17 @@ export function finalGrade(periodGrades: (number | null | undefined)[]): number 
 export function computeLearnerGrade(
   columns: GradeColumnLike[],
   scores: Map<number, number | null>,
-  weights: { ww: number; pt: number; ex: number },
+  weights: { ww: number; pt: number; ex: number; floor?: number | null },
   profileCode: string | null | undefined = 'do8_2015',
+  floor: number | null | undefined = null,
 ): ComputedGrade {
   const profile = profileFor(profileCode);
+  const effectiveFloor =
+    floor !== null && floor !== undefined
+      ? floor
+      : weights.floor !== null && weights.floor !== undefined
+        ? weights.floor
+        : profile.floor;
   const components: Record<GradeComponent, ComponentGrade> = {
     WW: { total: 0, maxTotal: 0, ps: null, ws: null, entered: 0, count: 0 },
     PT: { total: 0, maxTotal: 0, ps: null, ws: null, entered: 0, count: 0 },
@@ -323,7 +350,7 @@ export function computeLearnerGrade(
     );
   }
 
-  const qg = complete && initial !== null ? transmute(initial, profileCode) : null;
+  const qg = complete && initial !== null ? transmute(initial, profileCode, effectiveFloor) : null;
   const status = !complete
     ? 'Incomplete'
     : qg !== null && qg < 75

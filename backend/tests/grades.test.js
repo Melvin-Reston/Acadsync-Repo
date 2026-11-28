@@ -191,6 +191,24 @@ describe('DepEd computation', () => {
     assert.equal(deped.transmute(0, 'do015_zero_based'), 0);
   });
 
+  test('the floor is the profile default, and a set floor only ever raises the lowest grade', () => {
+    assert.equal(deped.defaultFloor('do8_2015'), 60);
+    assert.equal(deped.defaultFloor('do015_adjusted'), 60);
+    assert.equal(deped.defaultFloor('do015_zero_based'), 0);
+    // Adjusted: a floor below 60 changes nothing — the table bottoms at 60.
+    assert.equal(deped.transmute(0, 'do015_adjusted', 0), 60);
+    assert.equal(deped.transmute(0, 'do015_adjusted', 50), 60);
+    // A raised floor lifts the lowest grades: 0 -> 70, and a grade that
+    // would transmute to 68 is lifted to 70 as well.
+    assert.equal(deped.transmute(0, 'do015_adjusted', 70), 70);
+    assert.equal(deped.transmute(40, 'do015_adjusted', 70), 70);
+    assert.equal(deped.transmute(70, 'do015_adjusted', 70), 75);
+    // Zero-based: no table, so the floor does the work.
+    assert.equal(deped.transmute(0, 'do015_zero_based', 0), 0);
+    assert.equal(deped.transmute(40, 'do015_zero_based', 60), 60);
+    assert.equal(deped.transmute(88, 'do015_zero_based', 60), 88);
+  });
+
   test('worked example under DO 8: initial 88.05 transmutes to 92', () => {
     const columns = [
       ...[25, 25, 25, 25].map((max, i) => ({ id: i + 1, component: 'WW', highest_possible: max })),
@@ -202,7 +220,7 @@ describe('DepEd computation', () => {
       [10, 45], [11, 48], [12, 50], [13, 40],
       [20, 42],
     ]);
-    const result = deped.computeLearnerGrade(columns, scores, { ww: 30, pt: 50, ex: 20 }, 'do8_2015');
+    const result = deped.computeLearnerGrade(columns, scores, { ww: 30, pt: 50, ex: 20, floor: 60 }, 'do8_2015');
     assert.equal(result.components.WW.ps, 85);
     assert.equal(result.components.WW.ws, 25.5);
     assert.equal(result.components.PT.ps, 91.5);
@@ -355,7 +373,7 @@ describe('Grade sheet', () => {
     assert.deepEqual(sheet.columns.map((column) => column.name), ['WW1', 'WW2', 'WW3', 'WW4', 'PT1', 'PT2', 'PT3', 'PT4', 'Summative Test 1', 'Summative Test 2', 'Term Exam']);
     assert.deepEqual(sheet.columns.map((column) => column.highest_possible), [25, 25, 25, 25, 50, 50, 50, 50, 50, 50, 50]);
     assert.deepEqual(sheet.columns.filter((column) => column.component === 'EX').map((column) => column.sub_weight), [30, 30, 40]);
-    assert.deepEqual(sheet.weights, { ww: 20, pt: 50, ex: 30 });
+    assert.deepEqual(sheet.weights, { ww: 20, pt: 50, ex: 30, floor: 60 });
     // The sheet says which grading system is active for the year, in plain words.
     assert.equal(sheet.grading.code, 'do015_adjusted');
     assert.equal(sheet.grading.label, 'DO 015 · Adjusted · SY 2026-2027');
@@ -575,12 +593,51 @@ describe('Columns and weights', () => {
     const ok = await api().patch(`/api/teacher/grades/${klass.id}/weights`).set(bearer(token))
       .send({ ww_weight: 40, pt_weight: 40, ex_weight: 20 });
     assert.equal(ok.status, 200, JSON.stringify(ok.body));
-    assert.deepEqual(ok.body.weights, { ww: 40, pt: 40, ex: 20 });
+    assert.deepEqual(ok.body.weights, { ww: 40, pt: 40, ex: 20, floor: 60 });
 
     const after = await getSheet(token, klass.id, 1);
     // 85*0.40 + 91.5*0.40 + 84.2*0.20 = 34 + 36.6 + 16.84 = 87.44 -> term grade 89.
     assert.equal(after.learners[0].computed.initial, 87.44);
     assert.equal(after.learners[0].computed.qg, 89);
+  });
+
+  test('the floor saves with the weights and lifts the lowest grades on the sheet', async () => {
+    const { token } = await signup();
+    const klass = await makeClass(token, { section_name: 'Luke' });
+    const alex = await makeLearner(token, { first_name: 'Alex', last_name: 'Rivera', learner_id: 'STU-2026-1048', sex: 'Male' });
+    await enrol(token, klass.id, alex.id);
+
+    // All zeros: initial 0, which the Adjusted table transmutes to 60.
+    const sheet = await getSheet(token, klass.id, 1);
+    await saveScores(token, klass.id, 1, scoresFor(sheet, alex, { ww: [0, 0, 0, 0], pt: [0, 0, 0, 0], ex: [0, 0, 0] }));
+    const before = await getSheet(token, klass.id, 1);
+    assert.equal(before.learners[0].computed.qg, 60);
+    assert.equal(before.weights.floor, 60);
+
+    // A floor below the table's own changes nothing; a raised floor lifts it.
+    const low = await api().patch(`/api/teacher/grades/${klass.id}/weights`).set(bearer(token))
+      .send({ ww_weight: 20, pt_weight: 50, ex_weight: 30, floor_grade: 0 });
+    assert.equal(low.status, 200, JSON.stringify(low.body));
+    assert.equal(low.body.weights.floor, 0);
+    const still60 = await getSheet(token, klass.id, 1);
+    assert.equal(still60.weights.floor, 0);
+    assert.equal(still60.learners[0].computed.qg, 60);
+
+    const raised = await api().patch(`/api/teacher/grades/${klass.id}/weights`).set(bearer(token))
+      .send({ ww_weight: 20, pt_weight: 50, ex_weight: 30, floor_grade: 70 });
+    assert.equal(raised.status, 200, JSON.stringify(raised.body));
+    assert.equal(raised.body.weights.floor, 70);
+    const after = await getSheet(token, klass.id, 1);
+    assert.equal(after.learners[0].computed.qg, 70);
+
+    // An out-of-range floor is refused, and sending no floor keeps the saved one.
+    const bad = await api().patch(`/api/teacher/grades/${klass.id}/weights`).set(bearer(token))
+      .send({ ww_weight: 20, pt_weight: 50, ex_weight: 30, floor_grade: 101 });
+    assert.equal(bad.status, 400, JSON.stringify(bad.body));
+    const kept = await api().patch(`/api/teacher/grades/${klass.id}/weights`).set(bearer(token))
+      .send({ ww_weight: 20, pt_weight: 50, ex_weight: 30 });
+    assert.equal(kept.status, 200, JSON.stringify(kept.body));
+    assert.equal(kept.body.weights.floor, 70);
   });
 
   test('the Examinations sub-weights save together and must add up to 100', async () => {
@@ -1087,11 +1144,11 @@ describe('Subject groups and default weights', () => {
 
     const mapehClass = await makeClass(token, { subject: mapeh, section_name: 'Luke' });
     const mapehSheet = await getSheet(token, mapehClass.id, 1);
-    assert.deepEqual(mapehSheet.weights, { ww: 20, pt: 60, ex: 20 });
+    assert.deepEqual(mapehSheet.weights, { ww: 20, pt: 60, ex: 20, floor: 60 });
 
     const coreClass = await makeClass(token, { subject: core, section_name: 'Mark' });
     const coreSheet = await getSheet(token, coreClass.id, 1);
-    assert.deepEqual(coreSheet.weights, { ww: 20, pt: 50, ex: 30 });
+    assert.deepEqual(coreSheet.weights, { ww: 20, pt: 50, ex: 30, floor: 60 });
 
     // The group can be changed afterwards.
     const changed = await api().patch(`/api/teacher/subjects/${core.id}`).set(bearer(token))
@@ -1175,7 +1232,7 @@ describe('Grading profiles (Settings)', () => {
     assert.equal(sheet.grading.period_label, 'Quarter');
     assert.equal(sheet.grading.third_short, 'QA');
     assert.deepEqual(sheet.columns.map((column) => column.name), ['WW1', 'WW2', 'WW3', 'WW4', 'PT1', 'PT2', 'PT3', 'PT4', 'QA1']);
-    assert.deepEqual(sheet.weights, { ww: 30, pt: 50, ex: 20 });
+    assert.deepEqual(sheet.weights, { ww: 30, pt: 50, ex: 20, floor: 60 });
 
     await saveScores(token, klass.id, 1, scoresFor(sheet, alex, WORKED_DO8));
     const after = await getSheet(token, klass.id, 1);
@@ -1274,7 +1331,7 @@ describe('Grading profiles (Settings)', () => {
 
     const do8Sheet = await getSheet(token, klass.id, 1);
     assert.deepEqual(do8Sheet.columns.map((column) => column.name), ['WW1', 'WW2', 'WW3', 'WW4', 'PT1', 'PT2', 'PT3', 'PT4', 'QA1']);
-    assert.deepEqual(do8Sheet.weights, { ww: 30, pt: 50, ex: 20 });
+    assert.deepEqual(do8Sheet.weights, { ww: 30, pt: 50, ex: 20, floor: 60 });
     await saveScores(token, klass.id, 1, scoresFor(do8Sheet, alex, WORKED_DO8));
     const filed = await getSheet(token, klass.id, 1);
     assert.equal(filed.learners[0].computed.initial, 88.05);
@@ -1298,7 +1355,7 @@ describe('Grading profiles (Settings)', () => {
       after.columns.filter((c) => c.component === 'EX').map((c) => [c.name, c.sub_weight]),
       [['EX1', null]]
     );
-    assert.deepEqual(after.weights, { ww: 20, pt: 50, ex: 30 });
+    assert.deepEqual(after.weights, { ww: 20, pt: 50, ex: 30, floor: 60 });
     assert.equal(after.learners[0].computed.initial, 87.95);
     assert.equal(after.learners[0].computed.qg, 90); // the adjusted table, not DO 8
 

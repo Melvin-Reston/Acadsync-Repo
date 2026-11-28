@@ -109,7 +109,7 @@
                       <div class="meeting-top">
                         <b>{{ meeting.subject_name }} · {{ meeting.section_name }}</b>
                         <app-menu
-                          [items]="meetingMenuItems"
+                          [items]="meetingMenuItemsFor(meeting)"
                           [label]="'Actions for ' + meeting.subject_name + ' · ' + meeting.section_name"
                           (picked)="meetingMenuAction($event, meeting)"
                         />
@@ -154,7 +154,7 @@
                   <span class="pill plain">Next</span>
                 }
                 <app-menu
-                  [items]="meetingMenuItems"
+                  [items]="meetingMenuItemsFor(meeting)"
                   [label]="'Actions for ' + meeting.subject_name + ' · ' + meeting.section_name"
                   (picked)="meetingMenuAction($event, meeting)"
                 />
@@ -191,7 +191,7 @@
                       <div class="meeting-top">
                         <span>{{ time12(meeting.start_time) }} – {{ time12(meeting.end_time) }} · {{ meeting.room }}</span>
                         <app-menu
-                          [items]="meetingMenuItems"
+                          [items]="meetingMenuItemsFor(meeting)"
                           [label]="'Actions for ' + meeting.subject_name + ' · ' + meeting.section_name"
                           (picked)="meetingMenuAction($event, meeting)"
                         />
@@ -232,7 +232,7 @@
                       <div class="meeting-top">
                         <b>{{ meeting.subject_name }} · {{ meeting.section_name }}</b>
                         <app-menu
-                          [items]="meetingMenuItems"
+                          [items]="meetingMenuItemsFor(meeting)"
                           [label]="'Actions for ' + meeting.subject_name + ' · ' + meeting.section_name"
                           (picked)="meetingMenuAction($event, meeting)"
                         />
@@ -278,7 +278,7 @@
             [options]="dayOptions"
             [ngModel]="formDay"
             (ngModelChange)="formDay = $event"
-            [disabled]="repeatWeek"
+            [disabled]="repeatWeek || applyToWeek"
             placeholder="Choose a day"
             countSingular="day"
             countPlural="days"
@@ -314,7 +314,31 @@
             <span class="field-hint">One meeting per weekday, same time and room. Conflicting days are skipped and reported.</span>
           </div>
         }
+        @if (editingMeeting && seriesDays().length >= 2) {
+          <div class="field full">
+            <p class="muted">This meeting is part of a {{ seriesDays().join(', ') }} series at the same time and room.</p>
+            <label class="check">
+              <input type="checkbox" name="applyToWeek" [(ngModel)]="applyToWeek" />
+              Change the whole week ({{ seriesDays().join(', ') }})
+            </label>
+            <span class="field-hint">Each day keeps its own day; only the time and room change. A day that would conflict is skipped and reported. Leave it off to change just this one day.</span>
+          </div>
+        }
       </div>
+
+      @if (seriesResult(); as result) {
+        <div class="week-result" role="status">
+          <p><b>Changed {{ result.updated.length }} {{ result.updated.length === 1 ? 'meeting' : 'meetings' }}:</b> {{ result.updated.join(', ') }}.</p>
+          @if (result.skipped.length > 0) {
+            <p><b>Skipped:</b></p>
+            <ul>
+              @for (skip of result.skipped; track skip.day_name) {
+                <li>{{ skip.day_name }} — {{ skip.reason }}</li>
+              }
+            </ul>
+          }
+        </div>
+      }
 
       @if (weekResult(); as result) {
         <div class="week-result" role="status">
@@ -342,7 +366,7 @@
           <button type="button" class="btn btn-secondary" (click)="editingMeeting = null; manageOpen.set(false)">Cancel</button>
         }
         <button type="submit" class="btn btn-primary" [disabled]="saving() || !formClassId">
-          {{ saving() ? 'Saving…' : editingMeeting ? 'Save changes' : repeatWeek ? 'Add for the whole week' : 'Add meeting' }}
+          {{ saving() ? 'Saving…' : editingMeeting ? (applyToWeek ? 'Save whole week' : 'Save changes') : repeatWeek ? 'Add for the whole week' : 'Add meeting' }}
         </button>
       </div>
     </form>
@@ -350,12 +374,16 @@
 }
 
 <!-- Delete meeting confirmation -->
-@if (deleteMeetingTarget(); as meeting) {
-  <app-modal title="Delete this meeting?" (closed)="deleteMeetingTarget.set(null)">
-    <p>{{ meeting.subject_name }} · {{ meeting.section_name }} — {{ meeting.day_name }}, {{ time12(meeting.start_time) }} – {{ time12(meeting.end_time) }} in {{ meeting.room }}.</p>
+@if (deleteMeetingTarget(); as target) {
+  <app-modal [title]="target.wholeWeek ? 'Delete the whole week?' : 'Delete this meeting?'" (closed)="deleteMeetingTarget.set(null)">
+    @if (target.wholeWeek) {
+      <p>Delete every meeting of {{ target.meeting.subject_name }} · {{ target.meeting.section_name }} at {{ time12(target.meeting.start_time) }} – {{ time12(target.meeting.end_time) }} in {{ target.meeting.room }}, on every weekday it meets at that time and room? The other days' meetings at different times stay.</p>
+    } @else {
+      <p>{{ target.meeting.subject_name }} · {{ target.meeting.section_name }} — {{ target.meeting.day_name }}, {{ time12(target.meeting.start_time) }} – {{ time12(target.meeting.end_time) }} in {{ target.meeting.room }}.</p>
+    }
     <div class="form-actions">
       <button type="button" class="btn btn-secondary" (click)="deleteMeetingTarget.set(null)">Keep it</button>
-      <button type="button" class="btn btn-danger" (click)="confirmDeleteMeeting()">Delete</button>
+      <button type="button" class="btn btn-danger" (click)="confirmDeleteMeeting()">{{ target.wholeWeek ? 'Delete whole week' : 'Delete' }}</button>
     </div>
   </app-modal>
 }

@@ -29,7 +29,7 @@ import {
   SubmissionCheck,
   TeacherSelf,
 } from '../../../core/models';
-import { computeLearnerGrade, descriptorFor, exSubWs } from '../../../core/deped';
+import { computeLearnerGrade, defaultFloor, descriptorFor, exSubWs } from '../../../core/deped';
 import { DropdownComponent, DropdownOption } from '../../../shared/dropdown.component';
 import { IconComponent } from '../../../shared/icon.component';
 import { ModalComponent } from '../../../shared/modal.component';
@@ -100,10 +100,18 @@ export class TeacherGradesComponent {
     typeof window !== 'undefined' && window.matchMedia('(max-width: 760px)').matches,
   );
 
-  // Weights editing (three numbers that must add up to 100).
+  // Weights editing (three numbers that must add up to 100, plus the
+  // lowest grade that may appear on the card — the floor).
   protected readonly weightsEditing = signal(false);
-  protected readonly weightsDraft = signal({ ww: 20, pt: 50, ex: 30 });
+  protected readonly weightsDraft = signal({ ww: 20, pt: 50, ex: 30, floor: 60 });
   protected readonly weightsSaving = signal(false);
+
+  // The grading profile's own floor for the open class (60 under DO 8 and
+  // DO 015 Adjusted, 0 under zero-based): the floor the class uses when
+  // the teacher has not set one, and the lowest a set floor can go.
+  protected readonly profileFloor = computed(
+    () => this.sheet()?.grading.default_floor ?? defaultFloor(this.sheet()?.grading.code),
+  );
 
   // Examinations sub-weights (the shares of the EX component: ST1 30,
   // ST2 30, Term Exam 40). Saved together with the weights; they must add
@@ -328,9 +336,21 @@ export class TeacherGradesComponent {
       draft.ww !== sheet.weights.ww ||
       draft.pt !== sheet.weights.pt ||
       draft.ex !== sheet.weights.ex ||
+      (draft.floor ?? this.profileFloor()) !== (sheet.weights.floor ?? this.profileFloor()) ||
       this.subWeightsDirty()
     );
   });
+
+  // The saved weights and floor for a sheet, with the profile floor
+  // filling in when the class has never had a weights row saved.
+  private weightsFromSheet(sheet: GradeSheet): { ww: number; pt: number; ex: number; floor: number } {
+    return {
+      ww: sheet.weights.ww,
+      pt: sheet.weights.pt,
+      ex: sheet.weights.ex,
+      floor: sheet.weights.floor ?? defaultFloor(sheet.grading.code),
+    };
+  }
 
   // Everything on this page that would be lost by leaving: unsaved scores
   // or an unsaved weights edit. The route guard and the browser's
@@ -519,7 +539,7 @@ export class TeacherGradesComponent {
   private applySheet(sheet: GradeSheet): void {
     this.sheet.set(sheet);
     this.quarter.set(sheet.quarter);
-    this.weightsDraft.set({ ...sheet.weights });
+    this.weightsDraft.set(this.weightsFromSheet(sheet));
     this.weightsEditing.set(false);
     const subWeights: Record<number, number> = {};
     for (const column of sheet.columns) {
@@ -762,8 +782,10 @@ export class TeacherGradesComponent {
     if (classId === '') return;
     if (this.weightsSum() !== 100) return;
     if (this.subWeightsDirty() && this.subWeightsSum() !== 100) return;
+    const rawFloor = Number(this.weightsDraft().floor);
+    const floor = Number.isFinite(rawFloor) ? Math.min(100, Math.max(0, Math.round(rawFloor))) : this.profileFloor();
     this.weightsSaving.set(true);
-    this.grades.updateWeights(classId, this.weightsDraft()).subscribe({
+    this.grades.updateWeights(classId, { ...this.weightsDraft(), floor }).subscribe({
       next: () => {
         // The Examinations shares save with the weights, when they changed.
         if (this.subWeightsDirty() && this.subWeightsSum() === 100) {
@@ -822,7 +844,7 @@ export class TeacherGradesComponent {
   protected cancelWeights(): void {
     const sheet = this.sheet();
     if (sheet) {
-      this.weightsDraft.set({ ...sheet.weights });
+      this.weightsDraft.set(this.weightsFromSheet(sheet));
       const subWeights: Record<number, number> = {};
       for (const column of sheet.columns) {
         if (column.component === 'EX') subWeights[column.id] = column.sub_weight ?? 0;

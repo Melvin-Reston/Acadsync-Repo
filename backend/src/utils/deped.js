@@ -14,6 +14,13 @@
 //                       NO transmutation — the term grade is the initial
 //                       grade itself, rounded to a whole number.
 //
+// The floor is the lowest grade that can appear on the card. Each profile
+// has its own: 60 under DO 8 and under DO 015 Adjusted (both tables bottom
+// out at 60 — an initial grade of 0 transmutes to 60), 0 under zero-based
+// (a 0 stays a 0). A teacher can raise the floor for one class in the
+// weights section of the Grades page; a set floor is a minimum only, so it
+// never lowers a grade below what the profile's table gives.
+//
 // The steps, per learner per period (a quarter under DO 8, a term under
 // DO 015):
 //   1. Per component (Written Works, Performance Tasks, Examinations or
@@ -60,6 +67,7 @@ const PROFILES = {
     thirdShort: 'QA',
     transmutation: 'do8',
     honors: 'do8',
+    floor: 60,
     // Default weights do not depend on the subject group under DO 8.
     weights: {
       core: { ww: 30, pt: 50, ex: 20 },
@@ -78,6 +86,7 @@ const PROFILES = {
     thirdShort: 'EX',
     transmutation: 'do015_adjusted',
     honors: 'do015',
+    floor: 60,
     // DO 015 Table 9: core 20/50/30, MAPEH and EPP/TLE 20/60/20.
     weights: {
       core: { ww: 20, pt: 50, ex: 30 },
@@ -96,6 +105,7 @@ const PROFILES = {
     thirdShort: 'EX',
     transmutation: 'none',
     honors: 'do015',
+    floor: 0,
     weights: {
       core: { ww: 20, pt: 50, ex: 30 },
       mapeh: { ww: 20, pt: 60, ex: 20 },
@@ -213,16 +223,27 @@ function round2(value) {
 // Zero-based: the term grade IS the initial grade, rounded to a whole
 // number. The order sets no floor for zero-based — a 0 stays a 0 — so none
 // is applied here (see the Batch 4.1 build log for the source check).
-function transmute(initialGrade, profileCode = 'do8_2015') {
+// `floor` is the lowest grade that may appear: a teacher-set floor in the
+// weights section, or the profile's own floor when none was set. It is a
+// minimum only — Math.max — so under DO 8 / DO 015 Adjusted a floor below
+// 60 changes nothing, because the table already bottoms out at 60.
+function transmute(initialGrade, profileCode = 'do8_2015', floor = null) {
   if (initialGrade === null || initialGrade === undefined) return null;
   const profile = profileFor(profileCode);
   const grade = Math.min(100, Math.max(0, round2(Number(initialGrade))));
-  if (profile.transmutation === 'none') return Math.round(grade);
+  const effectiveFloor = floor === null || floor === undefined ? profile.floor : Math.min(100, Math.max(0, Number(floor)));
+  if (profile.transmutation === 'none') return Math.max(Math.round(grade), effectiveFloor);
   const bands = profile.transmutation === 'do015_adjusted' ? DO015_ADJUSTED_BANDS : DO8_BANDS;
   for (const [lower, transmuted] of bands) {
-    if (grade >= lower) return transmuted;
+    if (grade >= lower) return Math.max(transmuted, effectiveFloor);
   }
-  return bands[bands.length - 1][1];
+  return Math.max(bands[bands.length - 1][1], effectiveFloor);
+}
+
+// The lowest grade that can appear on the card under a profile, before
+// any teacher-set floor for a class.
+function defaultFloor(profileCode = 'do8_2015') {
+  return profileFor(profileCode).floor;
 }
 
 // ------------------------------------------------------------------- weights
@@ -273,14 +294,20 @@ function columnName(column, profileCode = 'do8_2015') {
 // One learner's grade for one class and period.
 // columns: [{ id, component, highest_possible, sub_weight, label }] for the period.
 // scores: a Map of column id -> score (number), or null when not encoded.
-// weights: { ww, pt, ex }.
+// weights: { ww, pt, ex } and, when the teacher set one for the class,
+// floor: the lowest grade that may appear (otherwise the profile's own).
 // profileCode: which grading system applies.
 // The result keeps the Batch 4 shape: { components, complete, entered,
 // cells, initial, qg, status }, plus descriptor once the grade is set.
 // qg is the grade on the card — the term grade under DO 015, the quarterly
 // grade under DO 8.
-function computeLearnerGrade(columns, scores, weights, profileCode = 'do8_2015') {
+function computeLearnerGrade(columns, scores, weights, profileCode = 'do8_2015', floor = null) {
   const profile = profileFor(profileCode);
+  const effectiveFloor = floor !== null && floor !== undefined
+    ? floor
+    : weights && weights.floor !== null && weights.floor !== undefined
+      ? weights.floor
+      : profile.floor;
   const result = { components: {}, complete: true, entered: 0, cells: 0, initial: null, qg: null, descriptor: null, status: 'Incomplete' };
 
   for (const component of COMPONENTS) {
@@ -342,7 +369,7 @@ function computeLearnerGrade(columns, scores, weights, profileCode = 'do8_2015')
     );
   }
   if (result.complete && result.initial !== null) {
-    result.qg = transmute(result.initial, profileCode);
+    result.qg = transmute(result.initial, profileCode, effectiveFloor);
     result.descriptor = descriptorFor(result.qg, profileCode);
     result.status = result.qg >= 75 ? 'Complete · Passed' : 'Complete · Below 75';
   }
@@ -467,6 +494,7 @@ module.exports = {
   DEFAULT_COLUMNS,
   round2,
   transmute,
+  defaultFloor,
   defaultColumns,
   defaultWeights,
   columnName,

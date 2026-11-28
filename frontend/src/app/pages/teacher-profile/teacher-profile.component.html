@@ -37,6 +37,7 @@
           <app-icon name="lock" [size]="16" /> Restrict
         </button>
       }
+      <button type="button" class="btn btn-danger" (click)="open('delete')">Delete</button>
     </div>
   </div>
 
@@ -213,6 +214,28 @@
           <button type="button" class="btn" (click)="close()">Cancel</button>
           <button type="button" class="btn btn-primary" [disabled]="working()" (click)="resetPassword()">
             {{ working() ? 'Resetting…' : 'Reset password' }}
+          </button>
+        </div>
+      </app-modal>
+    }
+    @case ('delete') {
+      <app-modal title="Delete teacher" (closed)="close()">
+        @if (dialogError()) {
+          <div class="alert" role="alert">
+            <app-icon name="alert" [size]="16" />
+            <span>{{ dialogError() }}</span>
+          </div>
+        }
+        <p>
+          Delete <strong>{{ t.first_name }} {{ t.last_name }}</strong> ({{ t.username }})? This
+          cannot be undone. Their account, subscription, invoices and payments, classes,
+          schedules, attendance, grades, quizzes, exams and lesson plans will be deleted too.
+          Learners other teachers of the same school use will stay.
+        </p>
+        <div class="form-actions">
+          <button type="button" class="btn" (click)="close()">Cancel</button>
+          <button type="button" class="btn btn-danger" [disabled]="working()" (click)="deleteTeacher()">
+            {{ working() ? 'Deleting…' : 'Delete teacher' }}
           </button>
         </div>
       </app-modal>

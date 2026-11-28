@@ -360,6 +360,14 @@
   min-width: 150px;
 }
 
+/* The floor note under the weights fields: full width, so it reads as
+   one line of guidance for the whole form, not a fifth field. */
+.floor-note {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 13px;
+}
+
 /* The Examinations shares, inside the weights form: one field per EX column. */
 .subweights {
   display: flex;

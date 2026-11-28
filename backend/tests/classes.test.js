@@ -503,6 +503,81 @@ describe('Whole-week meetings', () => {
     assert.equal(response.status, 409, JSON.stringify(response.body));
     assert.match(response.body.message, /No meeting was added/);
   });
+
+  test('editing the whole week changes every day of the series and keeps each day', async () => {
+    const { token } = await signup();
+    const subject = await makeSubject(token, { name: 'Sacraments', grade_level: 10 });
+    const klass = await makeClass(token, { subject, section_name: 'Luke' });
+    const created = await api()
+      .post('/api/teacher/meetings')
+      .set(bearer(token))
+      .send({ class_id: klass.id, day_of_week: 1, start_time: '07:30', end_time: '08:30', room: 'Room S1', repeat_week: true });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    assert.equal(created.body.meetings.length, 5);
+    // A different-time meeting on Monday stays exactly where it is.
+    await makeMeeting(token, klass.id, { day_of_week: 1, start_time: '10:00', end_time: '11:00', room: 'Room S1' });
+
+    const monday = created.body.meetings[0];
+    const edited = await api()
+      .patch(`/api/teacher/meetings/${monday.id}`)
+      .set(bearer(token))
+      .send({ day_of_week: 1, start_time: '08:00', end_time: '09:00', room: 'Room S2', apply_to_week: true });
+    assert.equal(edited.status, 200, JSON.stringify(edited.body));
+    assert.deepEqual(edited.body.updated, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']);
+    assert.equal(edited.body.skipped.length, 0);
+
+    const listed = await api().get('/api/teacher/meetings').set(bearer(token));
+    assert.equal(listed.body.items.length, 6);
+    const series = listed.body.items.filter((meeting) => meeting.start_time === '08:00:00');
+    assert.deepEqual(series.map((meeting) => meeting.day_of_week), [1, 2, 3, 4, 5]);
+    assert.ok(series.every((meeting) => meeting.room === 'Room S2'));
+    const untouched = listed.body.items.find((meeting) => meeting.start_time === '10:00:00');
+    assert.equal(untouched.day_of_week, 1);
+  });
+
+  test('editing one day leaves the rest of the week alone', async () => {
+    const { token } = await signup();
+    const subject = await makeSubject(token, { name: 'Sacraments', grade_level: 10 });
+    const klass = await makeClass(token, { subject, section_name: 'Luke' });
+    const created = await api()
+      .post('/api/teacher/meetings')
+      .set(bearer(token))
+      .send({ class_id: klass.id, day_of_week: 1, start_time: '07:30', end_time: '08:30', room: 'Room S3', repeat_week: true });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+
+    const edited = await api()
+      .patch(`/api/teacher/meetings/${created.body.meetings[0].id}`)
+      .set(bearer(token))
+      .send({ day_of_week: 1, start_time: '08:00', end_time: '09:00', room: 'Room S3' });
+    assert.equal(edited.status, 200, JSON.stringify(edited.body));
+    assert.equal(edited.body.updated, undefined);
+
+    const listed = await api().get('/api/teacher/meetings').set(bearer(token));
+    assert.equal(listed.body.items.filter((meeting) => meeting.start_time === '07:30:00').length, 4);
+    assert.equal(listed.body.items.filter((meeting) => meeting.start_time === '08:00:00').length, 1);
+  });
+
+  test('deleting the whole week removes the series and keeps other meetings', async () => {
+    const { token } = await signup();
+    const subject = await makeSubject(token, { name: 'Sacraments', grade_level: 10 });
+    const klass = await makeClass(token, { subject, section_name: 'Luke' });
+    const created = await api()
+      .post('/api/teacher/meetings')
+      .set(bearer(token))
+      .send({ class_id: klass.id, day_of_week: 1, start_time: '07:30', end_time: '08:30', room: 'Room S4', repeat_week: true });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    await makeMeeting(token, klass.id, { day_of_week: 1, start_time: '10:00', end_time: '11:00', room: 'Room S4' });
+
+    const deleted = await api()
+      .delete(`/api/teacher/meetings/${created.body.meetings[2].id}?whole_week=true`)
+      .set(bearer(token));
+    assert.equal(deleted.status, 200, JSON.stringify(deleted.body));
+    assert.equal(deleted.body.deleted, 5);
+
+    const listed = await api().get('/api/teacher/meetings').set(bearer(token));
+    assert.equal(listed.body.items.length, 1);
+    assert.equal(listed.body.items[0].start_time, '10:00:00');
+  });
 });
 
 // ---------- Bulk learner upload ----------

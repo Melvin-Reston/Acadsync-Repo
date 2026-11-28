@@ -1,5 +1,15 @@
 /* Payments & Invoices (Teacher Batch 6). Shared card, pill, button and table
    styles come from the global stylesheet; only this page's own layout lives here. */
+
+/* The page's boxes stand on their own: space between every box, so no
+   two cards touch edge to edge. */
+section.card {
+  margin-bottom: 20px;
+}
+
+.alert {
+  margin-bottom: 20px;
+}
 .plan-list {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));

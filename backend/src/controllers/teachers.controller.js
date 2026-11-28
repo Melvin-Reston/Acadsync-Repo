@@ -1,7 +1,8 @@
-// Teachers: list, create, view, edit, restrict / unrestrict, reset password.
+// Teachers: list, create, view, edit, restrict / unrestrict, reset password, delete.
 const db = require('../db');
 const { hashPassword, generateTemporaryPassword } = require('../utils/passwords');
 const { logActivity } = require('../utils/activity');
+const { deleteImage } = require('../utils/uploads');
 const { notFound, badRequest, conflict } = require('../utils/httpError');
 const billing = require('../utils/billing');
 const { findActivePlan } = require('./subscriptions.controller');
@@ -199,4 +200,77 @@ async function resetTeacherPassword(req, res) {
   res.json({ temporary_password: temporaryPassword });
 }
 
-module.exports = { listTeachers, getTeacher, createTeacher, updateTeacher, restrictTeacher, unrestrictTeacher, resetTeacherPassword };
+// DELETE /api/teachers/:id
+// No migration is needed: every table that belongs to a teacher already
+// references teachers ON DELETE CASCADE (subscriptions, invoices, payments,
+// subjects, classes, attendance, grades, quizzes, exams, lesson plans and
+// the rest), and report-card comments keep only a SET NULL updated_by.
+// The one exception handled here is a shared learner: learners belong to
+// the school, so a learner created by this teacher but enrolled or marked
+// by another teacher must survive. Such a learner is handed to the other
+// teacher who uses it (the lowest id when several do) before the delete,
+// so the other teacher's enrolments, attendance and scores are untouched.
+// A learner nobody else uses goes with the teacher, as before. The activity
+// log line is written first: it has no link to the teacher row, so it
+// survives the delete. Payment screenshot files are removed afterwards on
+// a best-effort basis; a file that is already gone never fails the delete.
+async function deleteTeacher(req, res) {
+  const { id } = req.valid.params;
+  const teacher = await findTeacher(id);
+
+  const screenshotPaths = await db.withTransaction(async (client) => {
+    await logActivity(
+      req,
+      { action: 'teacher.delete', entityType: 'teacher', entityId: id, description: `Deleted teacher ${fullName(teacher)} (${teacher.username})` },
+      client
+    );
+
+    const shared = await client.query(
+      `SELECT l.id AS learner_id, MIN(other_teacher_id) AS keeper_id
+         FROM learners l
+         JOIN (
+           SELECT cl.learner_id, c.teacher_id AS other_teacher_id
+             FROM class_learners cl JOIN classes c ON c.id = cl.class_id
+            WHERE c.teacher_id <> $1
+           UNION
+           SELECT a.learner_id, a.teacher_id FROM attendance a WHERE a.teacher_id <> $1
+           UNION
+           SELECT gs.learner_id, c.teacher_id
+             FROM grade_scores gs
+             JOIN grade_columns gc ON gc.id = gs.column_id
+             JOIN classes c ON c.id = gc.class_id
+            WHERE c.teacher_id <> $1
+           UNION
+           SELECT qa.learner_id, q.teacher_id
+             FROM quiz_attempts qa JOIN quizzes q ON q.id = qa.quiz_id
+            WHERE q.teacher_id <> $1
+           UNION
+           SELECT es.learner_id, e.teacher_id
+             FROM exam_scans es JOIN exams e ON e.id = es.exam_id
+            WHERE e.teacher_id <> $1
+         ) used ON used.learner_id = l.id
+        WHERE l.teacher_id = $1
+        GROUP BY l.id`,
+      [id]
+    );
+    for (const row of shared.rows) {
+      await client.query('UPDATE learners SET teacher_id = $1 WHERE id = $2', [row.keeper_id, row.learner_id]);
+    }
+
+    const screenshots = await client.query('SELECT screenshot_path FROM payments WHERE teacher_id = $1 AND screenshot_path IS NOT NULL', [id]);
+    await client.query('DELETE FROM teachers WHERE id = $1', [id]);
+    return screenshots.rows.map((row) => row.screenshot_path);
+  });
+
+  for (const screenshotPath of screenshotPaths) {
+    try {
+      await deleteImage(screenshotPath);
+    } catch {
+      // The payment row is already gone; a missing file is not an error.
+    }
+  }
+
+  res.json({ message: 'Teacher deleted.' });
+}
+
+module.exports = { listTeachers, getTeacher, createTeacher, updateTeacher, restrictTeacher, unrestrictTeacher, resetTeacherPassword, deleteTeacher };
